@@ -20,6 +20,9 @@ tested); `js/app.js` only renders and handles taps.
 - Dates are `YYYY-MM-DD` strings, months `YYYY-MM`. No `Date` math in local time.
 - Colors only through the CSS tokens in `css/app.css`, defined for light and dark.
 - No `alert`/`confirm`/`prompt`: confirmations are bottom sheets.
-- Bump `CACHE` in `sw.js` is not needed (network-first), but add new files to
-  its `SHELL` list so they work offline.
+- New app files go in `sw.js` `SHELL` (offline), `build.files` in
+  `package.json` (desktop) and `scripts/build-preview.mjs` if outside css/js/icons.
+- Desktop: `electron/main.cjs` serves the app from `app://finance`.
+  `npm run desktop` to run, `npm run dist` to package. CI builds installers
+  (`.github/workflows/desktop.yml`).
 - Tests: `node --test`, fixture `tests/fixtures/martie-2026.csv` is the made-up month in the owner's old sheet format (24 465 earned / 6 605 spent).

@@ -124,7 +124,7 @@ function jarsCard(key) {
       return `<div class="jar">
         <div class="row"><span>${esc(j.jar.emoji)} ${esc(j.jar.name)} <span class="muted">${j.jar.pct}%</span></span><span class="money">${money(j.used)}</span></div>
         <div class="bar"><i style="width:${(r * 100).toFixed(1)}%"></i></div>
-        <div class="foot">${j.left >= 0 ? `Plan ${money(j.budget)} reached ✓` : `Plan ${money(j.budget)}, ${money(-j.left)} to go`}</div>
+        <div class="foot">${!j.budget ? 'Waiting for this month\'s income' : j.left >= 0 ? `Plan ${money(j.budget)} reached ✓` : `Plan ${money(j.budget)}, ${money(-j.left)} to go`}</div>
       </div>`;
     }
     const over = j.used > j.budget;

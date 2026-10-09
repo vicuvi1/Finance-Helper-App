@@ -7,6 +7,7 @@ A personal finance app that replaces the "finance 2026" Google Sheet: the same d
 ![Home, income split and insights screens](docs/screens.png)
 
 - 📲 **Installs on your phone** like a real app, and works offline.
+- 🖥️ **Desktop app** for Windows, Mac and Linux, with a sidebar layout and keyboard shortcuts.
 - 🔒 **Private**: no account, no server, no tracking. Your data stays on your device.
 - ⚡ **No build step**: plain HTML, CSS and JavaScript.
 
@@ -36,10 +37,26 @@ A personal finance app that replaces the "finance 2026" Google Sheet: the same d
 
 > GitHub Pages on a private repo needs a paid GitHub plan. If the repo is private, make it public (your *data* never goes to GitHub, only the app code) or host the folder anywhere that serves static files.
 
-### On your computer
+### On your computer (desktop app)
+Every push builds the desktop app on GitHub:
+1. Open the repo's **Actions** tab → latest **Desktop app** run.
+2. Under **Artifacts**, download **Finance-Helper-Windows** (or Linux). Unzip it.
+3. Run `Finance-Helper-Setup-x.y.z.exe` to install, or `Finance-Helper-Portable-x.y.z.exe` to run without installing.
+   Windows may warn about an unknown publisher (the app isn't code-signed): **More info → Run anyway**.
+
+Push a tag like `v1.0.0` to also build the Mac app and publish all three as a GitHub Release.
+
+Shortcuts: **N** new record · **/** search · **1–4** switch sections · **Esc** close.
+
+> The phone app and the desktop app each keep their own data. To move data between them, use Settings → Back up on one and Restore backup on the other.
+
+### For development
 ```bash
-npm start          # serves the app at http://localhost:5173
-npm test           # runs the tests (Node 20+, no dependencies)
+npm test           # runs the tests (no install needed)
+npm start          # serves the web app at http://localhost:5173
+npm install        # once, for the desktop tools
+npm run desktop    # opens the desktop app
+npm run dist       # builds the installer for your OS into dist/
 ```
 
 ## Bring in your Google Sheet
@@ -62,6 +79,8 @@ js/dates.js           dates as YYYY-MM-DD, multilingual month names
 js/importer.js        Google Sheet / CSV import, CSV export
 js/csv.js, charts.js  CSV reader, small SVG charts
 sw.js                 offline cache
+electron/main.cjs     desktop app window (Electron)
+scripts/              live preview build
 tests/                node:test, including a made-up month in your old sheet format
 ```
 Money is stored as whole bani, so totals never drift. All the math lives in `model.js` as pure functions, which is what the tests cover.

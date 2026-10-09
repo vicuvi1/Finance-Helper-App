@@ -1,0 +1,50 @@
+name: Desktop app
+
+# Every push builds the Windows installer and a Linux AppImage; download them
+# from the run's "Artifacts" section. A tag like v1.0.0 (or a manual run) also
+# builds the Mac app, and a tag publishes everything as a GitHub Release.
+on:
+  push:
+    branches: ['**']
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ${{ (github.event_name == 'push' && !startsWith(github.ref, 'refs/tags/')) && fromJSON('["windows-latest","ubuntu-latest"]') || fromJSON('["windows-latest","macos-latest","ubuntu-latest"]') }}
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - name: Build
+        run: npx electron-builder --publish never
+        env:
+          # Unsigned builds: no code-signing certificate is configured.
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Finance-Helper-${{ runner.os }}
+          path: |
+            dist/*.exe
+            dist/*.dmg
+            dist/*.AppImage
+          if-no-files-found: error
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.exe
+            dist/*.dmg
+            dist/*.AppImage

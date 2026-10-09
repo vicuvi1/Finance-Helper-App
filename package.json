@@ -3,10 +3,73 @@
   "version": "1.0.0",
   "private": true,
   "description": "Personal finance app: log every lei, split income 70/10/10/10, see where money goes, hit your savings goal. Offline, private, no build step.",
+  "author": "vicuvi1",
+  "homepage": "https://github.com/vicuvi1/Finance-Helper-App",
+  "license": "MIT",
   "type": "module",
+  "main": "electron/main.cjs",
   "scripts": {
     "test": "node --test tests/*.test.js",
-    "start": "npx --yes serve -l 5173 ."
+    "start": "npx --yes serve -l 5173 .",
+    "desktop": "electron .",
+    "dist": "electron-builder --publish never"
   },
-  "license": "MIT"
+  "devDependencies": {
+    "electron": "^33.4.11",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.vicuvi1.financehelper",
+    "productName": "Finance Helper",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "index.html",
+      "manifest.webmanifest",
+      "sw.js",
+      "css/**",
+      "js/**",
+      "icons/**",
+      "electron/**",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "icons/icon-512.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "Finance-Helper-Setup-${version}.${ext}"
+    },
+    "portable": {
+      "artifactName": "Finance-Helper-Portable-${version}.${ext}"
+    },
+    "mac": {
+      "target": "dmg",
+      "icon": "icons/icon-512.png",
+      "category": "public.app-category.finance",
+      "artifactName": "Finance-Helper-${version}-${arch}.${ext}"
+    },
+    "linux": {
+      "target": "AppImage",
+      "icon": "icons/icon-512.png",
+      "category": "Finance",
+      "artifactName": "Finance-Helper-${version}.${ext}"
+    }
+  }
 }
