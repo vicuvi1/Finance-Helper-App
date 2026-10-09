@@ -1,7 +1,7 @@
 // The app: screens, the add/edit sheet, import and backup. All numbers come
 // from model.js; this file only turns them into HTML and handles taps.
 
-import { load, save, backupJSON, restoreJSON, requestPersistence } from './store.js';
+import { load, save, backupText, restoreJSON, requestPersistence, isSealed, openImported, wipeStore, hasSession, reopen, STORAGE_KEYS } from './store.js';
 import * as M from './model.js';
 import { formatMoney, evalAmount, centsToPlain } from './money.js';
 import { todayISO, monthKey, monthLabel, addMonths, dayLabel } from './dates.js';
@@ -852,11 +852,11 @@ function download(name, text, type) {
   return true;
 }
 
-function exportJSON() {
-  if (download(`finance-helper-backup-${todayISO()}.json`, backupJSON(state), 'application/json') === false) return;
+async function exportJSON() {
+  if (download(`finance-helper-backup-${todayISO()}.json`, await backupText(state), 'application/json') === false) return;
   state.meta.lastBackup = Date.now();
   commit();
-  toast('Backup saved. Keep it somewhere safe (Drive, Telegram Saved Messages).');
+  toast(hasSession() ? 'Encrypted backup saved. It opens only with your PIN.' : 'Backup saved. Keep it somewhere safe (Drive, Telegram Saved Messages).');
 }
 
 const XLSX_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -1148,8 +1148,42 @@ async function onWorkbookFile(buf) {
   });
 }
 
+// An encrypted backup: open it with the PIN in use, or ask for the PIN it
+// was made with.
+function askBackupPin(box) {
+  openSheet(`<h3>Encrypted backup <button type="button" class="icon-btn" data-close aria-label="Close">✕</button></h3>
+    <form id="bk-pin-form" autocomplete="off">
+      <p style="margin-top:0">This backup is encrypted. Enter the PIN that was in use when it was made.</p>
+      <label class="field"><span>PIN</span><input id="bk-pin" type="password" autocomplete="current-password"></label>
+      <p class="lock-msg" id="bk-pin-msg" role="alert"></p>
+      <div class="btns"><button class="btn" type="button" data-close>Cancel</button><button class="btn primary" type="submit">Open</button></div>
+    </form>`, (sheet) => {
+    sheet.querySelector('#bk-pin').focus();
+    sheet.querySelector('#bk-pin-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      try {
+        const plain = await openImported(box, sheet.querySelector('#bk-pin').value);
+        closeSheet();
+        onJSONFile(plain);
+      } catch (err) {
+        sheet.querySelector('#bk-pin-msg').textContent = err.message;
+      }
+    });
+  });
+}
+
 async function onJSONFile(text) {
   if (text == null) return;
+  let box = null;
+  try { box = JSON.parse(text); } catch { /* restoreJSON explains */ }
+  if (isSealed(box)) {
+    try {
+      text = await openImported(box);
+    } catch {
+      askBackupPin(box);
+      return;
+    }
+  }
   let next;
   try {
     next = restoreJSON(text);
@@ -1357,7 +1391,7 @@ function openMoreSheet() {
 
 async function updateRates({ force = false, announce = false } = {}) {
   const fresh = state.rates?.fetchedAt && Date.now() - state.rates.fetchedAt < 30 * 60000;
-  if ((fresh && !force) || ui.ratesBusy) return;
+  if ((fresh && !force) || ui.ratesBusy || state._sealed) return;
   if (DEMO) {
     if (announce) toast('This preview uses example rates; the installed app downloads live ones.');
     return;
@@ -1397,11 +1431,18 @@ Object.assign(ctx, {
   restoreFromText: (text) => onJSONFile(text),
   // Sync brings in a merged copy of the data.
   replaceState: (next) => { state = next; persist(); },
+  // Swap the data in memory without saving (lock / unlock with encryption).
+  setState: (next) => { state = next; },
+  // After unlocking encrypted data: catch up on what waited for it.
+  afterUnlock: () => {
+    applyTheme();
+    updateRates();
+    Sync.refreshConnected().then((on) => on && Sync.syncNow());
+    Binance.syncBinance();
+  },
   // Lock screen "Reset this device": wipe local data and start fresh.
   resetDevice: () => {
-    state = M.defaultState();
-    state.meta.createdAt = Date.now();
-    persist();
+    wipeStore();
     location.reload();
   },
 });
@@ -1434,11 +1475,16 @@ document.addEventListener('paste', (e) => {
 
 // Another tab or window changed the data: pick it up.
 window.addEventListener('storage', (e) => {
-  if (e.key === 'finance-helper.state') {
+  if (e.key === STORAGE_KEYS.KEY) {
     state = load();
     render();
   }
+  if (e.key === STORAGE_KEYS.ENC && hasSession()) {
+    reopen().then((next) => { if (next) { state = next; render(); } }).catch(() => {});
+  }
 });
+
+window.addEventListener('fh-save-failed', () => toast('Could not save the encrypted data. Make a backup and run "Check everything".'));
 
 window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();

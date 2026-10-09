@@ -1,7 +1,7 @@
 // App lock: a PIN or password asked on start and after you've been away.
-// Only a salted PBKDF2 hash is stored (per device, never synced). The data
-// itself is not encrypted yet; an encrypted store can later derive its key
-// from the same PIN with derive() and a second salt.
+// Only a salted PBKDF2 hash is stored (per device, never synced). "Encrypt
+// my data" derives a separate AES key from the same PIN with its own salt
+// (js/cipher.js, js/store.js).
 
 const ITERATIONS = 210000;
 const enc = new TextEncoder();

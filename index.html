@@ -18,7 +18,7 @@
   <script>
     // Apply the saved theme before first paint so there is no flash.
     try {
-      const t = JSON.parse(localStorage.getItem('finance-helper.state') || '{}')?.settings?.theme;
+      const t = JSON.parse(localStorage.getItem('finance-helper.state') || '{}')?.settings?.theme || JSON.parse(localStorage.getItem('finance-helper.head') || '{}')?.theme;
       if (t === 'dark' || t === 'light') document.documentElement.dataset.theme = t;
     } catch {}
   </script>

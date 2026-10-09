@@ -51,6 +51,8 @@ Shortcuts: **N** new record · **/** search · **1–7** sections · **L** lock 
 ### Sync between devices (Google Drive)
 Everything is stored on each device (fast, works offline). Your own Google Drive keeps them in step: **Settings → Google Drive sync**. The app uses Drive's hidden app folder and can't see your other files. The one-time setup (about 5 minutes) is shown step by step in that card: create a Google Cloud project, enable the Drive API, publish the consent screen, create an OAuth client (Desktop app for the PC, Web application with origin `https://vicuvi1.github.io` for the phone), paste the IDs. Syncs at start, a few seconds after each change, every 5 minutes and when the internet returns. PIN, theme and the Binance key never leave the device.
 
+**Encrypt my data** (Settings → Security, after setting a PIN) scrambles everything with your PIN (AES-256): on the device, in the Drive copy and in backups. Use the same PIN on every device. A forgotten PIN can't be recovered, so write it down somewhere safe.
+
 ### For development
 ```bash
 npm test           # runs the tests (no install needed)

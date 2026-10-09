@@ -4,7 +4,7 @@
 // restored from Settings.
 
 import { ctx, esc } from '../ctx.js';
-import { backupJSON } from '../store.js';
+import { backupText } from '../store.js';
 import { backupName, dateOf, toPrune } from '../backups.js';
 import { todayISO } from '../dates.js';
 import { driveIfConnected } from './sync.js';
@@ -13,11 +13,11 @@ const local = () => window.desktop?.backups;
 const st = { list: null, busy: false };
 
 export async function autoBackup({ force = false } = {}) {
-  if (ctx.DEMO || !ctx.state.tx.length) return;
+  if (ctx.DEMO || ctx.state._sealed || !ctx.state.tx.length) return;
   const today = todayISO();
   if (!force && ctx.state.meta.lastAutoBackupDay === today) return;
   const name = backupName(today);
-  const text = backupJSON(ctx.state);
+  const text = await backupText(ctx.state);
   const done = [];
   try {
     if (local()) {

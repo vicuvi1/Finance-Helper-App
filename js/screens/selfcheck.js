@@ -4,6 +4,8 @@
 
 import { ctx, esc } from '../ctx.js';
 import { URLS, parseErApi, parseBinance } from '../rates.js';
+import { STORAGE_KEYS, isEncrypted } from '../store.js';
+import { deriveKey, seal, open, newSalt } from '../cipher.js';
 
 let results = null;
 let running = false;
@@ -37,8 +39,14 @@ export async function runAll() {
     const ok = localStorage.getItem(k) === '1';
     localStorage.removeItem(k);
     if (!ok) throw new Error('Storage is blocked');
-    const kb = Math.round((localStorage.getItem('finance-helper.state') || '').length / 1024);
-    return `works · your data uses ${kb} KB`;
+    const kb = Math.round((localStorage.getItem(isEncrypted() ? STORAGE_KEYS.ENC : STORAGE_KEYS.KEY) || '').length / 1024);
+    return `works · your data uses ${kb} KB${isEncrypted() ? ', encrypted' : ''}`;
+  }));
+  list.push(await check('Encryption', async () => {
+    const salt = newSalt();
+    const key = await deriveKey('self-check', salt, 1000);
+    if ((await open(await seal('ok', key, salt, 1000), key)) !== 'ok') throw new Error('Round trip failed');
+    return isEncrypted() ? 'on · AES-256 with your PIN' : 'available (off)';
   }));
   list.push(await check('Exchange rates', async () => {
     const { usd, date } = parseErApi(await fetchText(URLS.fiat));

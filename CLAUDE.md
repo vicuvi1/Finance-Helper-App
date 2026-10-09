@@ -50,5 +50,10 @@ tested); `js/app.js` only renders and handles taps.
   `logView`. Desktop transport `electron/gdrive.cjs`, web `js/gdrive-web.js`.
 - Secrets (Binance key, Google refresh token) live only in the desktop main
   process, encrypted with safeStorage; never in state, never in the page.
+- Encryption (optional, Settings → Security): `js/store.js` keeps the data
+  sealed (`finance-helper.enc`) plus a header with only the lock fields
+  (`finance-helper.head`). Before unlock `ctx.state` is a placeholder
+  (`state._sealed`): anything that syncs, backs up or fetches must skip it.
+  Sync copies and backups go through `sealForExport` / `backupText`.
 - Tests: `node --test`. `tests/fixtures/sample-month.csv` is a made-up month
   in the owner's old Google Sheet format (24 465 earned / 6 605 spent).

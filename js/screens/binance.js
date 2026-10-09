@@ -35,7 +35,7 @@ function apply(payload) {
 }
 
 export async function syncBinance({ announce = false } = {}) {
-  if (!api() || st.busy) return;
+  if (!api() || st.busy || ctx.state._sealed) return;
   st.busy = true;
   st.error = '';
   refresh();

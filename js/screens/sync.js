@@ -7,6 +7,7 @@ import { ctx, esc } from '../ctx.js';
 import { mergeStates, toCloud } from '../sync.js';
 import { uid } from '../model.js';
 import { webDrive, signIn } from '../gdrive-web.js';
+import { hasSession, isEncrypted, isSealed, openImported, sealForExport } from '../store.js';
 
 const s = { busy: false, error: '', connected: false };
 let timer = null;
@@ -26,28 +27,47 @@ const clean = (e) => String(e?.message || e).replace(/^Error invoking remote met
 // The Drive connection, when it's on (used for daily snapshots too).
 export const driveIfConnected = () => (s.connected && !ctx.DEMO ? transport() : null);
 
+// The Drive copy as data: opened with the PIN when it is encrypted.
+async function readRemote(text) {
+  if (!text) return null;
+  const data = JSON.parse(text);
+  if (!isSealed(data)) return data;
+  if (!hasSession()) throw new Error('The copy in Google Drive is encrypted with a PIN. Turn on "Encrypt my data" (Settings → Security) with the same PIN to sync.');
+  try {
+    return JSON.parse(await openImported(data));
+  } catch {
+    throw new Error('The copy in Google Drive was encrypted with a different PIN. Use the same PIN on all your devices.');
+  }
+}
+
 export async function syncNow({ announce = false } = {}) {
   const t = transport();
-  if (!t || !s.connected || s.busy || ctx.DEMO) return;
+  if (!t || !s.connected || s.busy || ctx.DEMO || ctx.state._sealed) return;
+  if (isEncrypted() && !hasSession()) return;
+  const start = ctx.state;
   s.busy = true;
   s.error = '';
   refresh();
   try {
     const text = await t.pull();
-    const remote = text ? JSON.parse(text) : null;
+    const remote = await readRemote(text);
+    // Encryption on here but the Drive copy is still readable: replace it.
+    const reseal = hasSession() && !!text && !isSealed(JSON.parse(text));
+    // Locked, restored or erased meanwhile: leave it for the next round.
+    if (ctx.state !== start) throw Object.assign(new Error(''), { quiet: true });
     const { state: merged, pullChanged, pushNeeded } = mergeStates(ctx.state, remote);
     if (pullChanged) {
       ctx.replaceState(merged);
       if (!document.querySelector('.sheet')) ctx.render();
     }
-    if (pushNeeded) await t.push(JSON.stringify(toCloud(ctx.state, deviceId())));
+    if (pushNeeded || reseal) await t.push(await sealForExport(JSON.stringify(toCloud(ctx.state, deviceId()))));
     meta().lastSync = Date.now();
     meta().lastSyncNote = pullChanged && pushNeeded ? 'Got changes and sent yours' : pullChanged ? 'Got changes from another device' : pushNeeded ? 'Sent your changes' : 'Everything matches';
     ctx.persist();
     if (announce) ctx.toast(`Synced: ${meta().lastSyncNote.toLowerCase()}.`);
   } catch (e) {
-    s.error = clean(e);
-    if (announce) ctx.toast(`Sync failed: ${s.error}`);
+    s.error = e.quiet ? '' : clean(e);
+    if (announce && !e.quiet) ctx.toast(`Sync failed: ${s.error}`);
   }
   s.busy = false;
   refresh();
@@ -60,10 +80,17 @@ export function changed() {
   timer = setTimeout(() => syncNow(), 8000);
 }
 
+// Desktop asks the main process; the web app remembers it in meta (which
+// is only readable after unlocking when the data is encrypted).
+export async function refreshConnected() {
+  if (ctx.DEMO) return false;
+  s.connected = isDesktop() ? !!(await window.desktop.drive.status().catch(() => ({}))).connected : !!meta().driveWebConnected;
+  return s.connected;
+}
+
 export async function initSync() {
   if (ctx.DEMO) return;
-  s.connected = isDesktop() ? !!(await window.desktop.drive.status().catch(() => ({}))).connected : !!meta().driveWebConnected;
-  if (s.connected) syncNow();
+  if (await refreshConnected()) syncNow();
   setInterval(() => syncNow(), 5 * 60000);
   window.addEventListener('online', () => syncNow());
 }
