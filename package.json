@@ -1,6 +1,6 @@
 {
   "name": "finance-helper-app",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "description": "Personal finance app: log every lei, split income 70/10/10/10, see where money goes, hit your savings goal. Offline, private, no build step.",
   "author": "vicuvi1",
@@ -71,6 +71,17 @@
       "icon": "icons/icon-512.png",
       "category": "Finance",
       "artifactName": "Finance-Helper-${version}.${ext}"
-    }
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "vicuvi1",
+        "repo": "Finance-Helper-App",
+        "releaseType": "release"
+      }
+    ]
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9"
   }
 }

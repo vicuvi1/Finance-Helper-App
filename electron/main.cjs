@@ -78,7 +78,42 @@ ipcMain.handle('fetch-text', async (_e, url) => {
   return r.text();
 });
 
-ipcMain.handle('app-info', () => ({ version: app.getVersion(), platform: process.platform }));
+ipcMain.handle('app-info', () => ({ version: app.getVersion(), platform: process.platform, packaged: app.isPackaged }));
+
+// ---------- Updates (GitHub Releases, via electron-updater) ----------
+// The page asks; nothing downloads or installs without a click, except the
+// quiet check at start-up and every 4 hours.
+
+let updater = null;
+const send = (channel, payload) => {
+  for (const w of BrowserWindow.getAllWindows()) w.webContents.send(channel, payload);
+};
+
+function getUpdater() {
+  if (updater || !app.isPackaged) return updater;
+  ({ autoUpdater: updater } = require('electron-updater'));
+  updater.autoDownload = false;
+  updater.autoInstallOnAppQuit = true;
+  updater.on('update-available', (i) => send('update-event', { type: 'available', version: i.version, date: i.releaseDate }));
+  updater.on('update-not-available', () => send('update-event', { type: 'none' }));
+  updater.on('download-progress', (p) => send('update-event', { type: 'progress', percent: Math.round(p.percent) }));
+  updater.on('update-downloaded', (i) => send('update-event', { type: 'ready', version: i.version }));
+  updater.on('error', (e) => send('update-event', { type: 'error', message: String(e?.message || e).split('\n')[0] }));
+  return updater;
+}
+
+ipcMain.handle('update-check', async () => {
+  const u = getUpdater();
+  if (!u) return { type: 'dev', message: 'Updates work in the installed app, not in development.' };
+  const r = await u.checkForUpdates();
+  // No answer at all means this copy can't self-update (e.g. the portable
+  // .exe or an unpacked folder); never report that as "up to date".
+  if (!r?.updateInfo) return { type: 'error', message: 'This copy of the app can\'t update itself. Install it with the Setup file once; after that updates are one click.' };
+  const latest = r.updateInfo.version;
+  return { type: latest && latest !== app.getVersion() ? 'available' : 'none', version: latest, date: r?.updateInfo?.releaseDate };
+});
+ipcMain.handle('update-download', async () => { await getUpdater()?.downloadUpdate(); return true; });
+ipcMain.handle('update-install', () => { getUpdater()?.quitAndInstall(false, true); return true; });
 
 app.whenReady().then(() => {
   protocol.handle('app', (req) => {
@@ -91,6 +126,10 @@ app.whenReady().then(() => {
 
   if (process.platform !== 'darwin') Menu.setApplicationMenu(null);
   createWindow();
+  // Quiet check shortly after start and every 4 hours; the page shows it.
+  const quietCheck = () => getUpdater()?.checkForUpdates().catch(() => {});
+  setTimeout(quietCheck, 8000);
+  setInterval(quietCheck, 4 * 3600 * 1000);
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

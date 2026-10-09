@@ -40,17 +40,15 @@ A personal finance app that replaces the "finance 2026" Google Sheet: the same d
 > GitHub Pages on a private repo needs a paid GitHub plan. If the repo is private, make it public (your *data* never goes to GitHub, only the app code) or host the folder anywhere that serves static files.
 
 ### On your computer (desktop app)
-Every push builds the desktop app on GitHub:
-1. Open the repo's **Actions** tab → latest **Desktop app** run.
-2. Under **Artifacts**, download **Finance-Helper-Windows** (or Linux). Unzip it.
-3. Run `Finance-Helper-Setup-x.y.z.exe` to install, or `Finance-Helper-Portable-x.y.z.exe` to run without installing.
-   Windows may warn about an unknown publisher (the app isn't code-signed): **More info → Run anyway**.
+1. Open the repo's **Releases** (right side of the GitHub page) and download **Finance-Helper-Setup-x.y.z.exe** from the newest release.
+2. Run it once. Windows may warn about an unknown publisher (the app isn't code-signed): **More info → Run anyway**.
+3. From then on, updates are one click: **Settings → About & updates → Check for updates → Update now → Restart to update**. The app also checks by itself at start and every few hours, and shows a banner on Home when a new version is ready.
 
-Push a tag like `v1.0.0` to also build the Mac app and publish all three as a GitHub Release.
+The portable `.exe` runs without installing, but can't update itself.
 
-Shortcuts: **N** new record · **/** search · **1–4** switch sections · **Esc** close.
+Shortcuts: **N** new record · **/** search · **1–7** sections · **L** lock · **Esc** close.
 
-> The phone app and the desktop app each keep their own data. To move data between them, use Settings → Back up on one and Restore backup on the other.
+> The phone app and the desktop app keep their own data until Google Drive sync is set up. Until then, move data with Settings → Back up on one and Restore backup on the other.
 
 ### For development
 ```bash

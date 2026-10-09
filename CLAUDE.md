@@ -23,6 +23,12 @@ tested); `js/app.js` only renders and handles taps.
 - The owner works on the **desktop** app: check and screenshot changes at
   desktop width (1280–1440px) first, then make sure phone width still works.
 
+- **Releases**: raising `version` in `package.json` AND `js/version.js`
+  (a test keeps them equal) and pushing to the default branch publishes a
+  GitHub Release automatically (`.github/workflows/desktop.yml`). Installed
+  desktop apps offer it under Settings → About & updates. Bump the version
+  whenever a change should reach the owner's installed app.
+
 ## Conventions
 - Money is integer bani (1 MDL = 100). Format with `formatMoney`, parse user
   input with `evalAmount` (supports `120+45`).

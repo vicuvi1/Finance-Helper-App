@@ -7,4 +7,10 @@ contextBridge.exposeInMainWorld('desktop', {
   isDesktop: true,
   fetchText: (url) => ipcRenderer.invoke('fetch-text', url),
   appInfo: () => ipcRenderer.invoke('app-info'),
+  update: {
+    check: () => ipcRenderer.invoke('update-check'),
+    download: () => ipcRenderer.invoke('update-download'),
+    install: () => ipcRenderer.invoke('update-install'),
+    onEvent: (cb) => ipcRenderer.on('update-event', (_e, data) => cb(data)),
+  },
 });

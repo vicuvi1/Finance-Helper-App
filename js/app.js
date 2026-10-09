@@ -17,6 +17,7 @@ import * as Spending from './screens/spending.js';
 import * as PeopleScreen from './screens/people.js';
 import * as ReportsScreen from './screens/reports.js';
 import * as Security from './screens/security.js';
+import * as Updates from './screens/updates.js';
 import { tableHTML, calendarHTML } from './logviews.js';
 import { dailyChart } from './charts.js';
 
@@ -234,6 +235,7 @@ function viewHome() {
   const perDay = dim ? Math.round(s.expense / dim) : 0;
 
   return `<header class="top"><div><h1>${hello}</h1><div class="sub">${dayLabel(today)}</div></div></header>
+  ${Updates.updateBanner()}
   ${DEMO ? '<div class="banner"><p>Live preview with <b>example data</b> (a made-up month). What you add here stays in this browser only.</p></div>' : ''}
   ${!DEMO && needsBackup ? `<div class="banner"><p>Your data lives only on this device. Make a backup.</p><button class="btn primary" data-act="export-json">Back up</button></div>` : ''}
   ${welcome}
@@ -412,6 +414,7 @@ function viewSettings() {
   </section>
 
   ${Security.settingsCard()}
+  ${Updates.settingsCard()}
 
   <section class="card"><h2>Danger zone</h2>
     <button class="btn danger block" data-act="wipe">Erase everything on this device</button>
@@ -1178,6 +1181,7 @@ document.addEventListener('click', (e) => {
   if (act === 'acc-open') AccountsScreen.openAccount(el.dataset.id);
   else if (act === 'person-open') PeopleScreen.openPerson(el.dataset.id);
   else if (act === 'more') openMoreSheet();
+  else if (act.startsWith('update-')) Updates.onClick(act);
   else if (act === 'cat-open') Spending.openCategory(el.dataset.cat, el.dataset.period, el.dataset.type);
   else if (act === 'spend-period') {
     ui[el.dataset.type === 'income' ? 'incomePeriod' : 'spendPeriod'] = el.dataset.period;
@@ -1270,7 +1274,7 @@ const SCREENS = {
   people: PeopleScreen,
   reports: ReportsScreen,
   rates: RatesScreen,
-  settings: { view: viewSettings, onClick: Security.onClick, onChange: Security.onChange },
+  settings: { view: viewSettings, onClick: (a, el) => Security.onClick(a, el) || (a.startsWith('update-') && (Updates.onClick(a), true)), onChange: Security.onChange },
 };
 
 function openMoreSheet() {
@@ -1436,6 +1440,7 @@ Spending.bindHover(app);
 requestPersistence();
 if (!DEMO) Security.initLock();
 route();
+Updates.initUpdates();
 seedDemo();
 updateRates();
 setInterval(() => updateRates(), 30 * 60000);
