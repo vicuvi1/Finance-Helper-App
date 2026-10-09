@@ -44,5 +44,11 @@ tested); `js/app.js` only renders and handles taps.
   on `change`; `renderKeepFocus()` keeps the cursor where the user tabbed to.
 - Excel: `js/xlsx.js` writes real .xlsx (stored zip, no deps); sheet contents
   come from `monthSheet` / `overviewSheet` in `js/importer.js`.
+- Sync: `js/sync.js` merges per record by `updatedAt` with `state.deleted`
+  tombstones; anything new that is edited must call `M.touch()` (settings
+  scalars: `settings.updatedAt`). Device-only: `meta`, `rates`, `theme`,
+  `logView`. Desktop transport `electron/gdrive.cjs`, web `js/gdrive-web.js`.
+- Secrets (Binance key, Google refresh token) live only in the desktop main
+  process, encrypted with safeStorage; never in state, never in the page.
 - Tests: `node --test`. `tests/fixtures/sample-month.csv` is a made-up month
   in the owner's old Google Sheet format (24 465 earned / 6 605 spent).

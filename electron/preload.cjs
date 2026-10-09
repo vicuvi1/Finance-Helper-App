@@ -13,6 +13,13 @@ contextBridge.exposeInMainWorld('desktop', {
     balances: () => ipcRenderer.invoke('binance-balances'),
     forget: () => ipcRenderer.invoke('binance-forget'),
   },
+  drive: {
+    status: () => ipcRenderer.invoke('drive-status'),
+    connect: (clientId, clientSecret) => ipcRenderer.invoke('drive-connect', clientId, clientSecret),
+    pull: () => ipcRenderer.invoke('drive-pull'),
+    push: (text) => ipcRenderer.invoke('drive-push', text),
+    disconnect: () => ipcRenderer.invoke('drive-disconnect'),
+  },
   update: {
     check: () => ipcRenderer.invoke('update-check'),
     download: () => ipcRenderer.invoke('update-download'),

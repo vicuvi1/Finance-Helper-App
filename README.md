@@ -48,7 +48,8 @@ The portable `.exe` runs without installing, but can't update itself.
 
 Shortcuts: **N** new record · **/** search · **1–7** sections · **L** lock · **Esc** close.
 
-> The phone app and the desktop app keep their own data until Google Drive sync is set up. Until then, move data with Settings → Back up on one and Restore backup on the other.
+### Sync between devices (Google Drive)
+Everything is stored on each device (fast, works offline). Your own Google Drive keeps them in step: **Settings → Google Drive sync**. The app uses Drive's hidden app folder and can't see your other files. The one-time setup (about 5 minutes) is shown step by step in that card: create a Google Cloud project, enable the Drive API, publish the consent screen, create an OAuth client (Desktop app for the PC, Web application with origin `https://vicuvi1.github.io` for the phone), paste the IDs. Syncs at start, a few seconds after each change, every 5 minutes and when the internet returns. PIN, theme and the Binance key never leave the device.
 
 ### For development
 ```bash

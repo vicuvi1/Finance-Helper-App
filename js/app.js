@@ -19,6 +19,7 @@ import * as ReportsScreen from './screens/reports.js';
 import * as Security from './screens/security.js';
 import * as Updates from './screens/updates.js';
 import * as Binance from './screens/binance.js';
+import * as Sync from './screens/sync.js';
 import { tableHTML, calendarHTML } from './logviews.js';
 import { dailyChart } from './charts.js';
 
@@ -81,6 +82,7 @@ function persist() {
 function commit() {
   persist();
   render();
+  Sync.changed();
 }
 
 function applyTheme() {
@@ -414,6 +416,7 @@ function viewSettings() {
     </div>
   </section>
 
+  ${Sync.settingsCard()}
   ${Binance.settingsCard()}
   ${Security.settingsCard()}
   ${Updates.settingsCard()}
@@ -1149,22 +1152,24 @@ function onSettingsChange(el) {
     else if (key === 'savingsAccount') st.savingsAccount = v;
     else if (key === 'theme') { st.theme = v; applyTheme(); }
     else if (key === 'currency') st.currency = v.trim().toUpperCase() || 'MDL';
+    if (key !== 'theme') st.updatedAt = Date.now();
   } else if (el.dataset.jar) {
-    const j = M.jar(state, el.dataset.jar);
+    const j = M.touch(M.jar(state, el.dataset.jar));
     if (el.dataset.field === 'pct') j.pct = Math.max(0, Math.min(100, Math.round(Number(v) || 0)));
     else Object.assign(j, splitLabel(v, j.emoji));
     updateJarSum();
   } else if (el.dataset.acc) {
-    const a = M.account(state, el.dataset.acc);
+    const a = M.touch(M.account(state, el.dataset.acc));
     if (el.dataset.field === 'start') a.start = evalAmount(v) || 0;
     else Object.assign(a, splitLabel(v, a.emoji));
   } else if (el.dataset.cat) {
-    const c = M.category(state, el.dataset.cat);
+    const c = M.touch(M.category(state, el.dataset.cat));
     if (el.dataset.field === 'name') c.name = v.trim() || 'Untitled';
     else if (el.dataset.field === 'emoji') c.emoji = v.trim() || '•';
     else if (el.dataset.field === 'jar') c.jar = v;
   } else return;
   persist();
+  Sync.changed();
 }
 
 // ---------- Events ----------
@@ -1215,11 +1220,12 @@ document.addEventListener('click', (e) => {
   else if (act === 'install') installPrompt?.prompt().finally(() => { installPrompt = null; render(); });
   else if (act === 'add-cat') {
     const type = el.dataset.type;
-    state.settings.categories.push({ id: `c-${M.uid()}`, type, name: type === 'income' ? 'New source' : 'New category', emoji: type === 'income' ? '💵' : '🏷️', ...(type === 'expense' ? { jar: state.settings.jars.find((j) => !j.savings)?.id } : {}) });
+    state.settings.categories.push({ id: `c-${M.uid()}`, type, name: type === 'income' ? 'New source' : 'New category', emoji: '', updatedAt: Date.now(), ...(type === 'expense' ? { jar: state.settings.jars.find((j) => !j.savings)?.id } : {}) });
     commit();
     document.querySelector('details.card')?.setAttribute('open', '');
   } else if (act === 'del-cat') {
     state.settings.categories = state.settings.categories.filter((c) => c.id !== el.dataset.id);
+    state.deleted[el.dataset.id] = Date.now();
     commit();
     document.querySelector('details.card')?.setAttribute('open', '');
   } else if (act === 'wipe') openWipeSheet();
@@ -1276,7 +1282,7 @@ const SCREENS = {
   people: PeopleScreen,
   reports: ReportsScreen,
   rates: RatesScreen,
-  settings: { view: viewSettings, onClick: (a, el) => Security.onClick(a, el) || Binance.onClick(a) || (a.startsWith('update-') && (Updates.onClick(a), true)), onChange: Security.onChange },
+  settings: { view: viewSettings, onClick: (a, el) => Security.onClick(a, el) || Binance.onClick(a) || Sync.onClick(a) || (a.startsWith('update-') && (Updates.onClick(a), true)), onChange: Security.onChange },
 };
 
 function openMoreSheet() {
@@ -1331,6 +1337,8 @@ Object.assign(ctx, {
   openTxSheet,
   openTransferSheet,
   updateRates,
+  // Sync brings in a merged copy of the data.
+  replaceState: (next) => { state = next; persist(); },
   // Lock screen "Reset this device": wipe local data and start fresh.
   resetDevice: () => {
     state = M.defaultState();
@@ -1444,10 +1452,12 @@ if (!DEMO) Security.initLock();
 route();
 Updates.initUpdates();
 Binance.initBinance();
+Sync.initSync();
 
 document.addEventListener('submit', (e) => {
   if (e.target.closest('.sheet') || !e.target.id) return;
   if (e.target.id === 'bn-form') { e.preventDefault(); Binance.onSubmit(e.target); }
+  if (e.target.id === 'sync-form') { e.preventDefault(); Sync.onSubmit(e.target); }
 });
 seedDemo();
 updateRates();

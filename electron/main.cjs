@@ -4,6 +4,7 @@
 
 const { app, BrowserWindow, protocol, net, shell, Menu, ipcMain, safeStorage } = require('electron');
 const { createBinance } = require('./binance.cjs');
+const { createDrive } = require('./gdrive.cjs');
 const path = require('node:path');
 const fs = require('node:fs');
 const { pathToFileURL } = require('node:url');
@@ -99,6 +100,21 @@ ipcMain.handle('binance-connect', async (_e, key, secret) => {
 });
 ipcMain.handle('binance-balances', () => binance.balances());
 ipcMain.handle('binance-forget', () => { binance.forget(); return true; });
+
+// ---------- Google Drive sync ----------
+
+const drive = createDrive({ app, net, safeStorage, shell });
+ipcMain.handle('drive-status', () => drive.status());
+ipcMain.handle('drive-connect', (_e, clientId, clientSecret) => {
+  const id = String(clientId || '').trim();
+  const secret = String(clientSecret || '').trim();
+  if (!/\.apps\.googleusercontent\.com$/.test(id)) throw new Error('The Client ID should end with .apps.googleusercontent.com');
+  if (secret.length < 10) throw new Error('Paste the Client secret too.');
+  return drive.connect(id, secret);
+});
+ipcMain.handle('drive-pull', () => drive.pull());
+ipcMain.handle('drive-push', (_e, text) => drive.push(String(text)));
+ipcMain.handle('drive-disconnect', () => drive.disconnect());
 
 // ---------- Updates (GitHub Releases, via electron-updater) ----------
 // The page asks; nothing downloads or installs without a click, except the
