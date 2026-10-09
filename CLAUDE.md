@@ -4,6 +4,12 @@ Personal finance app for one user (MDL, Moldova). Plain HTML/CSS/JS, no build
 step, no dependencies for the web app. All math is in `js/model.js` (pure,
 tested); `js/app.js` only renders and handles taps.
 
+## Privacy: this repo is PUBLIC
+- Never commit the owner's real financial data: no real amounts, notes,
+  names, account numbers or screenshots of real data. Real data lives only on
+  the owner's devices (and their own Google Drive once sync exists). Use
+  made-up data for fixtures, tests, docs and the live preview.
+
 ## Workflow the owner asked for
 - **Commit and push after every change**, one focused commit each, so any
   step can be rolled back. Run `npm test` before each push.
@@ -32,4 +38,5 @@ tested); `js/app.js` only renders and handles taps.
   on `change`; `renderKeepFocus()` keeps the cursor where the user tabbed to.
 - Excel: `js/xlsx.js` writes real .xlsx (stored zip, no deps); sheet contents
   come from `monthSheet` / `overviewSheet` in `js/importer.js`.
-- Tests: `node --test`, fixture `tests/fixtures/martie-2026.csv` is the made-up month in the owner's old sheet format (24 465 earned / 6 605 spent).
+- Tests: `node --test`. `tests/fixtures/sample-month.csv` is a made-up month
+  in the owner's old Google Sheet format (24 465 earned / 6 605 spent).

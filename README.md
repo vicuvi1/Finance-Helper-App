@@ -4,7 +4,6 @@
 
 A personal finance app that replaces the "finance 2026" Google Sheet: the same daily log, the same 70 / 10 / 10 / 10 smart split, the same safe goal. It also does the thinking the sheet couldn't: where the money actually goes, which jar is leaking, which income source pays best, and when you'll hit your goal.
 
-![Home, income split and insights screens](docs/screens.png)
 
 - 📲 **Installs on your phone** like a real app, and works offline.
 - 🖥️ **Desktop app** for Windows, Mac and Linux, with a sidebar layout and keyboard shortcuts.

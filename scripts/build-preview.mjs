@@ -1,5 +1,5 @@
 // Builds the live preview published on claude.ai from the real app files.
-// The preview runs with example data (tests/fixtures/martie-2026.csv) and
+// The preview runs with example data (tests/fixtures/sample-month.csv) and
 // without downloads, install prompts or the service worker.
 //
 //   node scripts/build-preview.mjs <out-dir>
@@ -18,7 +18,7 @@ if (!out) {
 rmSync(out, { recursive: true, force: true });
 mkdirSync(out, { recursive: true });
 for (const dir of ['css', 'js', 'icons']) cpSync(join(root, dir), join(out, dir), { recursive: true });
-cpSync(join(root, 'tests/fixtures/martie-2026.csv'), join(out, 'sample.csv'));
+cpSync(join(root, 'tests/fixtures/sample-month.csv'), join(out, 'sample.csv'));
 
 // The host wraps the page in its own <html>/<head>/<body>, so publish only
 // the title, the stylesheet and what is inside <body>.

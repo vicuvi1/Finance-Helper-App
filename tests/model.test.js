@@ -9,7 +9,7 @@ import {
 } from '../js/model.js';
 import { load, save, restoreJSON, backupJSON } from '../js/store.js';
 
-const march = readFileSync(new URL('./fixtures/martie-2026.csv', import.meta.url), 'utf8');
+const march = readFileSync(new URL('./fixtures/sample-month.csv', import.meta.url), 'utf8');
 
 function withMarch() {
   const state = defaultState();
@@ -74,7 +74,7 @@ test('a table copied out of the app (names, tabs) pastes back in', () => {
   const { state } = withMarch();
   state.tx.push(tx('transfer', 2000, '2026-03-31', { from: 'wallet', to: 'safe' }));
   const rows = exportRows(state);
-  assert.deepEqual(rows[1].slice(0, 6), ['2026-03-01', 'Earned', '150', 'MDL', 'Competitions', 'Wallet']);
+  assert.deepEqual(rows[1].slice(0, 6), ['2026-03-01', 'Earned', '200', 'MDL', 'Competitions', 'Wallet']);
   assert.equal(rows.at(-1)[1], 'Move');
   const fresh = defaultState();
   const res = importRows(parseCSV(toTSV(rows)), fresh);
