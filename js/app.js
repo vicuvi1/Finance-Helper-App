@@ -19,6 +19,10 @@ const ui = {
 };
 let installPrompt = null;
 let toastTimer = null;
+// The live preview on claude.ai runs with example data and no downloads.
+const DEMO = globalThis.FH_DEMO === true;
+// Only undo a theme we set ourselves; the host page may set its own.
+let ownTheme = false;
 
 const app = document.getElementById('app');
 const sheetRoot = document.getElementById('sheet-root');
@@ -40,8 +44,13 @@ function commit() {
 
 function applyTheme() {
   const t = state.settings.theme;
-  if (t === 'dark' || t === 'light') document.documentElement.dataset.theme = t;
-  else delete document.documentElement.dataset.theme;
+  if (t === 'dark' || t === 'light') {
+    document.documentElement.dataset.theme = t;
+    ownTheme = true;
+  } else if (ownTheme) {
+    delete document.documentElement.dataset.theme;
+    ownTheme = false;
+  }
 }
 
 // ---------- Shared pieces ----------
@@ -139,7 +148,7 @@ function goalCard() {
   let line;
   if (!g.target) line = 'Set a goal in Settings.';
   else if (g.monthsLeft === 0) line = '🎉 Goal reached. Time to set a bigger one.';
-  else if (g.eta) line = `At ${money(g.pace)}/month you reach it in <b>${monthLabel(g.eta)}</b> (${g.monthsLeft} month${g.monthsLeft === 1 ? '' : 's'}). Save ${money(Math.ceil(g.remaining / Math.max(1, g.monthsLeft - 1)))}/month to get there a month sooner.`;
+  else if (g.eta) line = `At ${money(g.pace)}/month you reach it in <b>${monthLabel(g.eta)}</b> (${g.monthsLeft} month${g.monthsLeft === 1 ? '' : 's'}). Save ${money(Math.ceil(g.remaining / Math.max(1, g.monthsLeft - 1) / 100) * 100)}/month to get there a month sooner.`;
   else if (g.pace != null && g.pace < 0) line = `This went down by ${money(-g.pace)}/month lately. Keep more than you spend and I'll predict when you get there.`;
   else line = 'Log a month of income and spending and I\'ll predict when you get there.';
   return `<section class="card goal"><h2>🎯 ${esc(goal.name)} <span class="right muted">${esc(where)}</span></h2>
@@ -175,7 +184,8 @@ function viewHome() {
   </section>`;
 
   return `<header class="top"><div><h1>${hello}</h1><div class="sub">${dayLabel(today)}</div></div></header>
-  ${needsBackup ? `<div class="banner"><p>💾 Your data lives only on this device. Make a backup.</p><button class="btn primary" data-act="export-json">Back up</button></div>` : ''}
+  ${DEMO ? '<div class="banner"><p>👀 Live preview with <b>example data</b> from your March 2026 sheet. What you add here stays in this browser only.</p></div>' : ''}
+  ${!DEMO && needsBackup ? `<div class="banner"><p>💾 Your data lives only on this device. Make a backup.</p><button class="btn primary" data-act="export-json">Back up</button></div>` : ''}
   ${welcome}
   <section class="card hero">
     <div class="label">All my money</div>
@@ -371,6 +381,7 @@ function updateJarSum() {
 function render() {
   applyTheme();
   const views = { home: viewHome, log: viewLog, insights: viewInsights, settings: viewSettings };
+  app.className = `app view-${ui.tab}`;
   app.innerHTML = (views[ui.tab] || viewHome)();
   for (const a of document.querySelectorAll('.tabbar a')) {
     if (a.dataset.tab === ui.tab) a.setAttribute('aria-current', 'page');
@@ -586,6 +597,10 @@ function toast(text, actionLabel, action) {
 // ---------- Import / export ----------
 
 function download(name, text, type) {
+  if (DEMO) {
+    toast('Downloads work in the installed app, not in this preview.');
+    return false;
+  }
   const url = URL.createObjectURL(new Blob([text], { type }));
   const a = document.createElement('a');
   a.href = url;
@@ -594,11 +609,12 @@ function download(name, text, type) {
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+  return true;
 }
 
 function exportJSON() {
+  if (download(`finance-helper-backup-${todayISO()}.json`, backupJSON(state), 'application/json') === false) return;
   state.meta.lastBackup = Date.now();
-  download(`finance-helper-backup-${todayISO()}.json`, backupJSON(state), 'application/json');
   commit();
   toast('Backup saved. Keep it somewhere safe (Drive, Telegram Saved Messages).');
 }
@@ -660,6 +676,21 @@ async function onJSONFile(text) {
       commit();
       closeSheet();
       toast(`Restored ${state.tx.length} records`);
+    });
+  });
+}
+
+function openWipeSheet() {
+  openSheet(`<h3>Erase everything? <button type="button" class="icon-btn" data-close aria-label="Close">✕</button></h3>
+    <p style="margin-top:0">This deletes all ${state.tx.length} records and your settings from this device. It can't be undone. Make a backup first if you might need them.</p>
+    <div class="btns"><button class="btn" data-close>Keep my data</button><button class="btn danger" id="wipe-go">Erase ${state.tx.length} records</button></div>`, (sheet) => {
+    sheet.querySelector('#wipe-go').addEventListener('click', () => {
+      state = M.defaultState();
+      state.meta.createdAt = Date.now();
+      if (DEMO) state.meta.demoSeeded = true;
+      commit();
+      closeSheet();
+      toast('Everything erased');
     });
   });
 }
@@ -734,14 +765,7 @@ document.addEventListener('click', (e) => {
     state.settings.categories = state.settings.categories.filter((c) => c.id !== el.dataset.id);
     commit();
     document.querySelector('details.card')?.setAttribute('open', '');
-  } else if (act === 'wipe') {
-    if (confirm(`Erase all ${state.tx.length} records and settings from this device? Make a backup first if you might need them.`)) {
-      state = M.defaultState();
-      state.meta.createdAt = Date.now();
-      commit();
-      toast('Everything erased');
-    }
-  }
+  } else if (act === 'wipe') openWipeSheet();
 });
 
 document.addEventListener('change', (e) => {
@@ -762,8 +786,18 @@ document.addEventListener('input', (e) => {
   }
 });
 
+// Desktop shortcuts: N = new record, / = search, 1-4 = sections, Esc = close.
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && sheetRoot.firstChild) closeSheet();
+  if (e.key === 'Escape' && sheetRoot.firstChild) { closeSheet(); return; }
+  if (e.ctrlKey || e.metaKey || e.altKey || sheetRoot.firstChild) return;
+  if (e.target.closest('input, select, textarea')) return;
+  const tabs = { 1: 'home', 2: 'log', 3: 'insights', 4: 'settings' };
+  if (e.key === 'n' || e.key === 'N') { e.preventDefault(); openTxSheet(); }
+  else if (e.key === '/') {
+    e.preventDefault();
+    if (ui.tab !== 'log') location.hash = '#log';
+    setTimeout(() => document.getElementById('search')?.focus(), 0);
+  } else if (tabs[e.key]) location.hash = `#${tabs[e.key]}`;
 });
 
 function route() {
@@ -795,9 +829,40 @@ window.addEventListener('beforeinstallprompt', (e) => {
   if (ui.tab === 'settings') render();
 });
 
-if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+if (!DEMO && 'serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
   navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+
+// Preview only: fill an empty app with example data (your March 2026 sheet
+// plus a few records this month) so every screen has something to show.
+async function seedDemo() {
+  if (!DEMO || state.meta.demoSeeded || state.tx.length) return;
+  try {
+    const res = importRows(parseCSV(await (await fetch('sample.csv')).text()), state);
+    state.tx.push(...res.tx);
+  } catch {
+    // No sample file: the preview just starts empty.
+  }
+  const today = todayISO();
+  const day = (n) => `${monthKey(today)}-${String(Math.max(1, Math.min(Number(today.slice(8, 10)), n))).padStart(2, '0')}`;
+  const ex = [
+    ['income', 380000, day(1), 'work', 'from work'],
+    ['expense', 12000, day(2), 'food', 'groceries'],
+    ['expense', 4500, day(3), 'transport', 'taxi'],
+    ['expense', 5000, day(4), 'subscriptions', 'google subscription'],
+    ['income', 50000, day(5), 'family', 'mother'],
+    ['expense', 21000, day(6), 'food', 'food + coffee'],
+    ['expense', 16000, day(8), 'hygiene', 'hair care products'],
+  ];
+  let t0 = Date.now();
+  for (const [type, amount, date, category, note] of ex) {
+    state.tx.push({ id: M.uid(), createdAt: t0++, type, amount, date, category, note, account: 'wallet' });
+  }
+  state.tx.push({ id: M.uid(), createdAt: t0++, type: 'transfer', amount: 266000, date: day(1), from: 'wallet', to: 'safe', note: 'Deposit 70% · from work' });
+  state.meta.demoSeeded = true;
+  commit();
 }
 
 requestPersistence();
 route();
+seedDemo();
