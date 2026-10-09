@@ -347,6 +347,52 @@ export function categoryComparison(state, key) {
 
 // Honest, specific tips computed from your own numbers. Each has a level
 // (good / warn / bad / info) so the most important ones show first.
+// ---------- Budgets ----------
+// A category can have a monthly budget (category.budget, in the main
+// currency's cents). Loans don't count, same as everywhere else.
+
+const spentIn = (state, key, catId) => txInMonth(state, key)
+  .filter((t) => t.type === 'expense' && counts(t) && t.category === catId)
+  .reduce((a, t) => a + B(t), 0);
+
+// Average spent per month in a category over the `months` full months before `key`.
+export function averageSpend(state, catId, key, months = 3) {
+  let total = 0;
+  for (let i = 1; i <= months; i++) total += spentIn(state, addMonths(key, -i), catId);
+  return Math.round(total / months);
+}
+
+export function budgetStatus(state, key, today) {
+  const dim = daysInMonth(key);
+  const isNow = monthKey(today) === key;
+  const day = isNow ? Number(today.slice(8, 10)) : dim;
+  const rows = state.settings.categories
+    .filter((c) => c.type === 'expense' && c.budget > 0)
+    .map((c) => {
+      const spent = spentIn(state, key, c.id);
+      const projected = isNow ? Math.round((spent / day) * dim / 100) * 100 : spent; // whole lei
+      const pct = spent / c.budget;
+      const level = pct > 1 ? 'over' : pct >= 0.8 ? 'near' : isNow && day >= 5 && projected > c.budget * 1.05 ? 'pace' : 'ok';
+      return { category: c, budget: c.budget, spent, left: c.budget - spent, pct, projected, level };
+    })
+    .sort((a, b) => b.pct - a.pct);
+  const budget = rows.reduce((a, r) => a + r.budget, 0);
+  const spent = rows.reduce((a, r) => a + r.spent, 0);
+  return { rows, budget, spent, left: budget - spent, daysLeft: dim - day, isNow };
+}
+
+// After a new expense: did it cross 80% or 100% of its category's budget?
+export function budgetAlert(state, t) {
+  const c = category(state, t.category);
+  if (t.type !== 'expense' || !counts(t) || !(c?.budget > 0)) return null;
+  const after = spentIn(state, monthKey(t.date), c.id);
+  const before = after - B(t);
+  const fmt = (x) => formatMoney(x, state.settings.currency);
+  if (before <= c.budget && after > c.budget) return { level: 'over', text: `${c.name} is over budget: ${fmt(after)} of ${fmt(c.budget)} (${fmt(after - c.budget)} over).` };
+  if (before < c.budget * 0.8 && after >= c.budget * 0.8) return { level: 'near', text: `${c.name}: ${Math.round((after / c.budget) * 100)}% of the budget used. ${fmt(c.budget - after)} left this month.` };
+  return null;
+}
+
 export function insights(state, key, today) {
   const cur = state.settings.currency;
   const fmt = (c) => formatMoney(c, cur);
@@ -374,6 +420,15 @@ export function insights(state, key, today) {
     }
   } else if (s.expense > 0) {
     out.push({ level: 'warn', icon: '💸', title: 'No income logged this month', text: `${fmt(s.expense)} spent with no income logged. If you got paid, log it so the split works.` });
+  }
+
+  // Category budgets: over, nearly used, or on pace to go over.
+  const bs = budgetStatus(state, key, today);
+  for (const r of bs.rows.filter((x) => x.level !== 'ok').slice(0, 2)) {
+    const n = r.category.name;
+    if (r.level === 'over') out.push({ level: 'bad', icon: '🧾', title: `${n}: over budget`, text: `${fmt(r.spent)} spent of ${fmt(r.budget)}, ${fmt(-r.left)} over.` });
+    else if (r.level === 'near') out.push({ level: 'warn', icon: '🧾', title: `${n}: ${Math.round(r.pct * 100)}% of the budget used`, text: `${fmt(r.left)} left${bs.isNow ? ` for ${bs.daysLeft} more day${bs.daysLeft === 1 ? '' : 's'}` : ''}.` });
+    else out.push({ level: 'warn', icon: '🧾', title: `${n}: on pace to go over`, text: `At this pace you spend about ${fmt(r.projected)} this month, budget ${fmt(r.budget)}.` });
   }
 
   // 2. Jars that went over budget.

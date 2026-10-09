@@ -743,6 +743,8 @@ function openTxSheet(existing = null, preset = {}) {
     commit();
     closeSheet();
     if (!existing && draft.repeat && tx.type !== 'transfer') { toast(`Added, and it repeats ${FREQS.find((f) => f.id === draft.repeat).short}. See Plan.`); return; }
+    const alert = !existing && M.budgetAlert(state, tx);
+    if (alert) { toast(alert.text); return; }
     if (!existing && tx.type === 'income' && !tx.loan) openSplitSheet(tx);
     else toast(existing ? 'Saved' : `${tx.type === 'expense' ? 'Spent' : tx.type === 'income' ? 'Earned' : 'Moved'} ${formatMoney(tx.amount, tx.currency)}`);
   };
@@ -1403,7 +1405,7 @@ function openMoreSheet() {
   const item = (tab, label, sub) => `<a href="#${tab}" class="tx more-item"><span class="t"><b>${label}</b><span>${sub}</span></span><span class="muted">›</span></a>`;
   openSheet(`<h3>More <button type="button" class="icon-btn" data-close aria-label="Close">✕</button></h3>
     <div class="list more-list">
-      ${item('plan', 'Plan', 'Bills, subscriptions and regular income')}
+      ${item('plan', 'Plan', 'Budgets, bills, subscriptions, regular income')}
       ${item('people', 'People', 'Who gave you money, who you gave to, loans')}
       ${item('reports', 'Reports', 'Any month, quarter, year or your own dates')}
       ${item('rates', 'Rates & converter', 'Live exchange rates and crypto prices')}
@@ -1526,7 +1528,7 @@ if (!DEMO && 'serviceWorker' in navigator && (location.protocol === 'https:' || 
 // the old sheet format plus this month across several accounts and
 // currencies) so every screen has something to show. Bumping DEMO_VERSION
 // re-seeds previews opened before.
-const DEMO_VERSION = 3;
+const DEMO_VERSION = 4;
 
 async function seedDemo() {
   if (!DEMO || state.meta.demoSeeded === DEMO_VERSION) return;
@@ -1586,6 +1588,8 @@ async function seedDemo() {
   plan('google one', 'expense', 5000, 'maib-virt', 'subscriptions', 4, { auto: true, lastDone: day(4) });
   plan('gym', 'expense', 60000, 'wallet', 'sport', 15);
   plan('phone', 'expense', 12000, 'maib-visa', 'home', 12);
+  // Budgets for a few categories.
+  for (const [id, lei] of [['food', 400], ['clothes', 300], ['hygiene', 250], ['transport', 300], ['fun', 800]]) M.category(state, id).budget = lei * 100;
   state.settings.savingsAccount = 'safe';
   state.meta.demoSeeded = DEMO_VERSION;
   commit();

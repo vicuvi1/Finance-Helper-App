@@ -5,7 +5,7 @@
 import { ctx, esc } from '../ctx.js';
 import * as M from '../model.js';
 import * as R from '../recurring.js';
-import { todayISO, dayLabel, daysBetween, addDays } from '../dates.js';
+import { todayISO, dayLabel, daysBetween, addDays, monthKey, monthLabel, daysInMonth } from '../dates.js';
 import { evalAmount, formatMoney, centsToPlain } from '../money.js';
 import { convert } from '../fx.js';
 
@@ -57,7 +57,7 @@ export function view() {
   const inSoon = sum([...due, ...up].filter((x) => x.rule.type === 'income'));
   const sugg = R.suggestions(state, today).slice(0, 5);
 
-  return `<header class="top"><div><h1>Plan</h1><div class="sub">Bills, subscriptions and regular income</div></div>
+  return `<header class="top"><div><h1>Plan</h1><div class="sub">Budgets, bills, subscriptions and regular income</div></div>
     <button class="btn primary" data-act="rec-new">+ Add recurring</button></header>
   <section class="hero">
     <div class="hero-main">
@@ -75,6 +75,7 @@ export function view() {
   </section>
   <div class="dash">
     <div class="dash-main">
+      ${budgetCard()}
       ${due.length ? `<section class="card"><h2>Due now <span class="right muted">${due.length}</span></h2><div class="list">${due.map((x) => itemRow(x, today, { due: true })).join('')}</div>
         <p class="muted small" style="margin-bottom:0">"Paid" logs the planned amount on its date. Tap the name to change the amount first.</p></section>` : ''}
       <section class="card"><h2>Coming up · 30 days</h2>
@@ -90,6 +91,75 @@ export function view() {
           <button class="btn sm" data-act="rec-from" data-id="${esc(s.tx.id)}">Make recurring</button></div>`).join('')}</div></section>` : ''}
     </div>
   </div>`;
+}
+
+// ---------- Budgets ----------
+
+function budgetCard() {
+  const today = todayISO();
+  const key = monthKey(today);
+  const st = M.budgetStatus(ctx.state, key, today);
+  if (!st.rows.length) {
+    return `<section class="card"><h2>Budgets</h2>
+      <p class="muted" style="margin-top:0">Give the categories you want to keep in check (food, going out, clothes…) a monthly limit. You get a warning at 80%, when you go over, and when your pace would take you over.</p>
+      <button class="btn primary block" data-act="budget-set">Set budgets</button></section>`;
+  }
+  const evenPace = (Number(today.slice(8, 10)) / daysInMonth(key)) * 100;
+  const rows = st.rows.map((r) => {
+    const c = r.category;
+    const w = Math.min(100, r.pct * 100).toFixed(1);
+    const foot = r.level === 'over' ? `Over by ${ctx.money(-r.left)}` : r.level === 'pace' ? `${ctx.money(r.left)} left · on pace for ${ctx.money(r.projected)}` : `${ctx.money(r.left)} left`;
+    return `<button class="jar budget-row" data-act="cat-open" data-cat="${esc(c.id)}" data-period="month" data-type="expense">
+      <span class="row"><span>${ctx.dot(ctx.catColor(c.id))}${esc(c.name)} <span class="muted">${Math.round(r.pct * 100)}%</span></span><span class="money">${ctx.money(r.spent)} <span class="muted">/ ${ctx.money(r.budget, { compact: true })}</span></span></span>
+      <span class="bar ${r.level === 'over' ? 'over' : r.level === 'ok' ? '' : 'gold'}"><i style="width:${w}%"></i><span class="mark" style="left:${evenPace.toFixed(1)}%" title="Where an even pace would be today"></span></span>
+      <span class="foot ${r.level === 'over' ? 'bad' : ''}">${foot}</span>
+    </button>`;
+  }).join('');
+  return `<section class="card"><h2>Budgets · ${esc(monthLabel(key))} <button class="card-link right" data-act="budget-set">Edit</button></h2>
+    <p class="muted small" style="margin-top:0">${ctx.money(st.spent)} of ${ctx.money(st.budget)} · ${st.left >= 0 ? `${ctx.money(st.left)} left` : `<b class="expense">${ctx.money(-st.left)} over</b>`} · ${st.daysLeft} day${st.daysLeft === 1 ? '' : 's'} to go. The line marks an even pace.</p>
+    ${rows}</section>`;
+}
+
+function budgetSheet() {
+  const { state } = ctx;
+  const key = monthKey(todayISO());
+  const cats = state.settings.categories.filter((c) => c.type === 'expense');
+  const avg = Object.fromEntries(cats.map((c) => [c.id, M.averageSpend(state, c.id, key, 3)]));
+  const round50 = (x) => Math.ceil(x / 5000) * 5000;
+  ctx.openSheet(`<h3>Monthly budgets <button type="button" class="icon-btn" data-close aria-label="Close">✕</button></h3>
+    <form id="budget-form" novalidate>
+      <p class="muted small" style="margin-top:0">Leave empty for no limit. Amounts in ${esc(base())} per month; "avg" is what you spent on average in the last 3 months (tap it to use it).</p>
+      <div class="budget-list">${cats.map((c) => `<label class="budget-edit">
+        <span class="n">${ctx.dot(ctx.catColor(c.id))}${esc(c.name)}</span>
+        ${avg[c.id] ? `<button type="button" class="card-link" data-fill="${esc(c.id)}" data-v="${round50(avg[c.id])}">avg ${ctx.money(avg[c.id], { compact: true })}</button>` : '<span></span>'}
+        <input type="text" inputmode="decimal" id="b-${esc(c.id)}" value="${c.budget ? esc(centsToPlain(c.budget)) : ''}" placeholder="no limit" aria-label="Budget for ${esc(c.name)}">
+      </label>`).join('')}</div>
+      <div class="btns" style="margin-top:14px"><button type="button" class="btn" data-fill-all>Use my averages for empty ones</button><button type="submit" class="btn primary">Save budgets</button></div>
+    </form>`, (sheet) => {
+    sheet.addEventListener('click', (e) => {
+      const one = e.target.closest('[data-fill]');
+      if (one) { sheet.querySelector(`#b-${CSS.escape(one.dataset.fill)}`).value = centsToPlain(Number(one.dataset.v)); return; }
+      if (e.target.closest('[data-fill-all]')) {
+        for (const b of sheet.querySelectorAll('[data-fill]')) {
+          const input = sheet.querySelector(`#b-${CSS.escape(b.dataset.fill)}`);
+          if (!input.value.trim()) input.value = centsToPlain(Number(b.dataset.v));
+        }
+      }
+    });
+    sheet.querySelector('#budget-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      let n = 0;
+      for (const c of cats) {
+        const v = evalAmount(sheet.querySelector(`#b-${CSS.escape(c.id)}`).value) || 0;
+        const next = v > 0 ? v : null;
+        if ((c.budget || null) !== next) { c.budget = next; M.touch(c); }
+        if (next) n++;
+      }
+      ctx.commit();
+      ctx.closeSheet();
+      ctx.toast(n ? `${n} budget${n === 1 ? '' : 's'} set` : 'No budgets set');
+    });
+  });
 }
 
 // Small "Coming up" card for the dashboard.
@@ -259,6 +329,7 @@ export function editRule(existing = null, preset = {}) {
 const findRule = (id) => (ctx.state.recurring || []).find((r) => r.id === id);
 
 export function onClick(act, el) {
+  if (act === 'budget-set') { budgetSheet(); return true; }
   if (act === 'rec-new') { editRule(); return true; }
   if (act === 'rec-edit') { const r = findRule(el.dataset.id); if (r) editRule(r); return true; }
   if (act === 'rec-log') { const r = findRule(el.dataset.id); if (r) logNow(r, el.dataset.date); return true; }
