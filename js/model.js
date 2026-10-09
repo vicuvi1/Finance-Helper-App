@@ -69,6 +69,8 @@ export function defaultState() {
     },
     tx: [],
     people: [],
+    // Recurring payments and income (js/recurring.js).
+    recurring: [],
     // id -> time it was deleted, so a sync can tell "deleted here" from
     // "never existed there".
     deleted: {},
@@ -109,7 +111,10 @@ export function normalizeState(raw) {
     .filter((p) => p && typeof p.id === 'string' && p.name)
     .map((p) => ({ note: '', ...p, updatedAt: p.updatedAt || 0 }));
   const deleted = raw.deleted && typeof raw.deleted === 'object' ? { ...raw.deleted } : {};
-  return { version: SCHEMA_VERSION, settings, tx, people, deleted, rates: raw.rates || null, meta: { ...base.meta, ...(raw.meta || {}) } };
+  const recurring = (Array.isArray(raw.recurring) ? raw.recurring : [])
+    .filter((r) => r && typeof r.id === 'string' && Number.isInteger(r.amount) && /^\d{4}-\d{2}-\d{2}$/.test(r.start || ''))
+    .map((r) => ({ every: 'month', currency: accCur[r.account] || baseCur, note: '', auto: false, paused: false, lastDone: null, ...r, updatedAt: r.updatedAt || 0 }));
+  return { version: SCHEMA_VERSION, settings, tx, people, recurring, deleted, rates: raw.rates || null, meta: { ...base.meta, ...(raw.meta || {}) } };
 }
 
 function validTx(t) {

@@ -23,6 +23,8 @@ import * as Binance from './screens/binance.js';
 import * as Sync from './screens/sync.js';
 import * as SelfCheck from './screens/selfcheck.js';
 import * as Backups from './screens/backups.js';
+import * as Plan from './screens/plan.js';
+import { FREQS, markDone } from './recurring.js';
 import { tableHTML, calendarHTML } from './logviews.js';
 import { dailyChart } from './charts.js';
 
@@ -267,6 +269,7 @@ function viewHome() {
       ${recent.length ? `<section class="card"><h2>Recent <button class="card-link right" data-go="log">Open log</button></h2><div class="list">${recent.map((t) => txRow(t, { showDate: true })).join('')}</div></section>` : ''}
     </div>
     <div class="dash-side">
+      ${Plan.homeCard()}
       ${goalCard()}
       ${tips.length ? `<section class="card"><h2>Heads up <button class="card-link right" data-go="reports">Reports</button></h2>${tips.map(tipCard).join('')}</section>` : ''}
       ${jarsCard(key)}
@@ -603,7 +606,9 @@ function openTxSheet(existing = null, preset = {}) {
       <div class="row2">
         ${isT ? accSelect('from', 'From') + accSelect('to', 'To') : accSelect('account', draft.type === 'income' ? 'Into' : 'Paid from')}
       </div>
-      <label class="field"><span>Date</span><input id="tx-date" type="date" value="${esc(draft.date)}"></label>
+      ${!existing && !isT && !draft.fromRule ? `<div class="row2"><label class="field"><span>Date</span><input id="tx-date" type="date" value="${esc(draft.date)}"></label>
+        <label class="field"><span>Repeat</span><select id="tx-repeat"><option value="">No</option>${FREQS.map((f) => `<option value="${f.id}" ${draft.repeat === f.id ? 'selected' : ''}>${f.label}</option>`).join('')}</select></label></div>`
+    : `<label class="field"><span>Date</span><input id="tx-date" type="date" value="${esc(draft.date)}"></label>`}
       <div class="btns">
         ${existing ? '<button type="button" class="btn danger" data-act="tx-delete">Delete</button>' : ''}
         <button type="submit" class="btn primary">${existing ? 'Save' : 'Add'}</button>
@@ -620,6 +625,7 @@ function openTxSheet(existing = null, preset = {}) {
     if (v('#tx-to-amount')) toText = v('#tx-to-amount').value;
     if (v('#tx-person')) draft.personName = v('#tx-person').value;
     if (v('#tx-loan')) draft.loan = v('#tx-loan').checked;
+    if (v('#tx-repeat')) draft.repeat = v('#tx-repeat').value;
     for (const f of ['account', 'from', 'to']) {
       const el = v(`#tx-${f}`);
       if (el) draft[f] = el.value;
@@ -716,11 +722,27 @@ function openTxSheet(existing = null, preset = {}) {
         ...(personId && draft.loan ? { loan: true } : {}),
       };
     }
+    // Logged from a recurring item on the Plan screen.
+    const rule = draft.fromRule && state.recurring.find((r) => r.id === draft.fromRule.id);
+    if (rule) {
+      tx.id = draft.fromRule.txId;
+      tx.recurring = rule.id;
+      markDone(rule, draft.fromRule.date, now);
+      state.tx = state.tx.filter((t) => t.id !== tx.id);
+      delete state.deleted[tx.id];
+    }
+    // "Repeat": this record becomes the first of a recurring item.
+    if (!existing && draft.repeat && tx.type !== 'transfer') {
+      const id = M.uid();
+      state.recurring.push({ id, createdAt: now, updatedAt: now, type: tx.type, amount: tx.amount, currency: tx.currency, account: tx.account, category: tx.category, note: tx.note, ...(tx.person ? { person: tx.person } : {}), every: draft.repeat, start: tx.date, lastDone: tx.date, auto: false, paused: false });
+      tx.recurring = id;
+    }
     if (existing) state.tx = state.tx.map((t) => (t.id === existing.id ? tx : t));
     else state.tx.push(tx);
     ui.flashId = tx.id;
     commit();
     closeSheet();
+    if (!existing && draft.repeat && tx.type !== 'transfer') { toast(`Added, and it repeats ${FREQS.find((f) => f.id === draft.repeat).short}. See Plan.`); return; }
     if (!existing && tx.type === 'income' && !tx.loan) openSplitSheet(tx);
     else toast(existing ? 'Saved' : `${tx.type === 'expense' ? 'Spent' : tx.type === 'income' ? 'Earned' : 'Moved'} ${formatMoney(tx.amount, tx.currency)}`);
   };
@@ -1343,7 +1365,7 @@ document.addEventListener('input', (e) => {
   }
 });
 
-// Desktop shortcuts: N = new record, / = search, 1-4 = sections, Esc = close.
+// Desktop shortcuts: N = new record, / = search, 1-8 = sections, Esc = close.
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && sheetRoot.firstChild) { closeSheet(); return; }
   if (e.key === 'Enter' && e.target.closest('#tx-table') && e.target.matches('input')) {
@@ -1355,7 +1377,7 @@ document.addEventListener('keydown', (e) => {
   if (e.ctrlKey || e.metaKey || e.altKey || sheetRoot.firstChild) return;
   if (e.target.closest('input, select, textarea')) return;
   if ((e.key === 'l' || e.key === 'L') && Security.hasLock()) { Security.lock(); return; }
-  const tabs = { 1: 'home', 2: 'log', 3: 'accounts', 4: 'people', 5: 'reports', 6: 'rates', 7: 'settings' };
+  const tabs = { 1: 'home', 2: 'log', 3: 'accounts', 4: 'plan', 5: 'people', 6: 'reports', 7: 'rates', 8: 'settings' };
   if (e.key === 'n' || e.key === 'N') { e.preventDefault(); openTxSheet(); }
   else if (e.key === '/') {
     e.preventDefault();
@@ -1367,9 +1389,10 @@ document.addEventListener('keydown', (e) => {
 // ---------- Screens ----------
 
 const SCREENS = {
-  home: { view: viewHome },
+  home: { view: viewHome, onClick: (a, el) => Plan.onClick(a, el) },
   log: { view: viewLog },
   accounts: AccountsScreen,
+  plan: Plan,
   people: PeopleScreen,
   reports: ReportsScreen,
   rates: RatesScreen,
@@ -1380,6 +1403,7 @@ function openMoreSheet() {
   const item = (tab, label, sub) => `<a href="#${tab}" class="tx more-item"><span class="t"><b>${label}</b><span>${sub}</span></span><span class="muted">›</span></a>`;
   openSheet(`<h3>More <button type="button" class="icon-btn" data-close aria-label="Close">✕</button></h3>
     <div class="list more-list">
+      ${item('plan', 'Plan', 'Bills, subscriptions and regular income')}
       ${item('people', 'People', 'Who gave you money, who you gave to, loans')}
       ${item('reports', 'Reports', 'Any month, quarter, year or your own dates')}
       ${item('rates', 'Rates & converter', 'Live exchange rates and crypto prices')}
@@ -1428,6 +1452,7 @@ Object.assign(ctx, {
   openTxSheet,
   openTransferSheet,
   updateRates,
+  suggestedRate: (cur) => suggestedRate(cur),
   restoreFromText: (text) => onJSONFile(text),
   // Sync brings in a merged copy of the data.
   replaceState: (next) => { state = next; persist(); },
@@ -1439,6 +1464,7 @@ Object.assign(ctx, {
     updateRates();
     Sync.refreshConnected().then((on) => on && Sync.syncNow());
     Binance.syncBinance();
+    Plan.runAuto();
   },
   // Lock screen "Reset this device": wipe local data and start fresh.
   resetDevice: () => {
@@ -1500,7 +1526,7 @@ if (!DEMO && 'serviceWorker' in navigator && (location.protocol === 'https:' || 
 // the old sheet format plus this month across several accounts and
 // currencies) so every screen has something to show. Bumping DEMO_VERSION
 // re-seeds previews opened before.
-const DEMO_VERSION = 2;
+const DEMO_VERSION = 3;
 
 async function seedDemo() {
   if (!DEMO || state.meta.demoSeeded === DEMO_VERSION) return;
@@ -1545,6 +1571,21 @@ async function seedDemo() {
   rec('expense', 16000, 8, 'hygiene', 'shampoo and soap', 'wallet');
   rec('expense', 9900, 8, 'clothes', 'socks', 'maib-visa');
   state.tx.push({ id: M.uid(), createdAt: t0, updatedAt: t0++, type: 'transfer', amount: 266000, currency: 'MDL', rate: 1, base: 266000, date: day(1), from: 'maib-visa', to: 'safe', note: 'Deposit 70% · salary' });
+  // Recurring: start last month; the ones already logged this month are done.
+  const prev = addMonths(monthKey(today), -1);
+  const thisDay = Number(today.slice(8, 10));
+  const plan = (note, type, amount, account, category, d, extra = {}) => {
+    const start = `${prev}-${String(d).padStart(2, '0')}`;
+    const cur = M.account(state, account).currency;
+    state.recurring.push({ id: M.uid(), createdAt: now, updatedAt: now, type, amount, currency: cur, account, category, note, every: 'month', start, lastDone: start, auto: false, paused: false, ...extra });
+  };
+  plan('salary', 'income', 380000, 'maib-visa', 'work', 1, { auto: true, lastDone: day(1) });
+  plan('website retainer', 'income', 120000, 'vb-usd', 'side', 20, { person: client });
+  plan('rent', 'expense', 450000, 'maib-visa', 'home', 25);
+  plan('internet', 'expense', 15000, 'maib-virt', 'home', Math.max(1, Math.min(thisDay - 2, 28)));
+  plan('google one', 'expense', 5000, 'maib-virt', 'subscriptions', 4, { auto: true, lastDone: day(4) });
+  plan('gym', 'expense', 60000, 'wallet', 'sport', 15);
+  plan('phone', 'expense', 12000, 'maib-visa', 'home', 12);
   state.settings.savingsAccount = 'safe';
   state.meta.demoSeeded = DEMO_VERSION;
   commit();
@@ -1558,6 +1599,7 @@ Updates.initUpdates();
 Binance.initBinance();
 Sync.initSync();
 Backups.initBackups();
+Plan.initPlan();
 
 document.addEventListener('submit', (e) => {
   if (e.target.closest('.sheet') || !e.target.id) return;

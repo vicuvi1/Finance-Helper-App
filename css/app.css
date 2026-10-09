@@ -737,3 +737,16 @@ kbd {
   .keys { display: block; margin: auto 8px 0; color: var(--muted); font-size: 12px; line-height: 2.1; }
   .app { padding: 34px 44px 48px; }
 }
+
+/* Plan: recurring payments and income */
+.rec-row { grid-template-columns: 36px minmax(0, 1fr) auto auto; }
+.rec-row:hover { background: none; }
+.rec-open { background: none; border: 0; padding: 0; text-align: left; color: inherit; font: inherit; cursor: pointer; min-width: 0; }
+.rec-open:hover b { text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--line-strong); }
+.rec-btns { display: flex; gap: 6px; }
+.btn.sm { min-height: 32px; padding: 5px 10px; font-size: 13px; border-radius: 9px; }
+.seg.two { grid-template-columns: repeat(2, 1fr); }
+@media (max-width: 520px) {
+  .rec-row { grid-template-columns: 36px minmax(0, 1fr) auto; }
+  .rec-row .rec-btns { grid-column: 2 / -1; justify-content: flex-end; }
+}

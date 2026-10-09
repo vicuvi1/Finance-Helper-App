@@ -26,6 +26,7 @@ A personal finance app that replaces the "finance 2026" Google Sheet: the same d
 | 📤 **Excel in and out** | **Copy table** and paste into Excel or Google Sheets; paste rows from them back in to import. **Export month** or **Export to Excel** gives a real `.xlsx` with one tab per month, a year overview, live SUM formulas and filters. |
 | 📅 **Year overview** | The "2026 Overview" tab: earned / spent / kept / % for every month. |
 | 📥 **Import your sheet** | Download a month tab as CSV and import it. Dates like `1 martie 2026` and amounts like `2 300MDL` just work. Importing the same month twice is safe. |
+| 🔁 **Recurring & bills** | Rent, subscriptions, salary, a client who pays monthly: the **Plan** screen shows what's due and the next 30 days, your regular costs per month, and spots payments that look regular in your log. One tap logs a bill; fixed ones can log themselves. Tick **Repeat** when adding a record. |
 | 💾 **Backups** | One-tap JSON backup and restore, plus CSV export. The app reminds you when it's been a while. |
 
 ## Use it

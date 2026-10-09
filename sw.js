@@ -12,6 +12,8 @@ const SHELL = [
   './js/dates.js',
   './js/store.js',
   './js/cipher.js',
+  './js/recurring.js',
+  './js/screens/plan.js',
   './js/csv.js',
   './js/importer.js',
   './js/charts.js',

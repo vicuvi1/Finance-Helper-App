@@ -61,6 +61,14 @@ function utc(iso) {
   return new Date(Date.UTC(y, m - 1, d));
 }
 
+export function addDays(iso, n) {
+  const d = utc(iso);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
+export const daysBetween = (a, b) => Math.round((utc(b) - utc(a)) / 864e5);
+
 export function weekday(iso) {
   return utc(iso).getUTCDay();
 }
