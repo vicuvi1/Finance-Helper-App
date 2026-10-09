@@ -413,6 +413,15 @@ body.locked .app, body.locked .tabbar, body.locked #sheet-root, body.locked .toa
 .steps { margin: 0 0 14px; padding-left: 20px; color: var(--muted); display: grid; gap: 6px; }
 .steps b { color: var(--text); }
 
+.checks { display: grid; gap: 2px; margin-bottom: 12px; }
+.check-row { display: grid; grid-template-columns: auto 1fr; gap: 12px; align-items: start; padding: 8px 0; border-top: 1px solid var(--line); }
+.check-row:first-child { border-top: 0; }
+.check-row > span:last-child { display: grid; gap: 1px; font-size: 14px; }
+.check-row .tag { font: 600 10px/1 var(--font); text-transform: uppercase; letter-spacing: 0.08em; padding: 5px 7px; border-radius: 6px; min-width: 38px; text-align: center; margin-top: 2px; }
+.check-row.ok .tag { background: var(--income-soft); color: var(--income); }
+.check-row.bad .tag { background: var(--expense-soft); color: var(--expense); }
+.check-row.skip .tag { background: var(--surface-3); color: var(--muted); }
+
 /* Reports */
 .rep-bar { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; justify-content: space-between; margin-bottom: 14px; }
 .rep-bar .chips { margin: 0; }

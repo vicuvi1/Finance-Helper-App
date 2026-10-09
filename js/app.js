@@ -20,6 +20,7 @@ import * as Security from './screens/security.js';
 import * as Updates from './screens/updates.js';
 import * as Binance from './screens/binance.js';
 import * as Sync from './screens/sync.js';
+import * as SelfCheck from './screens/selfcheck.js';
 import { tableHTML, calendarHTML } from './logviews.js';
 import { dailyChart } from './charts.js';
 
@@ -420,6 +421,7 @@ function viewSettings() {
   ${Binance.settingsCard()}
   ${Security.settingsCard()}
   ${Updates.settingsCard()}
+  ${SelfCheck.settingsCard()}
 
   <section class="card"><h2>Danger zone</h2>
     <button class="btn danger block" data-act="wipe">Erase everything on this device</button>
@@ -1282,7 +1284,7 @@ const SCREENS = {
   people: PeopleScreen,
   reports: ReportsScreen,
   rates: RatesScreen,
-  settings: { view: viewSettings, onClick: (a, el) => Security.onClick(a, el) || Binance.onClick(a) || Sync.onClick(a) || (a.startsWith('update-') && (Updates.onClick(a), true)), onChange: Security.onChange },
+  settings: { view: viewSettings, onClick: (a, el) => Security.onClick(a, el) || Binance.onClick(a) || Sync.onClick(a) || SelfCheck.onClick(a) || (a.startsWith('update-') && (Updates.onClick(a), true)), onChange: Security.onChange },
 };
 
 function openMoreSheet() {

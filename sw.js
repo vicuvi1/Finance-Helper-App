@@ -33,6 +33,7 @@ const SHELL = [
   './js/sync.js',
   './js/gdrive-web.js',
   './js/screens/sync.js',
+  './js/screens/selfcheck.js',
   './fonts/Geist-Variable.woff2',
   './fonts/GeistMono-Variable.woff2',
   './manifest.webmanifest',
