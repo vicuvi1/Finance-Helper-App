@@ -31,6 +31,8 @@ contextBridge.exposeInMainWorld('desktop', {
     remove: (name) => ipcRenderer.invoke('backup-delete', name),
     openFolder: () => ipcRenderer.invoke('backup-folder'),
   },
+  hotkey: () => ipcRenderer.invoke('hotkey-status'),
+  onQuickAdd: (cb) => ipcRenderer.on('quick-add', () => cb()),
   update: {
     check: () => ipcRenderer.invoke('update-check'),
     download: () => ipcRenderer.invoke('update-download'),

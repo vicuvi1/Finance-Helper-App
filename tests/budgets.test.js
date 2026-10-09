@@ -51,3 +51,19 @@ test('average of the last full months, and tips', () => {
   assert.ok(tips.some((t) => /Fun.*80%|Fun.*90%/.test(t.title)));
   assert.ok(tips.some((t) => /Food: on pace/.test(t.title)));
 });
+
+test('quick picks: frequent records and favorites first', async () => {
+  const { quickPicks, toggleFavorite, isFavorite } = await import('../js/model.js');
+  const s = defaultState();
+  const t = (date, note, amount, cat = 'transport') => ({ id: `q${n++}`, type: 'expense', amount, currency: 'MDL', date, category: cat, account: 'wallet', note });
+  s.tx.push(t('2026-10-01', 'bus', 600), t('2026-10-02', 'bus', 600), t('2026-10-03', 'Bus ', 600), t('2026-10-02', 'coffee', 3500, 'food'), t('2026-10-05', 'coffee', 3500, 'food'), t('2026-10-05', 'rent', 450000, 'home'), t('2026-05-01', 'bus', 600));
+  let picks = quickPicks(s, '2026-10-09');
+  assert.deepEqual(picks.map((p) => [p.note.trim().toLowerCase(), p.count]), [['bus', 3], ['coffee', 2]]);
+  assert.equal(toggleFavorite(s, s.tx[5]), true);
+  assert.ok(isFavorite(s, s.tx[5]));
+  picks = quickPicks(s, '2026-10-09');
+  assert.equal(picks[0].note, 'rent');
+  assert.equal(picks[0].fav, true);
+  assert.equal(toggleFavorite(s, s.tx[5]), false);
+  assert.equal(quickPicks(s, '2026-10-09').length, 2);
+});

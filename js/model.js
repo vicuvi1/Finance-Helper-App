@@ -2,7 +2,7 @@
 // so it is all tested in Node without a browser.
 
 import { splitByPercent, formatMoney } from './money.js';
-import { monthKey, addMonths, daysInMonth, monthLabel } from './dates.js';
+import { monthKey, addMonths, daysInMonth, monthLabel, addDays } from './dates.js';
 import { convert, coinValue } from './fx.js';
 
 // v1: first release. v2: custom multi-currency accounts, people, loans,
@@ -352,6 +352,43 @@ export function categoryComparison(state, key) {
 
 // Honest, specific tips computed from your own numbers. Each has a level
 // (good / warn / bad / info) so the most important ones show first.
+// ---------- Quick picks ----------
+// Records you log again and again (same type, note, category, account and
+// amount) in the last 90 days, most used first, after your pinned favorites.
+
+const pickKey = (t) => [t.type, String(t.note || '').trim().toLowerCase(), t.category, t.account, t.amount, t.currency || ''].join('|');
+
+export function quickPicks(state, today, n = 8) {
+  const favs = (state.settings.favorites || []).map((f) => ({ ...f, fav: true }));
+  const pinned = new Set(favs.map(pickKey));
+  const since = addDays(today, -90);
+  const groups = new Map();
+  for (const t of state.tx) {
+    if (t.type === 'transfer' || t.loan || t.date < since || t.date > today) continue;
+    const k = pickKey(t);
+    if (pinned.has(k)) continue;
+    const g = groups.get(k) || { type: t.type, amount: t.amount, currency: t.currency, note: t.note || '', category: t.category, account: t.account, count: 0, last: '' };
+    g.count++;
+    if (t.date > g.last) g.last = t.date;
+    groups.set(k, g);
+  }
+  const auto = [...groups.values()].filter((g) => g.count >= 2).sort((a, b) => b.count - a.count || b.last.localeCompare(a.last));
+  return [...favs, ...auto].slice(0, n);
+}
+
+export const isFavorite = (state, t) => (state.settings.favorites || []).some((f) => pickKey(f) === pickKey(t));
+
+// Pins or unpins a record as a favorite quick pick. Returns the new state.
+export function toggleFavorite(state, t, now = Date.now()) {
+  const list = state.settings.favorites || [];
+  const on = !isFavorite(state, t);
+  state.settings.favorites = on
+    ? [...list, { type: t.type, amount: t.amount, currency: t.currency, note: t.note || '', category: t.category, account: t.account }].slice(-12)
+    : list.filter((f) => pickKey(f) !== pickKey(t));
+  state.settings.updatedAt = now;
+  return on;
+}
+
 // ---------- Budgets ----------
 // A category can have a monthly budget (category.budget, in the main
 // currency's cents). Loans don't count, same as everywhere else.

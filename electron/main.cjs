@@ -2,7 +2,7 @@
 // private app:// origin so ES modules and saved data work like on the web,
 // and nothing is loaded from the internet.
 
-const { app, BrowserWindow, protocol, net, shell, Menu, ipcMain, safeStorage } = require('electron');
+const { app, BrowserWindow, protocol, net, shell, Menu, ipcMain, safeStorage, globalShortcut } = require('electron');
 const { createBinance } = require('./binance.cjs');
 const { createDrive } = require('./gdrive.cjs');
 const path = require('node:path');
@@ -200,6 +200,27 @@ app.whenReady().then(() => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
 });
+
+// Ctrl+Alt+N (Cmd+Alt+N on a Mac) from anywhere: bring the app forward
+// with a new record open.
+const HOTKEY = 'CommandOrControl+Alt+N';
+let hotkeyOk = false;
+
+function quickAdd() {
+  let [win] = BrowserWindow.getAllWindows();
+  if (!win) win = createWindow();
+  if (win.isMinimized()) win.restore();
+  win.show();
+  win.focus();
+  if (win.webContents.isLoading()) win.webContents.once('did-finish-load', () => win.webContents.send('quick-add'));
+  else win.webContents.send('quick-add');
+}
+
+app.whenReady().then(() => {
+  try { hotkeyOk = globalShortcut.register(HOTKEY, quickAdd); } catch { hotkeyOk = false; }
+});
+app.on('will-quit', () => globalShortcut.unregisterAll());
+ipcMain.handle('hotkey-status', () => ({ key: process.platform === 'darwin' ? 'Cmd+Alt+N' : 'Ctrl+Alt+N', ok: hotkeyOk }));
 
 app.on('second-instance', () => {
   const [win] = BrowserWindow.getAllWindows();

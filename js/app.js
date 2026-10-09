@@ -213,6 +213,13 @@ function goalCard() {
 
 // ---------- Screens ----------
 
+// Home: one tap opens a record already filled in; Enter adds it.
+function quickRow() {
+  const picks = M.quickPicks(state, todayISO(), 8);
+  if (!picks.length) return '';
+  return `<div class="picks home-picks" role="group" aria-label="Quick add"><span class="label">Quick add</span>${picks.map((p, i) => `<button type="button" class="pick" data-act="quick-pick" data-i="${i}">${p.fav ? '<span class="gold">★</span> ' : ''}${esc(p.note || catOf(p.category).name)} <b class="${p.type === 'income' ? 'income' : ''}">${formatMoney(p.amount, p.currency, { compact: true })}</b></button>`).join('')}</div>`;
+}
+
 function viewHome() {
   const today = todayISO();
   const key = monthKey(today);
@@ -264,6 +271,7 @@ function viewHome() {
       ${stats(s)}${rateBar(s)}
     </div>
   </section>
+  ${quickRow()}
   <div class="dash">
     <div class="dash-main">
       ${Spending.spendingCard({ period: ui.spendPeriod })}
@@ -576,6 +584,8 @@ function openTxSheet(existing = null, preset = {}) {
   let rateText = existing?.rate && existing.currency !== baseCur ? String(existing.rate) : '';
   let catTouched = !!existing;
   let addingCat = false;
+  // One-tap fills for things you log often (and your favorites).
+  const picks = existing || preset.fromRule ? [] : M.quickPicks(state, todayISO(), 8);
 
   const curOf = () => M.account(state, draft.type === 'transfer' ? draft.from : draft.account)?.currency || baseCur;
   const toCur = () => M.account(state, draft.to)?.currency || baseCur;
@@ -593,6 +603,7 @@ function openTxSheet(existing = null, preset = {}) {
     const people = state.people.map((p) => `<option value="${esc(p.name)}">`).join('');
     return `<form id="tx-form" novalidate>
       <h3>${existing ? 'Edit record' : 'New record'} <button type="button" class="icon-btn" data-close aria-label="Close">✕</button></h3>
+      ${picks.length ? `<div class="picks" role="group" aria-label="Quick picks">${picks.map((p, i) => `<button type="button" class="pick" data-pick="${i}" title="${p.fav ? 'Favorite' : `Logged ${p.count} times lately`}">${p.fav ? '<span class="gold">★</span> ' : ''}${esc(p.note || catOf(p.category).name)} <b class="${p.type === 'income' ? 'income' : ''}">${formatMoney(p.type === 'income' ? p.amount : p.amount, p.currency, { compact: true })}</b></button>`).join('')}</div>` : ''}
       <div class="seg" role="group" aria-label="Type">${segBtn('expense', 'Spent')}${segBtn('income', 'Earned')}${segBtn('transfer', 'Move')}</div>
       <div class="amount-input"><input id="tx-amount" type="text" inputmode="decimal" autocomplete="off" placeholder="0" value="${esc(amountText)}" aria-label="Amount in ${cur}"><span class="cur">${esc(cur)}</span></div>
       <div class="calc-hint" id="calc-hint">${isT ? 'Move money between your accounts' : 'Tip: type 120+45 and it adds up'}</div>
@@ -615,6 +626,7 @@ function openTxSheet(existing = null, preset = {}) {
     : `<label class="field"><span>Date</span><input id="tx-date" type="date" value="${esc(draft.date)}"></label>`}
       <div class="btns">
         ${existing ? '<button type="button" class="btn danger" data-act="tx-delete">Delete</button>' : ''}
+        ${existing && !isT ? `<button type="button" class="btn" data-act="tx-fav" aria-pressed="${M.isFavorite(state, existing)}">${M.isFavorite(state, existing) ? '★ Favorite' : '☆ Make favorite'}</button>` : ''}
         <button type="submit" class="btn primary">${existing ? 'Save' : 'Add'}</button>
       </div>
     </form>`;
@@ -793,6 +805,30 @@ function openTxSheet(existing = null, preset = {}) {
         draft.category = cat.dataset.cat;
         catTouched = true;
         for (const b of sheet.querySelectorAll('.cat[data-cat]')) b.setAttribute('aria-pressed', String(b === cat));
+        return;
+      }
+      const pick = e.target.closest('[data-pick]');
+      if (pick) {
+        const p = picks[pick.dataset.pick];
+        readInputs(sheet);
+        Object.assign(draft, { type: p.type, note: p.note, category: p.category });
+        if (M.account(state, p.account) && !M.account(state, p.account).archived) draft.account = p.account;
+        amountText = centsToPlain(p.amount);
+        rateText = '';
+        catTouched = true;
+        paint(sheet, false);
+        const a = sheet.querySelector('#tx-amount');
+        a.focus();
+        a.select();
+        return;
+      }
+      if (e.target.closest('[data-act="tx-fav"]')) {
+        const on = M.toggleFavorite(state, existing);
+        persist();
+        Sync.changed();
+        readInputs(sheet);
+        paint(sheet, false);
+        toast(on ? 'Added to your quick picks' : 'Removed from quick picks');
         return;
       }
       if (e.target.closest('[data-act="tx-delete"]')) deleteTx(existing.id);
@@ -1307,6 +1343,10 @@ document.addEventListener('click', (e) => {
   if (act === 'acc-open') AccountsScreen.openAccount(el.dataset.id);
   else if (act === 'person-open') PeopleScreen.openPerson(el.dataset.id);
   else if (act === 'more') openMoreSheet();
+  else if (act === 'quick-pick') {
+    const p = M.quickPicks(state, todayISO(), 8)[Number(el.dataset.i)];
+    if (p) openTxSheet(null, { type: p.type, note: p.note, category: p.category, account: p.account, amountText: centsToPlain(p.amount) });
+  }
   else if (act.startsWith('update-')) Updates.onClick(act);
   else if (act === 'cat-open') Spending.openCategory(el.dataset.cat, el.dataset.period, el.dataset.type);
   else if (act === 'spend-period') {
@@ -1501,9 +1541,9 @@ function route() {
   render({ enter: true });
   window.scrollTo(0, 0);
   // "Add a record" shortcut from the home-screen icon.
-  if (tab === 'add') {
+  if (tab === 'add' || tab === 'add-income' || tab === 'add-expense') {
     history.replaceState(null, '', '#home');
-    openTxSheet();
+    openTxSheet(null, tab === 'add-income' ? { type: 'income' } : {});
   }
 }
 
@@ -1546,7 +1586,7 @@ if (!DEMO && 'serviceWorker' in navigator && (location.protocol === 'https:' || 
 // the old sheet format plus this month across several accounts and
 // currencies) so every screen has something to show. Bumping DEMO_VERSION
 // re-seeds previews opened before.
-const DEMO_VERSION = 5;
+const DEMO_VERSION = 6;
 
 async function seedDemo() {
   if (!DEMO || state.meta.demoSeeded === DEMO_VERSION) return;
@@ -1590,6 +1630,8 @@ async function seedDemo() {
   rec('expense', 21000, 6, 'food', 'dinner out', 'maib-visa');
   rec('expense', 16000, 8, 'hygiene', 'shampoo and soap', 'wallet');
   rec('expense', 9900, 8, 'clothes', 'socks', 'maib-visa');
+  for (const d of [2, 3, 6, 8]) rec('expense', 600, d, 'transport', 'bus', 'wallet');
+  for (const d of [2, 5, 8]) rec('expense', 3500, d, 'food', 'coffee', 'maib-virt');
   state.tx.push({ id: M.uid(), createdAt: t0, updatedAt: t0++, type: 'transfer', amount: 266000, currency: 'MDL', rate: 1, base: 266000, date: day(1), from: 'maib-visa', to: 'safe', note: 'Deposit 70% · salary' });
   // Recurring: start last month; the ones already logged this month are done.
   const prev = addMonths(monthKey(today), -1);
@@ -1630,6 +1672,19 @@ Binance.initBinance();
 Sync.initSync();
 Backups.initBackups();
 Plan.initPlan();
+
+// Desktop: Ctrl+Alt+N from any app brings this window up with a new record.
+if (window.desktop?.onQuickAdd) {
+  window.desktop.onQuickAdd(() => {
+    if (Security.isLocked()) return;
+    closeSheet();
+    openTxSheet();
+  });
+  window.desktop.hotkey?.().then((h) => {
+    const keys = document.querySelector('.tabbar .keys');
+    if (h?.ok && keys) keys.insertAdjacentHTML('beforeend', `<br>${h.key.split('+').map((k) => `<kbd>${k}</kbd>`).join('')} from anywhere`);
+  }).catch(() => {});
+}
 
 document.addEventListener('submit', (e) => {
   if (e.target.closest('.sheet') || !e.target.id) return;
