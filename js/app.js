@@ -14,6 +14,7 @@ import { ctx } from './ctx.js';
 import * as RatesScreen from './screens/rates.js';
 import * as AccountsScreen from './screens/accounts.js';
 import * as Spending from './screens/spending.js';
+import * as PeopleScreen from './screens/people.js';
 import { tableHTML, calendarHTML } from './logviews.js';
 import { trendChart, dailyChart } from './charts.js';
 
@@ -1297,7 +1298,7 @@ document.addEventListener('keydown', (e) => {
   }
   if (e.ctrlKey || e.metaKey || e.altKey || sheetRoot.firstChild) return;
   if (e.target.closest('input, select, textarea')) return;
-  const tabs = { 1: 'home', 2: 'log', 3: 'accounts', 4: 'insights', 5: 'rates', 6: 'settings' };
+  const tabs = { 1: 'home', 2: 'log', 3: 'accounts', 4: 'people', 5: 'insights', 6: 'rates', 7: 'settings' };
   if (e.key === 'n' || e.key === 'N') { e.preventDefault(); openTxSheet(); }
   else if (e.key === '/') {
     e.preventDefault();
@@ -1312,6 +1313,7 @@ const SCREENS = {
   home: { view: viewHome },
   log: { view: viewLog },
   accounts: AccountsScreen,
+  people: PeopleScreen,
   insights: { view: viewInsights },
   rates: RatesScreen,
   settings: { view: viewSettings },
@@ -1321,6 +1323,7 @@ function openMoreSheet() {
   const item = (tab, label, sub) => `<a href="#${tab}" class="tx more-item"><span class="t"><b>${label}</b><span>${sub}</span></span><span class="muted">›</span></a>`;
   openSheet(`<h3>More <button type="button" class="icon-btn" data-close aria-label="Close">✕</button></h3>
     <div class="list more-list">
+      ${item('people', 'People', 'Who gave you money, who you gave to, loans')}
       ${item('insights', 'Insights', 'Where money goes and comes from, year overview')}
       ${item('rates', 'Rates & converter', 'Live exchange rates and crypto prices')}
       ${item('settings', 'Settings', 'Goal, smart split, categories, backups')}

@@ -22,6 +22,7 @@ const SHELL = [
   './js/screens/accounts.js',
   './js/screens/rates.js',
   './js/screens/spending.js',
+  './js/screens/people.js',
   './fonts/Geist-Variable.woff2',
   './fonts/GeistMono-Variable.woff2',
   './manifest.webmanifest',
