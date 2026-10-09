@@ -16,6 +16,7 @@ const SHELL = [
   './js/charts.js',
   './js/logviews.js',
   './js/xlsx.js',
+  './js/xlsx-read.js',
   './js/fx.js',
   './js/rates.js',
   './js/ctx.js',

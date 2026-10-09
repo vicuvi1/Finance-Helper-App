@@ -123,6 +123,18 @@ export function importRows(rows, state, { account } = {}) {
   return { format: cols.format, tx: out, duplicates, skipped, income, expense, months };
 }
 
+// A whole workbook (every tab): each tab is imported on its own, so you can
+// see per month what will come in and leave tabs out (e.g. an overview).
+export function importWorkbook(sheets, state, opts = {}) {
+  const out = [];
+  for (const sh of sheets) {
+    const rows = sh.rows.filter((r) => r && r.some((c) => String(c ?? '').trim() !== ''));
+    if (!rows.length) { out.push({ name: sh.name, tx: [], income: 0, expense: 0, months: [], duplicates: 0 }); continue; }
+    out.push({ name: sh.name, ...importRows(rows.map((r) => r.map((c) => (c === true ? 'yes' : c === false ? '' : c))), state, opts) });
+  }
+  return { sheets: out };
+}
+
 export const EXPORT_HEADER = ['Date', 'Type', 'Amount', 'Currency', 'Category', 'Account', 'From', 'To', 'Note', 'Person', 'Loan'];
 
 // Rows as people read them (names, not ids), oldest first. Used for the CSV

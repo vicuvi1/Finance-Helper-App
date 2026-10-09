@@ -7,7 +7,8 @@ import { formatMoney, evalAmount, centsToPlain } from './money.js';
 import { todayISO, monthKey, monthLabel, addMonths, dayLabel } from './dates.js';
 import { convert, pairRate } from './fx.js';
 import { parseCSV, toCSV } from './csv.js';
-import { importRows, exportRows, toTSV, monthSheet, overviewSheet } from './importer.js';
+import { importRows, importWorkbook, exportRows, toTSV, monthSheet, overviewSheet } from './importer.js';
+import { readWorkbook } from './xlsx-read.js';
 import { workbook } from './xlsx.js';
 import { refreshRates } from './rates.js';
 import { ctx } from './ctx.js';
@@ -399,13 +400,13 @@ function viewSettings() {
       <button class="btn" data-act="import-json">Restore backup</button>
     </div>
     <div class="btns" style="margin-top:8px">
-      <button class="btn" data-act="import-csv">Import Google Sheet (CSV)</button>
+      <button class="btn" data-act="import-csv">Import Excel / Google Sheet</button>
       <button class="btn" data-act="export-xlsx">Export to Excel</button>
     </div>
     <div class="btns" style="margin-top:8px">
       <button class="btn" data-act="export-csv">Export CSV</button>
     </div>
-    <p class="muted small" style="margin-bottom:0">From Google Sheets: open a month tab → File → Download → Comma-separated values (.csv), then import it here. Repeat for each month. Importing the same month twice is safe.</p>
+    <p class="muted small" style="margin-bottom:0">From Google Sheets: File → Download → <b>Microsoft Excel (.xlsx)</b> and import the whole file: every month tab at once, you pick which. A single tab as .csv works too. Importing the same month twice is safe.</p>
   </section>
 
   <section class="card"><h2>Look</h2>
@@ -1099,6 +1100,52 @@ async function onCSVFile(text) {
   });
 }
 
+// A whole .xlsx: one line per tab with what it holds; untick tabs to skip.
+async function onWorkbookFile(buf) {
+  const sheets = await readWorkbook(buf);
+  const res = importWorkbook(sheets, state);
+  const tabs = res.sheets;
+  const useful = tabs.filter((t) => t.tx.length);
+  if (!useful.length) {
+    const dup = tabs.reduce((a, t) => a + (t.duplicates || 0), 0);
+    toast(dup ? `Already imported (${dup} records).` : 'No records found in this file. Rows need a date and an amount.');
+    return;
+  }
+  const row = (t, i) => `<label class="tab-row ${t.tx.length ? '' : 'empty'}">
+      <input type="checkbox" data-tab-i="${i}" ${t.tx.length ? 'checked' : 'disabled'}>
+      <span class="t"><b>${esc(t.name)}</b><span class="muted small">${t.tx.length ? `${t.months.map((m) => monthLabel(m, true)).join(', ')} · ${t.tx.length} records${t.duplicates ? ` · ${t.duplicates} already here` : ''}` : t.duplicates ? `all ${t.duplicates} already here` : 'nothing to import'}</span></span>
+      <span class="amount">${t.tx.length ? `<span class="income">+${money(t.income)}</span><span class="sub-amt">−${money(t.expense)}</span>` : ''}</span>
+    </label>`;
+  openSheet(`<h3>Import ${tabs.length} tab${tabs.length === 1 ? '' : 's'} <button type="button" class="icon-btn" data-close aria-label="Close">✕</button></h3>
+    <p class="muted small" style="margin-top:0">Check the totals against your sheet. Categories are guessed from your notes; fix any later in the Log.</p>
+    <div class="list tab-list">${tabs.map(row).join('')}</div>
+    <label class="field" style="margin-top:12px"><span>Put them in</span><select id="imp-acc">${state.settings.accounts.filter((a) => !a.archived).map((a) => `<option value="${esc(a.id)}">${esc(a.name)}</option>`).join('')}</select></label>
+    <div class="btns"><button class="btn" data-close>Cancel</button><button class="btn primary" id="imp-go">Import</button></div>`, (sheet) => {
+    const count = () => [...sheet.querySelectorAll('[data-tab-i]:checked')].reduce((a, el) => a + tabs[el.dataset.tabI].tx.length, 0);
+    const btn = sheet.querySelector('#imp-go');
+    const label = () => { const n = count(); btn.textContent = `Import ${n} record${n === 1 ? '' : 's'}`; btn.disabled = !n; };
+    sheet.addEventListener('change', label);
+    label();
+    btn.addEventListener('click', () => {
+      const acc = sheet.querySelector('#imp-acc').value;
+      const cur = M.account(state, acc)?.currency || state.settings.currency;
+      const picked = [...sheet.querySelectorAll('[data-tab-i]:checked')].flatMap((el) => tabs[el.dataset.tabI].tx);
+      for (const t of picked) {
+        if (!t.account) continue;
+        t.account = acc;
+        if (cur !== t.currency) { t.currency = cur; t.rate = suggestedRate(cur) || 1; t.base = Math.round(t.amount * t.rate); }
+      }
+      state.tx.push(...picked);
+      commit();
+      closeSheet();
+      const months = [...new Set(picked.map((t) => t.date.slice(0, 7)))].sort();
+      if (months.length) ui.month = months.at(-1);
+      location.hash = '#log';
+      toast(`Imported ${picked.length} records from ${months.length} month${months.length === 1 ? '' : 's'}`);
+    });
+  });
+}
+
 async function onJSONFile(text) {
   if (text == null) return;
   let next;
@@ -1237,7 +1284,13 @@ document.addEventListener('change', (e) => {
   if (e.target.closest('.sheet')) return;
   if (SCREENS[ui.tab]?.onChange?.(e.target)) return;
   if (e.target.closest('#tx-table')) onCellChange(e.target);
-  else if (e.target.id === 'file-csv') readFile(e.target).then(onCSVFile);
+  else if (e.target.id === 'file-csv') {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (/\.xlsx$/i.test(file.name)) file.arrayBuffer().then(onWorkbookFile).catch((err) => toast(err.message));
+    else file.text().then(onCSVFile);
+  }
   else if (e.target.id === 'file-json') readFile(e.target).then(onJSONFile);
   else onSettingsChange(e.target);
 });

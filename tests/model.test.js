@@ -235,3 +235,32 @@ test('Excel export: a valid .xlsx with one tab per month and formulas', async ()
   assert.equal(excelDate('2026-03-01'), 46082);
   assert.equal(safeSheetName('a/b:c?'), 'a b c');
 });
+
+test('reads a real .xlsx (made by another program) and imports every month tab', async () => {
+  const { readWorkbook, serialToISO } = await import('../js/xlsx-read.js');
+  const { importWorkbook } = await import('../js/importer.js');
+  const buf = readFileSync(new URL('./fixtures/sample-workbook.xlsx', import.meta.url));
+  const sheets = await readWorkbook(buf);
+  assert.deepEqual(sheets.map((s) => s.name), ['2026 Overview', 'Martie', 'Aprilie']);
+  assert.equal(sheets[1].rows[1][0], '2026-03-01');
+  assert.equal(sheets[1].rows[3][2], 'salary + mom');
+  assert.equal(serialToISO(46082), '2026-03-01');
+  const state = defaultState();
+  const res = importWorkbook(sheets, state);
+  const by = Object.fromEntries(res.sheets.map((s) => [s.name, s]));
+  assert.equal(by['2026 Overview'].tx.length, 0);
+  assert.equal(by.Martie.income, 80000);
+  assert.equal(by.Martie.expense, 317500);
+  assert.equal(by.Aprilie.tx.length, 5);
+  assert.deepEqual(by.Aprilie.months, ['2026-04']);
+});
+
+test('our own .xlsx export reads back', async () => {
+  const { readWorkbook } = await import('../js/xlsx-read.js');
+  const { workbook } = await import('../js/xlsx.js');
+  const { monthSheet } = await import('../js/importer.js');
+  const { state } = withMarch();
+  const sheets = await readWorkbook(workbook([{ name: 'March 2026', ...monthSheet(state, '2026-03') }]));
+  assert.equal(sheets[0].rows[1][0], '2026-03-01');
+  assert.equal(sheets[0].rows[1][1], 'Earned');
+});

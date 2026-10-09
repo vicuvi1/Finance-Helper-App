@@ -422,6 +422,13 @@ body.locked .app, body.locked .tabbar, body.locked #sheet-root, body.locked .toa
 .check-row.bad .tag { background: var(--expense-soft); color: var(--expense); }
 .check-row.skip .tag { background: var(--surface-3); color: var(--muted); }
 
+.tab-row { text-align: left; display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px 14px; border-top: 1px solid var(--line); cursor: pointer; }
+.tab-row:first-child { border-top: 0; }
+.tab-row.empty { opacity: 0.55; cursor: default; }
+.tab-row input { width: 18px; height: 18px; accent-color: var(--gold); }
+.tab-row .t { display: grid; gap: 1px; min-width: 0; }
+.tab-row .amount { text-align: right; }
+
 /* Reports */
 .rep-bar { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; justify-content: space-between; margin-bottom: 14px; }
 .rep-bar .chips { margin: 0; }
