@@ -23,6 +23,9 @@ function deviceId() {
 
 const clean = (e) => String(e?.message || e).replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
 
+// The Drive connection, when it's on (used for daily snapshots too).
+export const driveIfConnected = () => (s.connected && !ctx.DEMO ? transport() : null);
+
 export async function syncNow({ announce = false } = {}) {
   const t = transport();
   if (!t || !s.connected || s.busy || ctx.DEMO) return;

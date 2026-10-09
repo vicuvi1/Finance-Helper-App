@@ -22,6 +22,7 @@ import * as Updates from './screens/updates.js';
 import * as Binance from './screens/binance.js';
 import * as Sync from './screens/sync.js';
 import * as SelfCheck from './screens/selfcheck.js';
+import * as Backups from './screens/backups.js';
 import { tableHTML, calendarHTML } from './logviews.js';
 import { dailyChart } from './charts.js';
 
@@ -419,6 +420,7 @@ function viewSettings() {
   </section>
 
   ${Sync.settingsCard()}
+  ${Backups.settingsCard()}
   ${Binance.settingsCard()}
   ${Security.settingsCard()}
   ${Updates.settingsCard()}
@@ -1337,7 +1339,7 @@ const SCREENS = {
   people: PeopleScreen,
   reports: ReportsScreen,
   rates: RatesScreen,
-  settings: { view: viewSettings, onClick: (a, el) => Security.onClick(a, el) || Binance.onClick(a) || Sync.onClick(a) || SelfCheck.onClick(a) || (a.startsWith('update-') && (Updates.onClick(a), true)), onChange: Security.onChange },
+  settings: { view: viewSettings, onClick: (a, el) => Security.onClick(a, el) || Binance.onClick(a) || Sync.onClick(a) || SelfCheck.onClick(a) || Backups.onClick(a, el) || (a.startsWith('update-') && (Updates.onClick(a), true)), onChange: Security.onChange },
 };
 
 function openMoreSheet() {
@@ -1392,6 +1394,7 @@ Object.assign(ctx, {
   openTxSheet,
   openTransferSheet,
   updateRates,
+  restoreFromText: (text) => onJSONFile(text),
   // Sync brings in a merged copy of the data.
   replaceState: (next) => { state = next; persist(); },
   // Lock screen "Reset this device": wipe local data and start fresh.
@@ -1508,6 +1511,7 @@ route();
 Updates.initUpdates();
 Binance.initBinance();
 Sync.initSync();
+Backups.initBackups();
 
 document.addEventListener('submit', (e) => {
   if (e.target.closest('.sheet') || !e.target.id) return;

@@ -101,6 +101,31 @@ ipcMain.handle('binance-connect', async (_e, key, secret) => {
 ipcMain.handle('binance-balances', () => binance.balances());
 ipcMain.handle('binance-forget', () => { binance.forget(); return true; });
 
+// ---------- Daily backups in Documents/Finance Helper/Backups ----------
+
+const backupDir = () => path.join(app.getPath('documents'), 'Finance Helper', 'Backups');
+const safeName = (n) => /^finance-helper-\d{4}-\d{2}-\d{2}\.json$/.test(n);
+ipcMain.handle('backup-write', (_e, name, text) => {
+  if (!safeName(name)) throw new Error('Bad backup name');
+  fs.mkdirSync(backupDir(), { recursive: true });
+  fs.writeFileSync(path.join(backupDir(), name), String(text));
+  return backupDir();
+});
+ipcMain.handle('backup-list', () => {
+  try {
+    return fs.readdirSync(backupDir()).filter(safeName).map((n) => ({ name: n, size: fs.statSync(path.join(backupDir(), n)).size })).sort((a, b) => b.name.localeCompare(a.name));
+  } catch { return []; }
+});
+ipcMain.handle('backup-read', (_e, name) => {
+  if (!safeName(name)) throw new Error('Bad backup name');
+  return fs.readFileSync(path.join(backupDir(), name), 'utf8');
+});
+ipcMain.handle('backup-delete', (_e, name) => {
+  if (safeName(name)) fs.rmSync(path.join(backupDir(), name), { force: true });
+  return true;
+});
+ipcMain.handle('backup-folder', () => { fs.mkdirSync(backupDir(), { recursive: true }); return shell.openPath(backupDir()); });
+
 // ---------- Google Drive sync ----------
 
 const drive = createDrive({ app, net, safeStorage, shell });
@@ -115,6 +140,10 @@ ipcMain.handle('drive-connect', (_e, clientId, clientSecret) => {
 ipcMain.handle('drive-pull', () => drive.pull());
 ipcMain.handle('drive-push', (_e, text) => drive.push(String(text)));
 ipcMain.handle('drive-disconnect', () => drive.disconnect());
+ipcMain.handle('drive-snap-put', (_e, name, text) => drive.putSnapshot(String(name), String(text)));
+ipcMain.handle('drive-snap-list', () => drive.listSnapshots());
+ipcMain.handle('drive-snap-read', (_e, id) => drive.readSnapshot(String(id)));
+ipcMain.handle('drive-snap-delete', (_e, id) => drive.deleteSnapshot(String(id)));
 
 // ---------- Updates (GitHub Releases, via electron-updater) ----------
 // The page asks; nothing downloads or installs without a click, except the

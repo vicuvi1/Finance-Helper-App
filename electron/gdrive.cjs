@@ -130,9 +130,29 @@ function createDrive({ app, net, safeStorage, shell }) {
     return true;
   }
 
+  // Daily snapshots (finance-helper-YYYY-MM-DD.json) next to the live file.
+  async function listSnapshots() {
+    const q = encodeURIComponent("name contains 'finance-helper-2'");
+    const r = await api(`https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=${q}&fields=files(id,name,size)&pageSize=200`);
+    return ((await r.json()).files || []).sort((a, b) => b.name.localeCompare(a.name));
+  }
+  async function putSnapshot(name, text) {
+    const existing = (await listSnapshots()).find((f) => f.name === name);
+    if (existing) {
+      await api(`https://www.googleapis.com/upload/drive/v3/files/${existing.id}?uploadType=media`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: text });
+      return true;
+    }
+    const boundary = `fh${crypto.randomBytes(8).toString('hex')}`;
+    const body = `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify({ name, parents: ['appDataFolder'] })}\r\n--${boundary}\r\nContent-Type: application/json\r\n\r\n${text}\r\n--${boundary}--`;
+    await api('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', { method: 'POST', headers: { 'Content-Type': `multipart/related; boundary=${boundary}` }, body });
+    return true;
+  }
+  const readSnapshot = async (id) => (await api(`https://www.googleapis.com/drive/v3/files/${id}?alt=media`)).text();
+  const deleteSnapshot = async (id) => { await api(`https://www.googleapis.com/drive/v3/files/${id}`, { method: 'DELETE' }); return true; };
+
   const status = () => ({ connected: !!read() });
 
-  return { connect, pull, push, disconnect, status };
+  return { connect, pull, push, disconnect, status, listSnapshots, putSnapshot, readSnapshot, deleteSnapshot };
 }
 
 module.exports = { createDrive };

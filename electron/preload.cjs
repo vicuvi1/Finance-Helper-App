@@ -19,6 +19,17 @@ contextBridge.exposeInMainWorld('desktop', {
     pull: () => ipcRenderer.invoke('drive-pull'),
     push: (text) => ipcRenderer.invoke('drive-push', text),
     disconnect: () => ipcRenderer.invoke('drive-disconnect'),
+    putSnapshot: (name, text) => ipcRenderer.invoke('drive-snap-put', name, text),
+    listSnapshots: () => ipcRenderer.invoke('drive-snap-list'),
+    readSnapshot: (id) => ipcRenderer.invoke('drive-snap-read', id),
+    deleteSnapshot: (id) => ipcRenderer.invoke('drive-snap-delete', id),
+  },
+  backups: {
+    write: (name, text) => ipcRenderer.invoke('backup-write', name, text),
+    list: () => ipcRenderer.invoke('backup-list'),
+    read: (name) => ipcRenderer.invoke('backup-read', name),
+    remove: (name) => ipcRenderer.invoke('backup-delete', name),
+    openFolder: () => ipcRenderer.invoke('backup-folder'),
   },
   update: {
     check: () => ipcRenderer.invoke('update-check'),

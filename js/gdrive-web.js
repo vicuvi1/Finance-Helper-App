@@ -81,6 +81,25 @@ export function webDrive(clientId) {
       fileId = (await r.json()).id;
       return true;
     },
+    async listSnapshots() {
+      const q = encodeURIComponent("name contains 'finance-helper-2'");
+      const r = await api(clientId, `https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=${q}&fields=files(id,name,size)&pageSize=200`);
+      return ((await r.json()).files || []).sort((a, b) => b.name.localeCompare(a.name));
+    },
+    async putSnapshot(name, text) {
+      const existing = (await this.listSnapshots()).find((f) => f.name === name);
+      if (existing) {
+        await api(clientId, `https://www.googleapis.com/upload/drive/v3/files/${existing.id}?uploadType=media`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: text });
+        return true;
+      }
+      const form = new FormData();
+      form.append('metadata', new Blob([JSON.stringify({ name, parents: ['appDataFolder'] })], { type: 'application/json' }));
+      form.append('file', new Blob([text], { type: 'application/json' }));
+      await api(clientId, 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', { method: 'POST', body: form });
+      return true;
+    },
+    readSnapshot: async (id) => (await api(clientId, `https://www.googleapis.com/drive/v3/files/${id}?alt=media`)).text(),
+    deleteSnapshot: async (id) => { await api(clientId, `https://www.googleapis.com/drive/v3/files/${id}`, { method: 'DELETE' }); return true; },
     async disconnect() {
       if (tok && window.google?.accounts?.oauth2) window.google.accounts.oauth2.revoke(tok.token, () => {});
       tok = null;
