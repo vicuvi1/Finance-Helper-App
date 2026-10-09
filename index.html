@@ -48,6 +48,10 @@
       <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4.5" width="18" height="16" rx="2.5"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4M7.5 14h3M13.5 14h3M7.5 17.5h3"/></svg>
       <span>Plan</span>
     </a>
+    <a href="#clients" data-tab="clients" class="nav-extra">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="13" rx="2.5"/><path d="M8.5 7V5.5A1.5 1.5 0 0 1 10 4h4a1.5 1.5 0 0 1 1.5 1.5V7M3 12.5h18M10.5 12.5v2h3v-2"/></svg>
+      <span>Clients</span>
+    </a>
     <a href="#people" data-tab="people" class="nav-extra">
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14a6.5 6.5 0 0 1 3.5 6"/></svg>
       <span>People</span>
@@ -68,12 +72,13 @@
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/></svg>
       <span>More</span>
     </button>
-    <p class="keys"><kbd>N</kbd> new record<br><kbd>/</kbd> search<br><kbd>1</kbd>–<kbd>8</kbd> sections<br><kbd>L</kbd> lock</p>
+    <p class="keys"><kbd>N</kbd> new record<br><kbd>/</kbd> search<br><kbd>1</kbd>–<kbd>9</kbd> sections<br><kbd>L</kbd> lock</p>
   </nav>
 
   <div id="sheet-root"></div>
   <div id="lock-root" class="lock-root" hidden></div>
   <div id="toast" class="toast" role="status" hidden></div>
+  <div id="print-root"></div>
 
   <input type="file" id="file-csv" accept=".xlsx,.csv,.tsv,text/csv,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
   <input type="file" id="file-json" accept=".json,application/json" hidden>

@@ -71,6 +71,8 @@ export function defaultState() {
     people: [],
     // Recurring payments and income (js/recurring.js).
     recurring: [],
+    // Invoices to clients (js/invoices.js).
+    invoices: [],
     // id -> time it was deleted, so a sync can tell "deleted here" from
     // "never existed there".
     deleted: {},
@@ -114,7 +116,10 @@ export function normalizeState(raw) {
   const recurring = (Array.isArray(raw.recurring) ? raw.recurring : [])
     .filter((r) => r && typeof r.id === 'string' && Number.isInteger(r.amount) && /^\d{4}-\d{2}-\d{2}$/.test(r.start || ''))
     .map((r) => ({ every: 'month', currency: accCur[r.account] || baseCur, note: '', auto: false, paused: false, lastDone: null, ...r, updatedAt: r.updatedAt || 0 }));
-  return { version: SCHEMA_VERSION, settings, tx, people, recurring, deleted, rates: raw.rates || null, meta: { ...base.meta, ...(raw.meta || {}) } };
+  const invoices = (Array.isArray(raw.invoices) ? raw.invoices : [])
+    .filter((i) => i && typeof i.id === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(i.date || ''))
+    .map((i) => ({ items: [], note: '', sent: false, paidDate: null, paidTx: null, currency: 'USD', ...i, updatedAt: i.updatedAt || 0 }));
+  return { version: SCHEMA_VERSION, settings, tx, people, recurring, invoices, deleted, rates: raw.rates || null, meta: { ...base.meta, ...(raw.meta || {}) } };
 }
 
 function validTx(t) {

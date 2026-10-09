@@ -18,7 +18,7 @@ export function toCloud(state, deviceId, now = Date.now()) {
     schema: SCHEMA_VERSION,
     savedAt: now,
     deviceId,
-    data: { settings, tx: state.tx, people: state.people, recurring: state.recurring || [], deleted: state.deleted },
+    data: { settings, tx: state.tx, people: state.people, recurring: state.recurring || [], invoices: state.invoices || [], deleted: state.deleted },
   };
 }
 
@@ -66,6 +66,7 @@ export function mergeStates(local, remote) {
     tx: mergeList(local.tx, r.tx, deleted),
     people: mergeList(local.people, r.people, deleted),
     recurring: mergeList(local.recurring, r.recurring, deleted),
+    invoices: mergeList(local.invoices, r.invoices, deleted),
     deleted,
   };
   const localData = toCloud(local, '').data;

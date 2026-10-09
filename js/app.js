@@ -24,6 +24,7 @@ import * as Sync from './screens/sync.js';
 import * as SelfCheck from './screens/selfcheck.js';
 import * as Backups from './screens/backups.js';
 import * as Plan from './screens/plan.js';
+import * as Clients from './screens/clients.js';
 import { openBankImport, rowsFromFile, decodeText } from './screens/bankimport.js';
 import { guessMapping } from './bank.js';
 import { FREQS, markDone } from './recurring.js';
@@ -1382,7 +1383,7 @@ document.addEventListener('input', (e) => {
   }
 });
 
-// Desktop shortcuts: N = new record, / = search, 1-8 = sections, Esc = close.
+// Desktop shortcuts: N = new record, / = search, 1-9 = sections, Esc = close.
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && sheetRoot.firstChild) { closeSheet(); return; }
   if (e.key === 'Enter' && e.target.closest('#tx-table') && e.target.matches('input')) {
@@ -1394,7 +1395,7 @@ document.addEventListener('keydown', (e) => {
   if (e.ctrlKey || e.metaKey || e.altKey || sheetRoot.firstChild) return;
   if (e.target.closest('input, select, textarea')) return;
   if ((e.key === 'l' || e.key === 'L') && Security.hasLock()) { Security.lock(); return; }
-  const tabs = { 1: 'home', 2: 'log', 3: 'accounts', 4: 'plan', 5: 'people', 6: 'reports', 7: 'rates', 8: 'settings' };
+  const tabs = { 1: 'home', 2: 'log', 3: 'accounts', 4: 'plan', 5: 'clients', 6: 'people', 7: 'reports', 8: 'rates', 9: 'settings' };
   if (e.key === 'n' || e.key === 'N') { e.preventDefault(); openTxSheet(); }
   else if (e.key === '/') {
     e.preventDefault();
@@ -1410,6 +1411,7 @@ const SCREENS = {
   log: { view: viewLog },
   accounts: AccountsScreen,
   plan: Plan,
+  clients: Clients,
   people: PeopleScreen,
   reports: ReportsScreen,
   rates: RatesScreen,
@@ -1421,6 +1423,7 @@ function openMoreSheet() {
   openSheet(`<h3>More <button type="button" class="icon-btn" data-close aria-label="Close">✕</button></h3>
     <div class="list more-list">
       ${item('plan', 'Plan', 'Budgets, bills, subscriptions, regular income')}
+      ${item('clients', 'Clients', 'Invoices, payments, what an hour earns')}
       ${item('people', 'People', 'Who gave you money, who you gave to, loans')}
       ${item('reports', 'Reports', 'Any month, quarter, year or your own dates')}
       ${item('rates', 'Rates & converter', 'Live exchange rates and crypto prices')}
@@ -1543,7 +1546,7 @@ if (!DEMO && 'serviceWorker' in navigator && (location.protocol === 'https:' || 
 // the old sheet format plus this month across several accounts and
 // currencies) so every screen has something to show. Bumping DEMO_VERSION
 // re-seeds previews opened before.
-const DEMO_VERSION = 4;
+const DEMO_VERSION = 5;
 
 async function seedDemo() {
   if (!DEMO || state.meta.demoSeeded === DEMO_VERSION) return;
@@ -1603,6 +1606,14 @@ async function seedDemo() {
   plan('google one', 'expense', 5000, 'maib-virt', 'subscriptions', 4, { auto: true, lastDone: day(4) });
   plan('gym', 'expense', 60000, 'wallet', 'sport', 15);
   plan('phone', 'expense', 12000, 'maib-visa', 'home', 12);
+  // A US client with invoices: one paid (the website project above), one sent, one draft.
+  Object.assign(M.person(state, client), { client: true, rate: 2500, currency: 'USD', address: 'Example Corp\n100 Main St, Austin TX' });
+  const paidTx = state.tx.find((t) => t.person === client && t.type === 'income');
+  const inv = (number, date, due, items, extra = {}) => state.invoices.push({ id: M.uid(), createdAt: now, updatedAt: now, number, client, date, due, currency: 'USD', items, note: '', sent: true, paidDate: null, paidTx: null, ...extra });
+  inv('INV-2026-001', day(1), day(1), [{ desc: 'Website redesign', hours: 48, rate: 2500 }], { paidDate: paidTx.date, paidTx: paidTx.id });
+  inv('INV-2026-002', day(5), `${addMonths(monthKey(today), 1)}-05`, [{ desc: 'Landing page', hours: 12, rate: 2500 }, { desc: 'Hosting (year)', amount: 9000 }]);
+  inv('INV-2026-003', today, null, [{ desc: 'Maintenance', hours: 6, rate: 2500 }], { sent: false });
+  state.settings.invoiceFrom = 'Your Name\nChișinău, Moldova\nyou@example.com';
   // Budgets for a few categories.
   for (const [id, lei] of [['food', 400], ['clothes', 300], ['hygiene', 250], ['transport', 300], ['fun', 800]]) M.category(state, id).budget = lei * 100;
   state.settings.savingsAccount = 'safe';

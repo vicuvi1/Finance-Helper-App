@@ -29,6 +29,7 @@ A personal finance app that replaces the "finance 2026" Google Sheet: the same d
 | 🔁 **Recurring & bills** | Rent, subscriptions, salary, a client who pays monthly: the **Plan** screen shows what's due and the next 30 days, your regular costs per month, and spots payments that look regular in your log. One tap logs a bill; fixed ones can log themselves. Tick **Repeat** when adding a record. |
 | 🧾 **Budgets** | A monthly limit per category (with your 3-month average as a hint). Bars show what's used and where an even pace would be; you get a warning at 80%, when you go over, and when your pace would take you over. |
 | 🏦 **Bank statements** | Import the CSV or Excel statement from maib, Victoriabank or any bank. The app finds the headings (Romanian, Russian or English), the date, amount or debit/credit and description columns, shows a preview with totals, and remembers the layout next time. Statements already imported are skipped. |
+| 💼 **Clients & invoices** | Invoices in USD or any currency (hours × rate or fixed lines), numbered INV-2026-001…, printed or saved as PDF with your details. Draft → sent → paid; when the money lands, mark it paid and the income is logged in that account (after fees). Per client: paid this year, per month, and what an hour of your work really earned in lei. |
 | 💾 **Backups** | One-tap JSON backup and restore, plus CSV export. The app reminds you when it's been a while. |
 
 ## Use it
