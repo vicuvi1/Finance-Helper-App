@@ -1,0 +1,12 @@
+{
+  "name": "finance-helper-app",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Personal finance app: log every lei, split income 70/10/10/10, see where money goes, hit your savings goal. Offline, private, no build step.",
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "start": "npx --yes serve -l 5173 ."
+  },
+  "license": "MIT"
+}
