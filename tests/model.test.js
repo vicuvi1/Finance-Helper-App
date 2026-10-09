@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { parseCSV, toCSV } from '../js/csv.js';
-import { importRows, exportRows } from '../js/importer.js';
+import { importRows, exportRows, toTSV } from '../js/importer.js';
 import {
   defaultState, normalizeState, monthSummary, accountBalances, splitIncome, jarStatus,
   goalStatus, yearOverview, insights, suggestCategory, categoryComparison, trend,
@@ -68,6 +68,28 @@ test('app CSV export round-trips through the importer', () => {
   fresh.tx.push(...res.tx);
   assert.deepEqual(accountBalances(fresh), accountBalances(state));
   assert.equal(importRows(parseCSV(csv), fresh).tx.length, 0);
+});
+
+test('a table copied out of the app (names, tabs) pastes back in', () => {
+  const { state } = withMarch();
+  state.tx.push(tx('transfer', 2000, '2026-03-31', { from: 'wallet', to: 'safe' }));
+  const rows = exportRows(state);
+  assert.deepEqual(rows[1].slice(0, 6), ['2026-03-01', 'Earned', '150', 'MDL', 'Competitions', 'Wallet']);
+  assert.equal(rows.at(-1)[1], 'Move');
+  const fresh = defaultState();
+  const res = importRows(parseCSV(toTSV(rows)), fresh);
+  assert.equal(res.tx.length, state.tx.length);
+  fresh.tx.push(...res.tx);
+  assert.deepEqual(accountBalances(fresh), accountBalances(state));
+  const cats = (s) => s.tx.map((t) => t.category || '').sort().join();
+  assert.equal(cats(fresh), cats(state));
+});
+
+test('rows pasted straight from the old Google Sheet import too', () => {
+  const pasted = '4 martie 2026\t600MDL\tsalary + mom\t240MDL\tfood + bus\n5 martie 2026\t0MDL\t\t150MDL\t';
+  const res = importRows(parseCSV(pasted), defaultState());
+  assert.equal(res.income, 60000);
+  assert.equal(res.expense, 39000);
 });
 
 test('balances follow income, expenses and transfers', () => {
@@ -190,4 +212,26 @@ test('normalizeState drops invalid transactions and fills missing settings', () 
   assert.equal(s.tx.length, 1);
   assert.equal(s.settings.currency, 'EUR');
   assert.equal(s.settings.jars.length, 4);
+});
+
+test('Excel export: a valid .xlsx with one tab per month and formulas', async () => {
+  const { workbook, crc32, excelDate, safeSheetName } = await import('../js/xlsx.js');
+  const { monthSheet, overviewSheet } = await import('../js/importer.js');
+  const zlib = await import('node:zlib');
+  const { state } = withMarch();
+  const month = monthSheet(state, '2026-03');
+  assert.equal(month.rows.length, 1 + 34 + 4);
+  assert.equal(month.rows.at(-3)[5].v, 24465);
+  assert.equal(month.rows.at(-2)[5].v, 6605);
+  assert.match(month.rows.at(-3)[5].f, /^SUMIF\(B2:B35,"Earned",F2:F35\)$/);
+  const bytes = workbook([{ name: '2026 Overview', ...overviewSheet(state, 2026) }, { name: 'March 2026', ...month }]);
+  // Zip signature, and every stored file's CRC matches Node's own crc32.
+  assert.equal(bytes[0], 0x50);
+  assert.equal(bytes[1], 0x4b);
+  assert.equal(crc32(new TextEncoder().encode('hello')), zlib.crc32('hello'));
+  const text = new TextDecoder().decode(bytes);
+  assert.ok(text.includes('<sheet name="March 2026"'));
+  assert.ok(text.includes('xl/worksheets/sheet2.xml'));
+  assert.equal(excelDate('2026-03-01'), 46082);
+  assert.equal(safeSheetName('a/b:c?'), 'a b c');
 });

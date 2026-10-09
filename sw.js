@@ -14,6 +14,8 @@ const SHELL = [
   './js/csv.js',
   './js/importer.js',
   './js/charts.js',
+  './js/logviews.js',
+  './js/xlsx.js',
   './manifest.webmanifest',
   './icons/icon.svg',
   './icons/icon-192.png',

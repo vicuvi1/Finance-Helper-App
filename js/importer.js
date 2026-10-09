@@ -1,12 +1,19 @@
 // Brings data in from the Google Sheet you used before (one month tab exported
 // as CSV) or from this app's own CSV export.
 
-import { parseAmount } from './money.js';
+import { parseAmount, centsToPlain } from './money.js';
 import { parseLooseDate } from './dates.js';
 import { suggestCategory, uid } from './model.js';
 
 const norm = (s) => String(s || '').trim().toLowerCase()
   .normalize('NFD').replace(/[̀-ͯ]/g, '');
+
+const TYPE_WORDS = {
+  income: 'income', earned: 'income', venit: 'income', доход: 'income',
+  expense: 'expense', spent: 'expense', cheltuiala: 'expense', расход: 'expense',
+  transfer: 'transfer', move: 'transfer', moved: 'transfer', mutare: 'transfer', перевод: 'transfer',
+};
+export const TYPE_LABEL = { income: 'Earned', expense: 'Spent', transfer: 'Move' };
 
 export const txKey = (t) => [t.date, t.type, t.amount, (t.note || '').trim().toLowerCase(), t.account || t.from || ''].join('|');
 
@@ -37,8 +44,16 @@ export function importRows(rows, state, { account } = {}) {
   const existing = new Map();
   for (const t of state.tx) existing.set(txKey(t), (existing.get(txKey(t)) || 0) + 1);
   const defaultAccount = account || state.settings.accounts[0]?.id || 'wallet';
-  const catIds = new Set(state.settings.categories.map((c) => c.id));
-  const accIds = new Set(state.settings.accounts.map((a) => a.id));
+  // Category and account cells may hold an id ("food") or the name you see
+  // in the app ("Food"), so tables copied out of the app paste back in.
+  const findCat = (text, type) => {
+    const t = norm(text);
+    return state.settings.categories.find((c) => c.type === type && (norm(c.id) === t || norm(c.name) === t))?.id;
+  };
+  const findAcc = (text) => {
+    const t = norm(text);
+    return state.settings.accounts.find((a) => norm(a.id) === t || norm(a.name) === t)?.id;
+  };
   const out = [];
   let duplicates = 0;
   let skipped = 0;
@@ -59,20 +74,19 @@ export function importRows(rows, state, { account } = {}) {
     if (cols.format === 'app') {
       const c = cols.col;
       const date = parseLooseDate(cell(row, c.date));
-      const type = norm(cell(row, c.type));
+      const type = TYPE_WORDS[norm(cell(row, c.type))];
       const amount = Math.abs(parseAmount(cell(row, c.amount)) || 0);
-      if (!date || !amount || !['income', 'expense', 'transfer'].includes(type)) { skipped++; continue; }
+      if (!date || !amount || !type) { skipped++; continue; }
       const note = String(cell(row, c.note ?? -1)).trim();
       if (type === 'transfer') {
-        const from = String(cell(row, c.from ?? -1)).trim();
-        const to = String(cell(row, c.to ?? -1)).trim();
-        if (!accIds.has(from) || !accIds.has(to) || from === to) { skipped++; continue; }
+        const from = findAcc(cell(row, c.from ?? -1));
+        const to = findAcc(cell(row, c.to ?? -1));
+        if (!from || !to || from === to) { skipped++; continue; }
         add({ type, amount, date, from, to, note });
       } else {
-        let cat = String(cell(row, c.category ?? -1)).trim();
-        if (!catIds.has(cat)) cat = suggestCategory(state, note, type) || (type === 'income' ? 'other-in' : 'other');
-        let acc = String(cell(row, c.account ?? -1)).trim();
-        if (!accIds.has(acc)) acc = defaultAccount;
+        const cat = findCat(cell(row, c.category ?? -1), type)
+          || suggestCategory(state, note, type) || (type === 'income' ? 'other-in' : 'other');
+        const acc = findAcc(cell(row, c.account ?? -1)) || defaultAccount;
         add({ type, amount, date, category: cat, account: acc, note });
       }
       continue;
@@ -100,12 +114,61 @@ export function importRows(rows, state, { account } = {}) {
 
 export const EXPORT_HEADER = ['Date', 'Type', 'Amount', 'Currency', 'Category', 'Account', 'From', 'To', 'Note'];
 
-export function exportRows(state) {
+// Rows as people read them (names, not ids), oldest first. Used for the CSV
+// export and for "Copy table", and the importer reads them back.
+export function exportRows(state, list = state.tx) {
+  const catName = (id) => state.settings.categories.find((c) => c.id === id)?.name || '';
+  const accName = (id) => state.settings.accounts.find((a) => a.id === id)?.name || '';
   const rows = [EXPORT_HEADER];
-  const sorted = [...state.tx].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : (a.createdAt || 0) - (b.createdAt || 0)));
+  const sorted = [...list].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : (a.createdAt || 0) - (b.createdAt || 0)));
   for (const t of sorted) {
-    rows.push([t.date, t.type, (t.amount / 100).toFixed(2), state.settings.currency, t.category || '',
-      t.account || '', t.from || '', t.to || '', t.note || '']);
+    rows.push([t.date, TYPE_LABEL[t.type], centsToPlain(t.amount), state.settings.currency, catName(t.category),
+      accName(t.account), accName(t.from), accName(t.to), t.note || '']);
   }
   return rows;
+}
+
+export function toTSV(rows) {
+  return rows.map((r) => r.map((v) => String(v ?? '').replace(/[\t\r\n]+/g, ' ')).join('\t')).join('\n');
+}
+
+// ---------- Excel workbook contents (see xlsx.js for the file format) ----------
+
+// One month as an Excel sheet: the records, then totals as live formulas.
+export function monthSheet(state, key, list = state.tx.filter((t) => t.date.startsWith(key))) {
+  const catName = (id) => state.settings.categories.find((c) => c.id === id)?.name || '';
+  const accName = (id) => state.settings.accounts.find((a) => a.id === id)?.name || '';
+  const sorted = [...list].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : (a.createdAt || 0) - (b.createdAt || 0)));
+  const rows = [['Date', 'Type', 'Category', 'Note', 'Account', `Amount (${state.settings.currency})`]];
+  for (const t of sorted) {
+    rows.push([{ v: t.date, t: 'date' }, TYPE_LABEL[t.type], t.type === 'transfer' ? '' : catName(t.category), t.note || '',
+      t.type === 'transfer' ? `${accName(t.from)} → ${accName(t.to)}` : accName(t.account), { v: t.amount / 100, t: 'money' }]);
+  }
+  const n = sorted.length;
+  const sum = (type) => sorted.filter((t) => t.type === type).reduce((a, t) => a + t.amount, 0) / 100;
+  const range = (col) => `${col}2:${col}${n + 1}`;
+  const earnedRow = n + 3;
+  rows.push([]);
+  rows.push(['', '', '', '', { v: 'Earned', bold: true }, { f: `SUMIF(${range('B')},"Earned",${range('F')})`, v: sum('income'), t: 'money', bold: true }]);
+  rows.push(['', '', '', '', { v: 'Spent', bold: true }, { f: `SUMIF(${range('B')},"Spent",${range('F')})`, v: sum('expense'), t: 'money', bold: true }]);
+  rows.push(['', '', '', '', { v: 'Kept', bold: true }, { f: `F${earnedRow}-F${earnedRow + 1}`, v: sum('income') - sum('expense'), t: 'money', bold: true }]);
+  return { cols: [13, 9, 22, 34, 18, 16], rows, filterRows: n };
+}
+
+// The "Overview" tab: earned / spent / kept for every month of a year.
+export function overviewSheet(state, year) {
+  const rows = [['Month', 'Earned', 'Spent', 'Kept', 'Kept %']];
+  const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  months.forEach((m, i) => {
+    const key = `${year}-${String(i + 1).padStart(2, '0')}`;
+    const list = state.tx.filter((t) => t.date.startsWith(key));
+    const inc = list.filter((t) => t.type === 'income').reduce((a, t) => a + t.amount, 0);
+    const exp = list.filter((t) => t.type === 'expense').reduce((a, t) => a + t.amount, 0);
+    const r = i + 2;
+    rows.push([m, { v: inc / 100, t: 'money' }, { v: exp / 100, t: 'money' }, { f: `B${r}-C${r}`, v: (inc - exp) / 100, t: 'money' },
+      inc ? `${Math.round(((inc - exp) / inc) * 100)}%` : '']);
+  });
+  const total = (col) => ({ f: `SUM(${col}2:${col}13)`, t: 'money', bold: true });
+  rows.push([{ v: 'Total', bold: true }, total('B'), total('C'), total('D'), '']);
+  return { cols: [14, 14, 14, 14, 9], rows };
 }

@@ -14,6 +14,9 @@ tested); `js/app.js` only renders and handles taps.
   The preview sets `window.FH_DEMO = true`: example data, no downloads,
   no service worker.
 
+- The owner works on the **desktop** app: check and screenshot changes at
+  desktop width (1280–1440px) first, then make sure phone width still works.
+
 ## Conventions
 - Money is integer bani (1 MDL = 100). Format with `formatMoney`, parse user
   input with `evalAmount` (supports `120+45`).
@@ -25,4 +28,8 @@ tested); `js/app.js` only renders and handles taps.
 - Desktop: `electron/main.cjs` serves the app from `app://finance`.
   `npm run desktop` to run, `npm run dist` to package. CI builds installers
   (`.github/workflows/desktop.yml`).
+- Log screen: List / Table / Calendar (`js/logviews.js`). Table cells save
+  on `change`; `renderKeepFocus()` keeps the cursor where the user tabbed to.
+- Excel: `js/xlsx.js` writes real .xlsx (stored zip, no deps); sheet contents
+  come from `monthSheet` / `overviewSheet` in `js/importer.js`.
 - Tests: `node --test`, fixture `tests/fixtures/martie-2026.csv` is the made-up month in the owner's old sheet format (24 465 earned / 6 605 spent).

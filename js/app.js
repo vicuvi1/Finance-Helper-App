@@ -6,7 +6,9 @@ import * as M from './model.js';
 import { formatMoney, evalAmount, centsToPlain } from './money.js';
 import { todayISO, monthKey, monthLabel, addMonths, dayLabel } from './dates.js';
 import { parseCSV, toCSV } from './csv.js';
-import { importRows, exportRows } from './importer.js';
+import { importRows, exportRows, toTSV, monthSheet, overviewSheet } from './importer.js';
+import { workbook } from './xlsx.js';
+import { tableHTML, calendarHTML } from './logviews.js';
 import { trendChart } from './charts.js';
 
 let state = load();
@@ -16,6 +18,9 @@ const ui = {
   year: Number(todayISO().slice(0, 4)),
   filter: 'all',
   search: '',
+  sort: { col: 'date', dir: 1 },
+  // Table view's empty "new row": keeps date/type/account between adds.
+  draft: null,
 };
 let installPrompt = null;
 let toastTimer = null;
@@ -201,8 +206,11 @@ function viewHome() {
   ${recent.length ? `<section class="card"><h2>Recent <button class="card-link right" data-go="log">See all</button></h2><div class="list">${recent.map((t) => txRow(t, { showDate: true })).join('')}</div></section>` : ''}`;
 }
 
-function viewLog() {
-  const s = M.monthSummary(state, ui.month);
+function logView() {
+  return state.settings.logView || (window.innerWidth >= 720 ? 'table' : 'list');
+}
+
+function logRecords() {
   const q = ui.search.trim().toLowerCase();
   let list = q
     ? state.tx.filter((t) => {
@@ -211,26 +219,57 @@ function viewLog() {
     })
     : M.txInMonth(state, ui.month);
   if (ui.filter !== 'all') list = list.filter((t) => t.type === ui.filter);
-  list = M.sortTx(list);
+  return list;
+}
 
-  const groups = new Map();
-  for (const t of list) {
-    if (!groups.has(t.date)) groups.set(t.date, []);
-    groups.get(t.date).push(t);
+function draftRow() {
+  const inMonth = monthKey(todayISO()) === ui.month ? todayISO() : `${ui.month}-01`;
+  if (!ui.draft || !ui.draft.date.startsWith(ui.month)) {
+    ui.draft = { type: 'expense', date: inMonth, category: '', note: '', account: ui.draft?.account || state.settings.accounts[0]?.id, from: state.settings.accounts[0]?.id, to: state.settings.savingsAccount };
   }
-  const days = [...groups.entries()].map(([date, items]) => {
-    const net = items.reduce((a, t) => a + (t.type === 'income' ? t.amount : t.type === 'expense' ? -t.amount : 0), 0);
-    return `<div class="day"><div class="day-head"><span>${dayLabel(date)}${q ? ` ${date.slice(0, 4)}` : ''}</span><span class="money ${net > 0 ? 'income' : ''}">${net ? money(net, { sign: true }) : ''}</span></div>
-      <div class="list">${items.map((t) => txRow(t)).join('')}</div></div>`;
-  }).join('');
+  return ui.draft;
+}
+
+function viewLog() {
+  const s = M.monthSummary(state, ui.month);
+  const q = ui.search.trim().toLowerCase();
+  const view = logView();
+  const list = logRecords();
+
+  let content;
+  if (view === 'calendar') {
+    content = `<section class="card">${calendarHTML(state, ui.month)}</section>`;
+  } else if (view === 'table') {
+    content = tableHTML(state, list, { sort: ui.sort, draft: draftRow(), fmt: (c) => money(c) });
+  } else {
+    const groups = new Map();
+    for (const t of M.sortTx(list)) {
+      if (!groups.has(t.date)) groups.set(t.date, []);
+      groups.get(t.date).push(t);
+    }
+    content = [...groups.entries()].map(([date, items]) => {
+      const net = items.reduce((a, t) => a + (t.type === 'income' ? t.amount : t.type === 'expense' ? -t.amount : 0), 0);
+      return `<div class="day"><div class="day-head"><span>${dayLabel(date)}${q ? ` ${date.slice(0, 4)}` : ''}</span><span class="money ${net > 0 ? 'income' : ''}">${net ? money(net, { sign: true }) : ''}</span></div>
+        <div class="list">${items.map((t) => txRow(t)).join('')}</div></div>`;
+    }).join('') || `<div class="empty"><div class="big">🧾</div><b>${q ? 'Nothing found' : 'No records this month'}</b>${q ? 'Try another word.' : 'Tap + to add one.'}</div>`;
+  }
 
   const chip = (id, label) => `<button class="chip" data-act="filter" data-filter="${id}" aria-pressed="${ui.filter === id}">${label}</button>`;
+  const viewBtn = (id, label) => `<button type="button" data-act="log-view" data-view="${id}" aria-pressed="${view === id}">${label}</button>`;
   return `<header class="top"><h1>Log</h1>${monthSwitch()}</header>
   ${q ? '' : `<section class="card">${stats(s)}${rateBar(s)}</section>`}
-  <div class="search"><input type="search" id="search" placeholder="Search notes, categories, amounts" value="${esc(ui.search)}" aria-label="Search all records"></div>
-  <div class="chips">${chip('all', 'All')}${chip('expense', 'Spent')}${chip('income', 'Earned')}${chip('transfer', 'Moves')}</div>
-  ${q ? `<p class="muted small">${list.length} result${list.length === 1 ? '' : 's'} in all months</p>` : ''}
-  ${days || `<div class="empty"><div class="big">🧾</div><b>${q ? 'Nothing found' : 'No records this month'}</b>${q ? 'Try another word.' : 'Tap + to add one.'}</div>`}`;
+  <div class="log-tools">
+    <div class="seg seg-views" role="group" aria-label="View">${viewBtn('table', 'Table')}${viewBtn('calendar', 'Calendar')}${viewBtn('list', 'List')}</div>
+    ${view === 'calendar' ? '' : `<input type="search" id="search" placeholder="Search notes, categories, amounts" value="${esc(ui.search)}" aria-label="Search all records">`}
+    <div class="log-actions">
+      <button type="button" class="btn" data-act="copy-table" title="Copy this month as a table to paste into Excel or Google Sheets">Copy table</button>
+      <button type="button" class="btn" data-act="export-month" title="Download this month as a file Excel opens">Export month</button>
+    </div>
+  </div>
+  ${view === 'calendar' ? '' : `<div class="chips">${chip('all', 'All')}${chip('expense', 'Spent')}${chip('income', 'Earned')}${chip('transfer', 'Moves')}</div>`}
+  ${q && view !== 'calendar' ? `<p class="muted small">${list.length} result${list.length === 1 ? '' : 's'} in all months</p>` : ''}
+  ${content}
+  ${view === 'table' ? '<p class="muted small">Edit any cell; it saves by itself. <b>Enter</b> moves down a row. Paste rows copied from Excel or Google Sheets anywhere on this page to import them.</p>' : ''}`;
 }
 
 function viewInsights() {
@@ -350,6 +389,9 @@ function viewSettings() {
     </div>
     <div class="btns" style="margin-top:8px">
       <button class="btn" data-act="import-csv">Import Google Sheet (CSV)</button>
+      <button class="btn" data-act="export-xlsx">Export to Excel</button>
+    </div>
+    <div class="btns" style="margin-top:8px">
       <button class="btn" data-act="export-csv">Export CSV</button>
     </div>
     <p class="muted small" style="margin-bottom:0">From Google Sheets: open a month tab → File → Download → Comma-separated values (.csv), then import it here. Repeat for each month. Importing the same month twice is safe.</p>
@@ -619,8 +661,184 @@ function exportJSON() {
   toast('Backup saved. Keep it somewhere safe (Drive, Telegram Saved Messages).');
 }
 
+const XLSX_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+
 function exportCSV() {
-  download(`finance-helper-${todayISO()}.csv`, toCSV(exportRows(state)), 'text/csv');
+  // The BOM makes Excel read Romanian letters and emoji correctly.
+  download(`finance-helper-${todayISO()}.csv`, `\ufeff${toCSV(exportRows(state))}`, 'text/csv');
+}
+
+// Whole history as an Excel workbook: an overview tab per year, then one tab
+// per month, like the old Google Sheet.
+function exportExcel() {
+  const months = [...new Set(state.tx.map((t) => monthKey(t.date)))].sort();
+  if (!months.length) { toast('Nothing to export yet.'); return; }
+  const years = [...new Set(months.map((m) => m.slice(0, 4)))];
+  const sheets = [
+    ...years.map((y) => ({ name: `${y} Overview`, ...overviewSheet(state, Number(y)) })),
+    ...months.map((m) => ({ name: monthLabel(m), ...monthSheet(state, m) })),
+  ];
+  if (download(`finance-helper-${todayISO()}.xlsx`, workbook(sheets), XLSX_TYPE)) toast(`Exported ${months.length} month${months.length === 1 ? '' : 's'} to Excel`);
+}
+
+function exportMonthExcel() {
+  const list = logRecords();
+  const name = ui.search.trim() ? `Search ${ui.search.trim()}` : monthLabel(ui.month);
+  if (download(`finance-helper-${ui.month}.xlsx`, workbook([{ name, ...monthSheet(state, ui.month, list) }]), XLSX_TYPE)) toast(`${name} saved as an Excel file`);
+}
+
+async function copyTable() {
+  const text = toTSV(exportRows(state, logRecords()));
+  try {
+    await navigator.clipboard.writeText(text);
+    toast('Copied. Paste it into Excel or Google Sheets.');
+  } catch {
+    // Clipboard blocked: show the text so it can be copied by hand.
+    openSheet(`<h3>Copy table <button type="button" class="icon-btn" data-close aria-label="Close">✕</button></h3>
+      <p style="margin-top:0" class="muted small">Press Ctrl+C (⌘C on Mac), then paste into Excel or Google Sheets.</p>
+      <textarea id="copy-text" rows="10" style="width:100%;font:13px/1.4 ui-monospace,monospace">${esc(text)}</textarea>`, (sheet) => {
+      const ta = sheet.querySelector('#copy-text');
+      ta.focus();
+      ta.select();
+    });
+  }
+}
+
+// ---------- Table editing ----------
+
+// Re-render after an edit but keep the cursor in the cell the user moved to.
+function renderKeepFocus() {
+  setTimeout(() => {
+    const a = document.activeElement;
+    const row = a?.closest?.('#tx-table tr');
+    const col = a?.dataset?.col;
+    const id = row?.dataset.id;
+    const draft = row?.hasAttribute('data-draft');
+    render();
+    if (!col) return;
+    const sel = draft ? `#tx-table tr[data-draft] [data-col="${col}"]` : id ? `#tx-table tr[data-id="${CSS.escape(id)}"] [data-col="${col}"]` : null;
+    const el = sel && document.querySelector(sel);
+    if (el) {
+      el.focus();
+      if (el.select && el.type === 'text') el.select();
+    }
+  }, 0);
+}
+
+function onCellChange(el) {
+  const row = el.closest('tr');
+  const col = el.dataset.col;
+  const v = el.value;
+  if (row.hasAttribute('data-draft')) {
+    const d = ui.draft;
+    if (col === 'type') {
+      d.type = v;
+      d.category = M.suggestCategory(state, d.note, v) || '';
+      renderKeepFocus();
+    } else if (col === 'note') {
+      d.note = v;
+      if (!d.category) {
+        d.category = M.suggestCategory(state, v, d.type) || '';
+        const sel = row.querySelector('[data-col="category"]');
+        if (sel && d.category) sel.value = d.category;
+      }
+    } else if (col === 'amount') d.amountText = v;
+    else d[col] = v;
+    return;
+  }
+  const t = state.tx.find((x) => x.id === row.dataset.id);
+  if (!t) return;
+  if (col === 'amount') {
+    const c = evalAmount(v);
+    if (!c || c <= 0) { toast('Amount must be a number bigger than 0'); el.value = formatMoney(t.amount, ''); return; }
+    t.amount = c;
+  } else if (col === 'date') {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) { el.value = t.date; return; }
+    t.date = v;
+  } else if (col === 'type') {
+    if (v === 'transfer') {
+      t.from = t.account || state.settings.accounts[0].id;
+      t.to = state.settings.accounts.find((a) => a.id !== t.from && a.id === state.settings.savingsAccount)?.id
+        || state.settings.accounts.find((a) => a.id !== t.from)?.id;
+      delete t.account;
+      delete t.category;
+    } else {
+      t.account = t.account || t.from || state.settings.accounts[0].id;
+      t.category = M.suggestCategory(state, t.note, v) || (v === 'income' ? 'other-in' : 'other');
+      delete t.from;
+      delete t.to;
+    }
+    t.type = v;
+  } else if (col === 'from' || col === 'to') {
+    const other = col === 'from' ? t.to : t.from;
+    if (v === other) { toast('Pick two different accounts'); el.value = t[col]; return; }
+    t[col] = v;
+  } else if (['category', 'account', 'note'].includes(col)) {
+    t[col] = col === 'note' ? v.trim() : v;
+  } else return;
+  persist();
+  renderKeepFocus();
+}
+
+function addDraftRow() {
+  const d = ui.draft;
+  const row = document.querySelector('#tx-table tr[data-draft]');
+  if (row) for (const el of row.querySelectorAll('[data-col]')) {
+    if (el.dataset.col === 'amount') d.amountText = el.value;
+    else d[el.dataset.col] = el.value;
+  }
+  const amount = evalAmount(d.amountText);
+  if (!amount || amount <= 0) {
+    toast('Type an amount in the new row first');
+    row?.querySelector('[data-col="amount"]')?.focus();
+    return;
+  }
+  if (d.type === 'transfer' && d.from === d.to) { toast('Pick two different accounts'); return; }
+  const base = { id: M.uid(), createdAt: Date.now(), type: d.type, amount, date: d.date, note: (d.note || '').trim() };
+  state.tx.push(d.type === 'transfer'
+    ? { ...base, from: d.from, to: d.to }
+    : { ...base, account: d.account, category: d.category || M.suggestCategory(state, d.note, d.type) || (d.type === 'income' ? 'other-in' : 'other') });
+  ui.draft = { ...d, note: '', category: '', amountText: '' };
+  commit();
+  toast(`Added ${money(amount)}`);
+  document.querySelector('#tx-table tr[data-draft] [data-col="note"]')?.focus();
+}
+
+// Excel-style: Enter moves to the same column one row down; Enter in the new
+// row adds it.
+function onTableEnter(el) {
+  const row = el.closest('tr');
+  if (row.hasAttribute('data-draft')) {
+    if (el.dataset.col === 'amount' || el.dataset.col === 'note') ui.draft.amountText = row.querySelector('[data-col="amount"]').value;
+    addDraftRow();
+    return;
+  }
+  el.blur();
+  setTimeout(() => {
+    const rows = [...document.querySelectorAll('#tx-table tbody tr')];
+    const i = rows.findIndex((r) => r.dataset.id === row.dataset.id);
+    rows[i + 1]?.querySelector(`[data-col="${el.dataset.col}"]`)?.focus();
+  }, 10);
+}
+
+function openDaySheet(date) {
+  const items = M.sortTx(state.tx.filter((t) => t.date === date));
+  const inc = items.filter((t) => t.type === 'income').reduce((a, t) => a + t.amount, 0);
+  const exp = items.filter((t) => t.type === 'expense').reduce((a, t) => a + t.amount, 0);
+  openSheet(`<h3>${dayLabel(date)} <button type="button" class="icon-btn" data-close aria-label="Close">✕</button></h3>
+    <div class="stats" style="margin-bottom:12px">
+      <div class="stat"><span class="k">Earned</span><b class="income">${money(inc)}</b></div>
+      <div class="stat"><span class="k">Spent</span><b class="expense">${money(exp)}</b></div>
+      <div class="stat"><span class="k">Records</span><b>${items.length}</b></div>
+    </div>
+    ${items.length ? `<div class="list">${items.map((t) => txRow(t)).join('')}</div>` : '<p class="muted">Nothing logged on this day.</p>'}
+    <div class="btns" style="margin-top:14px"><button class="btn primary" id="day-add">Add a record on this day</button></div>`, (sheet) => {
+    sheet.querySelector('#day-add').addEventListener('click', () => { closeSheet(); openTxSheet(null, { date }); });
+    sheet.addEventListener('click', (e) => {
+      const row = e.target.closest('[data-act="edit"]');
+      if (row) { closeSheet(); openTxSheet(state.tx.find((t) => t.id === row.dataset.id)); }
+    });
+  });
 }
 
 async function readFile(input) {
@@ -633,7 +851,7 @@ async function onCSVFile(text) {
   if (text == null) return;
   const res = importRows(parseCSV(text), state);
   if (!res.tx.length) {
-    toast(res.duplicates ? `Already imported (${res.duplicates} records).` : 'No records found in that file.');
+    toast(res.duplicates ? `Already imported (${res.duplicates} records).` : 'No records found. Rows need a date and an amount.');
     return;
   }
   const incomes = res.tx.filter((t) => t.type === 'income').length;
@@ -751,6 +969,17 @@ document.addEventListener('click', (e) => {
   else if (act === 'year') { ui.year += Number(el.dataset.step); render(); }
   else if (act === 'open-month') { ui.month = el.dataset.key; ui.search = ''; location.hash = '#log'; }
   else if (act === 'filter') { ui.filter = el.dataset.filter; render(); }
+  else if (act === 'log-view') { state.settings.logView = el.dataset.view; commit(); }
+  else if (act === 'sort') {
+    const col = el.dataset.col;
+    ui.sort = { col, dir: ui.sort.col === col ? -ui.sort.dir : 1 };
+    render();
+  } else if (act === 'row-del') deleteTx(el.dataset.id);
+  else if (act === 'row-add') addDraftRow();
+  else if (act === 'day') openDaySheet(el.dataset.date);
+  else if (act === 'copy-table') copyTable();
+  else if (act === 'export-month') exportMonthExcel();
+  else if (act === 'export-xlsx') exportExcel();
   else if (act === 'export-json') exportJSON();
   else if (act === 'export-csv') exportCSV();
   else if (act === 'import-csv') document.getElementById('file-csv').click();
@@ -770,7 +999,8 @@ document.addEventListener('click', (e) => {
 
 document.addEventListener('change', (e) => {
   if (e.target.closest('.sheet')) return;
-  if (e.target.id === 'file-csv') readFile(e.target).then(onCSVFile);
+  if (e.target.closest('#tx-table')) onCellChange(e.target);
+  else if (e.target.id === 'file-csv') readFile(e.target).then(onCSVFile);
   else if (e.target.id === 'file-json') readFile(e.target).then(onJSONFile);
   else onSettingsChange(e.target);
 });
@@ -789,6 +1019,11 @@ document.addEventListener('input', (e) => {
 // Desktop shortcuts: N = new record, / = search, 1-4 = sections, Esc = close.
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && sheetRoot.firstChild) { closeSheet(); return; }
+  if (e.key === 'Enter' && e.target.closest('#tx-table') && e.target.matches('input')) {
+    e.preventDefault();
+    onTableEnter(e.target);
+    return;
+  }
   if (e.ctrlKey || e.metaKey || e.altKey || sheetRoot.firstChild) return;
   if (e.target.closest('input, select, textarea')) return;
   const tabs = { 1: 'home', 2: 'log', 3: 'insights', 4: 'settings' };
@@ -814,6 +1049,16 @@ function route() {
 }
 
 window.addEventListener('hashchange', route);
+
+// Paste rows copied from Excel / Google Sheets (or this app's "Copy table")
+// anywhere on the Log screen to import them, with a preview first.
+document.addEventListener('paste', (e) => {
+  if (ui.tab !== 'log' || sheetRoot.firstChild || e.target.closest('input, textarea, select')) return;
+  const text = e.clipboardData?.getData('text/plain') || '';
+  if (!/[\t,;]/.test(text)) return;
+  e.preventDefault();
+  onCSVFile(text);
+});
 
 // Another tab or window changed the data: pick it up.
 window.addEventListener('storage', (e) => {
