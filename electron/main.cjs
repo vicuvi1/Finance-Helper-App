@@ -2,13 +2,13 @@
 // private app:// origin so ES modules and saved data work like on the web,
 // and nothing is loaded from the internet.
 
-const { app, BrowserWindow, protocol, net, shell, Menu } = require('electron');
+const { app, BrowserWindow, protocol, net, shell, Menu, ipcMain } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 const { pathToFileURL } = require('node:url');
 
 const ROOT = path.join(__dirname, '..');
-const SERVED = ['index.html', 'manifest.webmanifest', 'sw.js', 'css/', 'js/', 'icons/'];
+const SERVED = ['index.html', 'manifest.webmanifest', 'sw.js', 'css/', 'js/', 'icons/', 'fonts/'];
 const ORIGIN = 'app://finance';
 
 protocol.registerSchemesAsPrivileged([
@@ -37,7 +37,7 @@ function createWindow() {
     autoHideMenuBar: true,
     show: false,
     icon: path.join(ROOT, 'icons', 'icon-512.png'),
-    webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false },
+    webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false, preload: path.join(__dirname, 'preload.cjs') },
   });
   win.once('ready-to-show', () => win.show());
   win.on('close', () => {
@@ -63,6 +63,22 @@ function createWindow() {
   win.loadURL(`${ORIGIN}/index.html`);
   return win;
 }
+
+// Sites the app may read through the main process (no browser CORS limits
+// here). Anything else is refused.
+const FETCH_HOSTS = new Set([
+  'open.er-api.com', 'www.bnm.md', 'api.binance.com', 'api.coingecko.com', 'api.github.com',
+]);
+
+ipcMain.handle('fetch-text', async (_e, url) => {
+  const u = new URL(url);
+  if (u.protocol !== 'https:' || !FETCH_HOSTS.has(u.hostname)) throw new Error(`Not allowed: ${u.hostname}`);
+  const r = await net.fetch(url, { headers: { 'User-Agent': `FinanceHelper/${app.getVersion()}` } });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.text();
+});
+
+ipcMain.handle('app-info', () => ({ version: app.getVersion(), platform: process.platform }));
 
 app.whenReady().then(() => {
   protocol.handle('app', (req) => {

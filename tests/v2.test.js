@@ -18,8 +18,9 @@ test('fx converts through USD and leaves unknown pairs empty', () => {
   assert.equal(pairRate('USD', 'MDL', RATES), 17.5);
   assert.equal(coinValue(0.01, 'BTC', 'USD', RATES), 60000);
   assert.equal(coinValue(5, 'USDT', 'USD', RATES), 500);
-  assert.equal(formatRate(17.5432), '17.54');
-  assert.equal(formatQty(0.00012300), '0.000123');
+  assert.equal(formatRate(17.5432), '17,54');
+  assert.equal(formatRate(0.0568), '0,0568');
+  assert.equal(formatQty(0.00012300), '0,000123');
 });
 
 test('v1 data migrates to v2 without losing anything', () => {
@@ -155,4 +156,13 @@ test('export → import keeps currency, person and loan', async () => {
   assert.equal(usd.base, 875000);
   const loan = res.tx.find((t) => t.loan);
   assert.equal(fresh.people.find((p) => p.id === loan.person).name, 'Ana');
+});
+
+test('converter handles fiat and coins both ways', async () => {
+  const { convertAny } = await import('../js/fx.js');
+  assert.equal(convertAny(100, 'USD', 'MDL', RATES), 1750);
+  assert.equal(convertAny(0.01, 'BTC', 'MDL', RATES), 10500);
+  assert.equal(convertAny(10500, 'MDL', 'BTC', RATES), 0.01);
+  assert.equal(convertAny(5, 'USDT', 'USD', RATES), 5);
+  assert.equal(convertAny(1, 'ETH', 'MDL', RATES), null);
 });

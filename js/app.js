@@ -9,6 +9,10 @@ import { convert, pairRate } from './fx.js';
 import { parseCSV, toCSV } from './csv.js';
 import { importRows, exportRows, toTSV, monthSheet, overviewSheet } from './importer.js';
 import { workbook } from './xlsx.js';
+import { refreshRates } from './rates.js';
+import { ctx } from './ctx.js';
+import * as RatesScreen from './screens/rates.js';
+import * as AccountsScreen from './screens/accounts.js';
 import { tableHTML, calendarHTML } from './logviews.js';
 import { trendChart, dailyChart } from './charts.js';
 
@@ -55,6 +59,7 @@ const initial = (name) => esc((String(name).match(/\p{L}|\p{N}/u) || ['•'])[0]
 
 // Big figure with the currency set smaller beside it.
 function bigMoney(c) {
+  c = Math.round(c / 100) * 100; // whole lei for headline totals
   return `<span class="fig" data-count="${c}" data-ck="total">${formatMoney(c, '')}</span><span class="cur-sm">${esc(state.settings.currency)}</span>`;
 }
 
@@ -231,7 +236,7 @@ function viewHome() {
       <div class="label">All my money</div>
       <div class="big ${total < 0 ? 'expense' : ''}">${bigMoney(total)}</div>
       <div class="accounts">
-        ${values.map(({ account: a, own, coins }) => `<button class="acc ${own < 0 ? 'neg' : ''}" data-act="transfer" data-from="${esc(a.id)}" title="Move money from ${esc(a.name)}"><span class="n">${dot(`var(--c${a.color || 1})`)}${esc(a.name)}</span><b class="money">${a.kind === 'crypto' && (a.holdings || []).length ? money(coins + (convert(own, a.currency, state.settings.currency, state.rates) || 0)) : formatMoney(own, a.currency)}</b></button>`).join('')}
+        ${values.map(({ account: a, own, coins }) => `<button class="acc ${own < 0 ? 'neg' : ''}" data-act="acc-open" data-id="${esc(a.id)}" title="Open ${esc(a.name)}"><span class="n">${dot(`var(--c${a.color || 1})`)}${esc(a.name)}</span><b class="money">${a.kind === 'crypto' && (a.holdings || []).length ? money(coins + (convert(own, a.currency, state.settings.currency, state.rates) || 0)) : formatMoney(own, a.currency)}</b></button>`).join('')}
       </div>
       ${missing.length ? `<p class="muted small" style="margin:10px 0 0">Not counted yet (no exchange rate): ${missing.map((v) => esc(v.account.name)).join(', ')}.</p>` : ''}
     </div>
@@ -411,12 +416,9 @@ function viewSettings() {
   </section>
 
   <section class="card"><h2>Accounts</h2>
-    <p class="muted small" style="margin-top:0">Starting balance = what was there before you started logging.</p>
-    ${st.accounts.map((a) => `<div class="set-row">
-      <input type="text" value="${esc(a.name)}" data-acc="${esc(a.id)}" data-field="label" aria-label="Account name">
-      <input type="text" inputmode="decimal" class="pct" style="width:120px" value="${centsToPlain(a.start || 0)}" data-acc="${esc(a.id)}" data-field="start" aria-label="Starting balance of ${esc(a.name)}">
-    </div>`).join('')}
-    <label class="field" style="margin:12px 0 0"><span>Savings go to</span><select data-set="savingsAccount">${accOptions(st.savingsAccount, false)}</select></label>
+    <p class="muted small" style="margin-top:0">Cards, cash, banks, currencies and crypto are managed on the Accounts screen.</p>
+    <button class="btn block" data-go="accounts">Open Accounts</button>
+    <label class="field" style="margin:12px 0 0"><span>The "move to savings" button sends money to</span><select data-set="savingsAccount">${accOptions(st.savingsAccount, false)}</select></label>
   </section>
 
   <details class="card"><summary>Categories</summary>
@@ -512,9 +514,8 @@ function runCounters(entering) {
 
 function render({ enter = false } = {}) {
   applyTheme();
-  const views = { home: viewHome, log: viewLog, insights: viewInsights, settings: viewSettings };
   app.className = `app view-${ui.tab}`;
-  app.innerHTML = (views[ui.tab] || viewHome)();
+  app.innerHTML = (SCREENS[ui.tab] || SCREENS.home).view();
   if (enter) {
     shownCounts.clear();
     playEnter();
@@ -524,7 +525,7 @@ function render({ enter = false } = {}) {
     app.querySelector(`[data-id="${CSS.escape(ui.flashId)}"]`)?.classList.add('flash');
     ui.flashId = null;
   }
-  for (const a of document.querySelectorAll('.tabbar a')) {
+  for (const a of document.querySelectorAll('.tabbar a, .more-list a')) {
     if (a.dataset.tab === ui.tab) a.setAttribute('aria-current', 'page');
     else a.removeAttribute('aria-current');
   }
@@ -1217,7 +1218,10 @@ document.addEventListener('click', (e) => {
   const el = e.target.closest('[data-act]');
   if (!el || el.closest('.sheet')) return;
   const act = el.dataset.act;
-  if (act === 'add') openTxSheet();
+  if (SCREENS[ui.tab]?.onClick?.(act, el)) return;
+  if (act === 'acc-open') AccountsScreen.openAccount(el.dataset.id);
+  else if (act === 'more') openMoreSheet();
+  else if (act === 'add') openTxSheet();
   else if (act === 'edit') openTxSheet(state.tx.find((t) => t.id === el.dataset.id));
   else if (act === 'transfer') openTransferSheet(el.dataset.from);
   else if (act === 'month') { ui.month = addMonths(ui.month, Number(el.dataset.step)); render({ enter: true }); }
@@ -1254,6 +1258,7 @@ document.addEventListener('click', (e) => {
 
 document.addEventListener('change', (e) => {
   if (e.target.closest('.sheet')) return;
+  if (SCREENS[ui.tab]?.onChange?.(e.target)) return;
   if (e.target.closest('#tx-table')) onCellChange(e.target);
   else if (e.target.id === 'file-csv') readFile(e.target).then(onCSVFile);
   else if (e.target.id === 'file-json') readFile(e.target).then(onJSONFile);
@@ -1261,6 +1266,7 @@ document.addEventListener('change', (e) => {
 });
 
 document.addEventListener('input', (e) => {
+  if (!e.target.closest('.sheet') && SCREENS[ui.tab]?.onInput?.(e.target)) return;
   if (e.target.id === 'search') {
     ui.search = e.target.value;
     const pos = e.target.selectionStart;
@@ -1281,7 +1287,7 @@ document.addEventListener('keydown', (e) => {
   }
   if (e.ctrlKey || e.metaKey || e.altKey || sheetRoot.firstChild) return;
   if (e.target.closest('input, select, textarea')) return;
-  const tabs = { 1: 'home', 2: 'log', 3: 'insights', 4: 'settings' };
+  const tabs = { 1: 'home', 2: 'log', 3: 'accounts', 4: 'insights', 5: 'rates', 6: 'settings' };
   if (e.key === 'n' || e.key === 'N') { e.preventDefault(); openTxSheet(); }
   else if (e.key === '/') {
     e.preventDefault();
@@ -1290,9 +1296,71 @@ document.addEventListener('keydown', (e) => {
   } else if (tabs[e.key]) location.hash = `#${tabs[e.key]}`;
 });
 
+// ---------- Screens ----------
+
+const SCREENS = {
+  home: { view: viewHome },
+  log: { view: viewLog },
+  accounts: AccountsScreen,
+  insights: { view: viewInsights },
+  rates: RatesScreen,
+  settings: { view: viewSettings },
+};
+
+function openMoreSheet() {
+  const item = (tab, label, sub) => `<a href="#${tab}" class="tx more-item"><span class="t"><b>${label}</b><span>${sub}</span></span><span class="muted">›</span></a>`;
+  openSheet(`<h3>More <button type="button" class="icon-btn" data-close aria-label="Close">✕</button></h3>
+    <div class="list more-list">
+      ${item('insights', 'Insights', 'Where money goes and comes from, year overview')}
+      ${item('rates', 'Rates & converter', 'Live exchange rates and crypto prices')}
+      ${item('settings', 'Settings', 'Goal, smart split, categories, backups')}
+    </div>`);
+}
+
+// ---------- Exchange rates ----------
+
+let ratesTimer = null;
+
+async function updateRates({ force = false, announce = false } = {}) {
+  const fresh = state.rates?.fetchedAt && Date.now() - state.rates.fetchedAt < 30 * 60000;
+  if ((fresh && !force) || ui.ratesBusy) return;
+  if (DEMO) {
+    if (announce) toast('This preview uses example rates; the installed app downloads live ones.');
+    return;
+  }
+  ui.ratesBusy = true;
+  if (ui.tab === 'rates') render();
+  const res = await refreshRates(state, { fetchText: window.desktop?.fetchText, bnm: !!window.desktop });
+  ui.ratesBusy = false;
+  persist();
+  if (['home', 'accounts', 'rates'].includes(ui.tab) && !sheetRoot.firstElementChild) render();
+  if (announce) toast(res.ok ? 'Rates updated' : res.partial ? `Partly updated. ${res.errors[0]}` : `Couldn't update rates. ${res.errors[0] || ''}`);
+}
+
+// A real getter (Object.assign would copy today's object once), so screens
+// always see the current state after a restore, erase or demo reset.
+Object.defineProperty(ctx, 'state', { get: () => state });
+Object.assign(ctx, {
+  ui,
+  DEMO,
+  commit,
+  persist,
+  render: (o) => render(o),
+  toast,
+  openSheet,
+  closeSheet,
+  money,
+  bigMoney,
+  countUp,
+  txRow,
+  openTxSheet,
+  openTransferSheet,
+  updateRates,
+});
+
 function route() {
   const tab = location.hash.slice(1) || 'home';
-  ui.tab = ['home', 'log', 'insights', 'settings'].includes(tab) ? tab : 'home';
+  ui.tab = tab in SCREENS ? tab : 'home';
   closeSheet();
   render({ enter: true });
   window.scrollTo(0, 0);
@@ -1333,36 +1401,63 @@ if (!DEMO && 'serviceWorker' in navigator && (location.protocol === 'https:' || 
   navigator.serviceWorker.register('sw.js').catch(() => {});
 }
 
-// Preview only: fill an empty app with example data (your March 2026 sheet
-// plus a few records this month) so every screen has something to show.
+// Preview only: fill the app with invented example data (a made-up month in
+// the old sheet format plus this month across several accounts and
+// currencies) so every screen has something to show. Bumping DEMO_VERSION
+// re-seeds previews opened before.
+const DEMO_VERSION = 2;
+
 async function seedDemo() {
-  if (!DEMO || state.meta.demoSeeded || state.tx.length) return;
+  if (!DEMO || state.meta.demoSeeded === DEMO_VERSION) return;
+  state = M.defaultState();
+  const now = Date.now();
+  const acc = (id, name, bank, kind, currency, color, extra = {}) => ({ id, name, bank, kind, currency, color, start: 0, last4: '', savings: false, archived: false, holdings: [], updatedAt: now, ...extra });
+  state.settings.accounts = [
+    acc('wallet', 'Cash', 'Cash', 'cash', 'MDL', 2),
+    acc('maib-visa', 'maib Visa', 'maib', 'card', 'MDL', 1, { last4: '4821' }),
+    acc('maib-virt', 'maib virtual', 'maib', 'virtual', 'MDL', 5, { last4: '0937' }),
+    acc('maib-biz', 'maib Business', 'maib', 'business', 'MDL', 4, { last4: '5512' }),
+    acc('vb-usd', 'Victoriabank USD', 'Victoriabank', 'card', 'USD', 3, { last4: '7740' }),
+    acc('safe', 'Safe', 'Cash', 'savings', 'MDL', 6, { savings: true, start: 1500000 }),
+    acc('binance', 'Binance', 'Binance', 'crypto', 'USD', 7, { holdings: [{ asset: 'BTC', qty: 0.012 }, { asset: 'ETH', qty: 0.4 }, { asset: 'USDT', qty: 150 }] }),
+  ];
+  state.rates = { usd: { USD: 1, MDL: 17.6, EUR: 0.86, RON: 4.3, GBP: 0.75, UAH: 41.5, CHF: 0.8, PLN: 3.7, TRY: 41, CAD: 1.38 }, crypto: { BTC: 62000, ETH: 2400, BNB: 580, SOL: 150, XRP: 0.55, ADA: 0.4, DOGE: 0.12, TON: 5.2 }, sources: { fiat: { name: 'example rates' }, crypto: { name: 'example prices' } }, fetchedAt: now };
   try {
     const res = importRows(parseCSV(await (await fetch('sample.csv')).text()), state);
     state.tx.push(...res.tx);
   } catch {
-    // No sample file: the preview just starts empty.
+    // No sample file: the preview just starts with this month.
   }
   const today = todayISO();
   const day = (n) => `${monthKey(today)}-${String(Math.max(1, Math.min(Number(today.slice(8, 10)), n))).padStart(2, '0')}`;
-  const ex = [
-    ['income', 380000, day(1), 'work', 'from work'],
-    ['expense', 12000, day(2), 'food', 'groceries'],
-    ['expense', 4500, day(3), 'transport', 'taxi'],
-    ['expense', 5000, day(4), 'subscriptions', 'google subscription'],
-    ['income', 50000, day(5), 'family', 'mother'],
-    ['expense', 21000, day(6), 'food', 'food + coffee'],
-    ['expense', 16000, day(8), 'hygiene', 'hair care products'],
-  ];
-  let t0 = Date.now();
-  for (const [type, amount, date, category, note] of ex) {
-    state.tx.push({ id: M.uid(), createdAt: t0++, type, amount, date, category, note, account: 'wallet' });
-  }
-  state.tx.push({ id: M.uid(), createdAt: t0++, type: 'transfer', amount: 266000, date: day(1), from: 'wallet', to: 'safe', note: 'Deposit 70% · from work' });
-  state.meta.demoSeeded = true;
+  const ana = M.ensurePerson(state, 'Ana', now);
+  const mom = M.ensurePerson(state, 'Mom', now);
+  const client = M.ensurePerson(state, 'US client', now);
+  let t0 = now;
+  const rec = (type, amount, d, category, note, account, extra = {}) => {
+    const cur = M.account(state, account).currency;
+    const rate = cur === 'MDL' ? 1 : 17.6;
+    state.tx.push({ id: M.uid(), createdAt: t0, updatedAt: t0++, type, amount, currency: cur, rate, base: Math.round(amount * rate), date: day(d), category, note, account, ...extra });
+  };
+  rec('income', 120000, 1, 'side', 'website project', 'vb-usd', { person: client });
+  rec('income', 380000, 1, 'work', 'salary', 'maib-visa');
+  rec('expense', 12000, 2, 'food', 'groceries', 'maib-visa');
+  rec('expense', 4500, 3, 'transport', 'taxi', 'maib-virt');
+  rec('expense', 5000, 4, 'subscriptions', 'google one', 'maib-virt');
+  rec('income', 50000, 5, 'family', 'birthday money', 'wallet', { person: mom });
+  rec('expense', 30000, 6, 'other', 'lent for a phone repair', 'wallet', { person: ana, loan: true });
+  rec('expense', 21000, 6, 'food', 'dinner out', 'maib-visa');
+  rec('expense', 16000, 8, 'hygiene', 'shampoo and soap', 'wallet');
+  rec('expense', 9900, 8, 'clothes', 'socks', 'maib-visa');
+  state.tx.push({ id: M.uid(), createdAt: t0, updatedAt: t0++, type: 'transfer', amount: 266000, currency: 'MDL', rate: 1, base: 266000, date: day(1), from: 'maib-visa', to: 'safe', note: 'Deposit 70% · salary' });
+  state.settings.savingsAccount = 'safe';
+  state.meta.demoSeeded = DEMO_VERSION;
   commit();
 }
 
 requestPersistence();
 route();
 seedDemo();
+updateRates();
+ratesTimer = setInterval(() => updateRates(), 30 * 60000);
+window.addEventListener('online', () => updateRates({ force: true }));

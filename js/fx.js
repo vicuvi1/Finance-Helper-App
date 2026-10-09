@@ -59,14 +59,34 @@ export function coinValue(qty, asset, to, rates) {
 // Human rate, enough digits to be useful: 17.6234 → "17.62", 0.0567 → "0.0567".
 export function formatRate(r) {
   if (r == null) return '–';
-  if (r >= 100) return r.toFixed(2);
-  if (r >= 1) return r.toFixed(r >= 10 ? 2 : 4).replace(/0+$/, '').replace(/\.$/, '');
-  return r.toPrecision(4);
+  let t;
+  if (r >= 100) t = r.toFixed(2);
+  else if (r >= 1) t = r.toFixed(r >= 10 ? 2 : 4).replace(/0+$/, '').replace(/\.$/, '');
+  else t = String(Number(r.toPrecision(4)));
+  return t.replace('.', ','); // decimal comma, as amounts are written in Moldova
 }
 
 export function formatQty(q) {
   if (!Number.isFinite(q)) return '–';
   const abs = Math.abs(q);
   const digits = abs >= 1000 ? 2 : abs >= 1 ? 4 : 8;
-  return q.toFixed(digits).replace(/\.?0+$/, '');
+  return q.toFixed(digits).replace(/\.?0+$/, '').replace('.', ',');
+}
+
+const isCoin = (code) => CRYPTO.includes(code) || code in STABLE;
+
+// Converts a plain number (e.g. 100, 0.25) between any fiat currency or coin.
+// Used by the converter; money stored in records stays in integer cents.
+export function convertAny(value, from, to, rates) {
+  if (!Number.isFinite(value)) return null;
+  if (from === to) return value;
+  const toUsd = isCoin(from) ? coinUsd(rates, from) : (perUsd(rates, from) ? 1 / perUsd(rates, from) : null);
+  if (toUsd == null) return null;
+  const usd = value * toUsd;
+  if (isCoin(to)) {
+    const p = coinUsd(rates, to);
+    return p ? usd / p : null;
+  }
+  const r = perUsd(rates, to);
+  return r ? usd * r : null;
 }

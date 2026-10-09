@@ -58,3 +58,32 @@ export function dailyChart(days, fmt) {
   const base = `<line x1="0" x2="${W}" y1="${top + plotH + 0.5}" y2="${top + plotH + 0.5}" style="stroke:var(--line)"/>`;
   return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Spending per day this month">${base}${bars}${avgLine}${labels}</svg>`;
 }
+
+// A value over time (e.g. savings at the end of each month): line with a soft
+// area under it and the last point marked.
+export function lineChart(points, fmt, { color = 'var(--gold)' } = {}) {
+  const W = 620;
+  const H = 150;
+  const top = 16;
+  const bottom = 22;
+  const plotH = H - top - bottom;
+  if (!points.length) return '';
+  const vals = points.map((p) => p.value);
+  const max = Math.max(1, ...vals);
+  const min = Math.min(0, ...vals);
+  const span = max - min || 1;
+  const step = points.length > 1 ? (W - 8) / (points.length - 1) : 0;
+  const xy = points.map((p, i) => [4 + i * step, top + plotH - ((p.value - min) / span) * plotH]);
+  const line = xy.map(([x, y], i) => `${i ? 'L' : 'M'}${x.toFixed(1)} ${y.toFixed(1)}`).join(' ');
+  const area = `${line} L${xy.at(-1)[0].toFixed(1)} ${top + plotH} L${xy[0][0].toFixed(1)} ${top + plotH} Z`;
+  const [lx, ly] = xy.at(-1);
+  const labels = points.map((p, i) => (i % Math.ceil(points.length / 6) === 0 || i === points.length - 1
+    ? `<text x="${xy[i][0].toFixed(1)}" y="${H - 5}" text-anchor="${i === 0 ? 'start' : i === points.length - 1 ? 'end' : 'middle'}">${p.label}</text>` : '')).join('');
+  const dots = points.map((p, i) => `<circle cx="${xy[i][0].toFixed(1)}" cy="${xy[i][1].toFixed(1)}" r="9" style="fill:transparent"><title>${p.label}: ${fmt(p.value)}</title></circle>`).join('');
+  return `<svg class="chart line-chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Savings over time">
+    <path d="${area}" style="fill:${color};opacity:.12"/>
+    <path d="${line}" class="draw" pathLength="1" style="fill:none;stroke:${color};stroke-width:2;stroke-linejoin:round;stroke-linecap:round"/>
+    <circle cx="${lx.toFixed(1)}" cy="${ly.toFixed(1)}" r="4" style="fill:${color}"/>
+    <text x="${Math.min(lx, W - 4).toFixed(1)}" y="${Math.max(12, ly - 10).toFixed(1)}" text-anchor="end" style="fill:var(--text);font-weight:600">${fmt(points.at(-1).value)}</text>
+    ${labels}${dots}</svg>`;
+}
