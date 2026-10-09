@@ -391,6 +391,20 @@ label.field.check input { width: 18px; height: 18px; accent-color: var(--gold); 
 
 @media (max-width: 420px) { .stat b { font-size: 16px; } }
 
+/* Reports */
+.rep-bar { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.rep-bar .chips { margin: 0; }
+.rep-dates { display: flex; gap: 8px; align-items: center; }
+.rep-dates input { width: 160px; min-height: 38px; font-size: 14px; }
+.rep-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px 20px; }
+.kpi { display: grid; gap: 2px; min-width: 0; }
+.kpi .k { color: var(--muted); font-size: 12px; }
+.kpi b { font-size: 21px; font-weight: 600; letter-spacing: -0.01em; font-feature-settings: "tnum"; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.delta { font-size: 12px; font-weight: 550; }
+tr.click { cursor: pointer; }
+tr.click:hover td { background: var(--surface-2); }
+.view-reports { max-width: 1280px; }
+
 /* Accounts */
 .acc.static { cursor: default; }
 .acc.static:hover { background: none; border-color: var(--line); }
@@ -661,9 +675,9 @@ kbd {
   .nav-more { display: none; }
 
   .app { margin-left: var(--side); max-width: none; padding: 28px 28px 40px; }
-  .view-insights, .view-settings, .view-rates { column-width: 340px; column-count: 3; column-gap: 14px; max-width: 1280px; }
-  .view-insights > *, .view-settings > *, .view-rates > * { break-inside: avoid; }
-  .view-insights > .top, .view-settings > .top, .view-settings > .banner, .view-rates > .top, .view-rates > .conv { column-span: all; }
+  .view-reports, .view-settings, .view-rates { column-width: 400px; column-count: 3; column-gap: 14px; max-width: 1280px; }
+  .view-reports > *, .view-settings > *, .view-rates > * { break-inside: avoid; }
+  .view-reports > .top, .view-reports > .rep-bar, .view-reports > .rep-kpis, .view-settings > .top, .view-settings > .banner, .view-rates > .top, .view-rates > .conv { column-span: all; }
   .view-home, .view-log, .view-accounts { max-width: 1280px; }
   .card { margin-bottom: 14px; }
   .top h1 { font-size: 28px; }

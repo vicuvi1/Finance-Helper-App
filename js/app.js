@@ -15,8 +15,9 @@ import * as RatesScreen from './screens/rates.js';
 import * as AccountsScreen from './screens/accounts.js';
 import * as Spending from './screens/spending.js';
 import * as PeopleScreen from './screens/people.js';
+import * as ReportsScreen from './screens/reports.js';
 import { tableHTML, calendarHTML } from './logviews.js';
-import { trendChart, dailyChart } from './charts.js';
+import { dailyChart } from './charts.js';
 
 let state = load();
 const ui = {
@@ -258,7 +259,7 @@ function viewHome() {
     </div>
     <div class="dash-side">
       ${goalCard()}
-      ${tips.length ? `<section class="card"><h2>Heads up <button class="card-link right" data-go="insights">All insights</button></h2>${tips.map(tipCard).join('')}</section>` : ''}
+      ${tips.length ? `<section class="card"><h2>Heads up <button class="card-link right" data-go="reports">Reports</button></h2>${tips.map(tipCard).join('')}</section>` : ''}
       ${jarsCard(key)}
     </div>
   </div>`;
@@ -329,59 +330,6 @@ function viewLog() {
   ${q && view !== 'calendar' ? `<p class="muted small">${list.length} result${list.length === 1 ? '' : 's'} in all months</p>` : ''}
   ${content}
   ${view === 'table' ? '<p class="muted small">Edit any cell; it saves by itself. <b>Enter</b> moves down a row. Paste rows copied from Excel or Google Sheets anywhere on this page to import them.</p>' : ''}`;
-}
-
-function viewInsights() {
-  const today = todayISO();
-  const key = ui.month;
-  const tips = M.insights(state, key, today);
-  const cmp = M.categoryComparison(state, key);
-  const s = M.monthSummary(state, key);
-  const maxCat = cmp[0]?.amount || 1;
-  const cats = cmp.slice(0, 12).map((c) => {
-    const k = catOf(c.id);
-    let vs = '';
-    if (c.avg) {
-      const d = c.amount - c.avg;
-      const p = Math.round((d / c.avg) * 100);
-      vs = `<div class="vs">normal month ${money(c.avg)} · <span class="${d > 0 ? 'up' : 'down'}">${d > 0 ? '▲' : '▼'} ${Math.abs(p)}%</span></div>`;
-    }
-    return `<div class="cbar"><div class="row"><span>${dot(catColor(c.id))}${esc(k.name)} <span class="muted">${pct(c.share)}</span></span><span class="money">${money(c.amount)}</span></div>
-      <div class="bar"><i style="width:${((c.amount / maxCat) * 100).toFixed(1)}%"></i></div>${vs}</div>`;
-  }).join('');
-  const maxSrc = s.bySource[0]?.amount || 1;
-  const srcs = s.bySource.map((c) => {
-    const k = catOf(c.id);
-    return `<div class="cbar in"><div class="row"><span>${dot(catColor(c.id))}${esc(k.name)} <span class="muted">${pct(c.amount / s.income)}</span></span><span class="money">${money(c.amount)}</span></div>
-      <div class="bar"><i style="width:${((c.amount / maxSrc) * 100).toFixed(1)}%"></i></div></div>`;
-  }).join('');
-
-  const y = M.yearOverview(state, ui.year);
-  const nowKey = monthKey(today);
-  const k = (c) => formatMoney(c, '', { compact: true });
-  const yearRows = y.rows.map((r) => {
-    const has = r.income || r.expense;
-    return `<tr class="${has ? '' : 'dim'}">
-    <td><button class="card-link" style="color:inherit" data-act="open-month" data-key="${r.key}">${monthLabel(r.key, true).slice(0, 3)}</button></td>
-    ${has ? `<td class="income">${k(r.income)}</td><td class="expense">${k(r.expense)}</td><td>${k(r.net)}</td><td>${pct(r.savingsRate)}</td>` : '<td>–</td><td>–</td><td>–</td><td>–</td>'}</tr>`;
-  }).join('');
-
-  return `<header class="top"><h1>Insights</h1>${monthSwitch()}</header>
-  <section class="card"><h2>What your money says</h2>${tips.map(tipCard).join('')}</section>
-  <section class="card"><h2>Where it goes <span class="right muted">${money(s.expense)}</span></h2>
-    ${cats || '<p class="muted" style="margin:0">No spending logged this month.</p>'}</section>
-  <section class="card"><h2>Where it comes from <span class="right muted">${money(s.income)}</span></h2>
-    ${srcs || '<p class="muted" style="margin:0">No income logged this month.</p>'}
-    ${s.bySource.length ? '<p class="muted small" style="margin-bottom:0">To make more: do more of what pays best per hour, and add one more source.</p>' : ''}</section>
-  <section class="card"><h2>Last 6 months</h2>${trendChart(M.trend(state, key, 6), (c) => money(c))}
-    <div class="legend"><span><i style="background:var(--income)"></i>Earned</span><span><i style="background:var(--expense)"></i>Spent</span></div></section>
-  <section class="card"><h2>Year ${ui.year} · ${esc(state.settings.currency)}
-      <span class="right"><button class="card-link" data-act="year" data-step="-1" aria-label="Previous year">‹ ${ui.year - 1}</button>
-      ${ui.year < Number(nowKey.slice(0, 4)) ? `&nbsp;<button class="card-link" data-act="year" data-step="1" aria-label="Next year">${ui.year + 1} ›</button>` : ''}</span></h2>
-    <div class="table-wrap"><table>
-      <thead><tr><th>Month</th><th>Earned</th><th>Spent</th><th>Kept</th><th>%</th></tr></thead>
-      <tbody>${yearRows}<tr class="total"><td>Total</td><td class="income">${k(y.total.income)}</td><td class="expense">${k(y.total.expense)}</td><td>${k(y.total.net)}</td><td>${pct(y.total.savingsRate)}</td></tr></tbody>
-    </table></div></section>`;
 }
 
 function viewSettings() {
@@ -1225,6 +1173,7 @@ document.addEventListener('click', (e) => {
   const act = el.dataset.act;
   if (SCREENS[ui.tab]?.onClick?.(act, el)) return;
   if (act === 'acc-open') AccountsScreen.openAccount(el.dataset.id);
+  else if (act === 'person-open') PeopleScreen.openPerson(el.dataset.id);
   else if (act === 'more') openMoreSheet();
   else if (act === 'cat-open') Spending.openCategory(el.dataset.cat, el.dataset.period, el.dataset.type);
   else if (act === 'spend-period') {
@@ -1298,7 +1247,7 @@ document.addEventListener('keydown', (e) => {
   }
   if (e.ctrlKey || e.metaKey || e.altKey || sheetRoot.firstChild) return;
   if (e.target.closest('input, select, textarea')) return;
-  const tabs = { 1: 'home', 2: 'log', 3: 'accounts', 4: 'people', 5: 'insights', 6: 'rates', 7: 'settings' };
+  const tabs = { 1: 'home', 2: 'log', 3: 'accounts', 4: 'people', 5: 'reports', 6: 'rates', 7: 'settings' };
   if (e.key === 'n' || e.key === 'N') { e.preventDefault(); openTxSheet(); }
   else if (e.key === '/') {
     e.preventDefault();
@@ -1314,7 +1263,7 @@ const SCREENS = {
   log: { view: viewLog },
   accounts: AccountsScreen,
   people: PeopleScreen,
-  insights: { view: viewInsights },
+  reports: ReportsScreen,
   rates: RatesScreen,
   settings: { view: viewSettings },
 };
@@ -1324,7 +1273,7 @@ function openMoreSheet() {
   openSheet(`<h3>More <button type="button" class="icon-btn" data-close aria-label="Close">✕</button></h3>
     <div class="list more-list">
       ${item('people', 'People', 'Who gave you money, who you gave to, loans')}
-      ${item('insights', 'Insights', 'Where money goes and comes from, year overview')}
+      ${item('reports', 'Reports', 'Any month, quarter, year or your own dates')}
       ${item('rates', 'Rates & converter', 'Live exchange rates and crypto prices')}
       ${item('settings', 'Settings', 'Goal, smart split, categories, backups')}
     </div>`);
@@ -1353,6 +1302,10 @@ async function updateRates({ force = false, announce = false } = {}) {
 Object.defineProperty(ctx, 'state', { get: () => state });
 Object.assign(ctx, {
   ui,
+  tipCard,
+  dot,
+  catColor,
+  download,
   DEMO,
   commit,
   persist,
@@ -1370,7 +1323,8 @@ Object.assign(ctx, {
 });
 
 function route() {
-  const tab = location.hash.slice(1) || 'home';
+  let tab = location.hash.slice(1) || 'home';
+  if (tab === 'insights') tab = 'reports'; // old links
   ui.tab = tab in SCREENS ? tab : 'home';
   closeSheet();
   render({ enter: true });

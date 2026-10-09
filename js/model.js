@@ -582,3 +582,86 @@ export function totalsByCategory(state, from, to, type = 'expense') {
   const rows = sumBy(list, (t) => t.category).map((r) => ({ ...r, share: total ? r.amount / total : 0, count: count[r.id] }));
   return { total, rows, list };
 }
+
+// ---------- Reports for any period ----------
+
+const DAY = 864e5;
+const isoDays = (a, b) => Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / DAY) + 1;
+const shiftIso = (iso, days) => new Date(Date.parse(`${iso}T00:00:00Z`) + days * DAY).toISOString().slice(0, 10);
+
+// The same length of time right before [from, to] (for "vs previous").
+export function previousRange(from, to) {
+  const n = isoDays(from, to);
+  return { from: shiftIso(from, -n), to: shiftIso(from, -1) };
+}
+
+function group(list, key) {
+  const m = new Map();
+  for (const t of list) {
+    const k = key(t);
+    if (k == null) continue;
+    const r = m.get(k) || { id: k, income: 0, expense: 0, count: 0 };
+    if (t.type === 'income') r.income += B(t); else r.expense += B(t);
+    r.count++;
+    m.set(k, r);
+  }
+  return [...m.values()];
+}
+
+// Everything a report shows for [from, to], in the base currency unless
+// noted. `prev` holds the same numbers for the period just before.
+export function report(state, from, to, { withPrev = true } = {}) {
+  const inRange = state.tx.filter((t) => t.date >= from && t.date <= to);
+  const real = inRange.filter((t) => t.type !== 'transfer' && !t.loan);
+  const income = real.filter((t) => t.type === 'income').reduce((a, t) => a + B(t), 0);
+  const expense = real.filter((t) => t.type === 'expense').reduce((a, t) => a + B(t), 0);
+  const days = isoDays(from, to);
+  const spending = totalsByCategory(state, from, to, 'expense');
+  const sources = totalsByCategory(state, from, to, 'income');
+  const byAccount = group(real, (t) => t.account).sort((a, b) => b.expense + b.income - a.expense - a.income);
+  const byPerson = group(inRange.filter((t) => t.person && t.type !== 'transfer'), (t) => t.person).sort((a, b) => b.expense + b.income - a.expense - a.income);
+  const cur = new Map();
+  for (const t of real) {
+    const k = t.currency || state.settings.currency;
+    const r = cur.get(k) || { id: k, income: 0, expense: 0 };
+    r[t.type === 'income' ? 'income' : 'expense'] += t.amount;
+    cur.set(k, r);
+  }
+  const loans = inRange.filter((t) => t.loan);
+  const biggest = real.filter((t) => t.type === 'expense').sort((a, b) => B(b) - B(a)).slice(0, 10);
+  const spendDays = new Set(real.filter((t) => t.type === 'expense').map((t) => t.date)).size;
+  const out = {
+    from, to, days,
+    income, expense, net: income - expense,
+    savingsRate: income > 0 ? (income - expense) / income : null,
+    perDay: days ? Math.round(expense / days) : 0,
+    noSpendDays: Math.max(0, days - spendDays),
+    count: inRange.length,
+    spending, sources, byAccount, byPerson,
+    byCurrency: [...cur.values()],
+    loansOut: loans.filter((t) => t.type === 'expense').reduce((a, t) => a + B(t), 0),
+    loansIn: loans.filter((t) => t.type === 'income').reduce((a, t) => a + B(t), 0),
+    biggest,
+    list: inRange,
+  };
+  if (withPrev) {
+    const p = previousRange(from, to);
+    out.prev = report(state, p.from, p.to, { withPrev: false });
+  }
+  return out;
+}
+
+// Income and spending per day (short periods) or per month (long ones).
+export function reportSeries(state, from, to) {
+  const days = isoDays(from, to);
+  const real = state.tx.filter((t) => t.date >= from && t.date <= to && t.type !== 'transfer' && !t.loan);
+  const buckets = new Map();
+  const keyOf = days <= 62 ? (iso) => iso : (iso) => iso.slice(0, 7);
+  if (days <= 62) for (let i = 0; i < days; i++) buckets.set(shiftIso(from, i), { key: shiftIso(from, i), income: 0, expense: 0 });
+  else for (let k = from.slice(0, 7); k <= to.slice(0, 7); k = addMonths(k, 1)) buckets.set(k, { key: k, income: 0, expense: 0 });
+  for (const t of real) {
+    const b = buckets.get(keyOf(t.date));
+    if (b) b[t.type === 'income' ? 'income' : 'expense'] += B(t);
+  }
+  return { unit: days <= 62 ? 'day' : 'month', rows: [...buckets.values()] };
+}

@@ -185,3 +185,30 @@ test('spending by category over a period, loans left out', async () => {
   assert.deepEqual(Object.values(periodRange('last', '2026-01-15')).slice(0, 2), ['2025-12-01', '2025-12-31']);
   assert.equal(periodRange('3m', '2026-10-09').from, '2026-08-01');
 });
+
+test('report for any period, with the period before for comparison', async () => {
+  const { report, previousRange, reportSeries } = await import('../js/model.js');
+  assert.deepEqual(previousRange('2026-10-01', '2026-10-31'), { from: '2026-08-31', to: '2026-09-30' });
+  const s = multi();
+  const ana = ensurePerson(s, 'Ana');
+  s.tx.push(
+    { id: '1', type: 'income', amount: 100000, currency: 'USD', rate: 17.5, base: 1750000, date: '2026-10-01', account: 'usd', category: 'work' },
+    { id: '2', type: 'expense', amount: 50000, currency: 'MDL', rate: 1, base: 50000, date: '2026-10-02', account: 'wallet', category: 'food' },
+    { id: '3', type: 'expense', amount: 20000, currency: 'MDL', rate: 1, base: 20000, date: '2026-10-02', account: 'wallet', category: 'other', person: ana, loan: true },
+    { id: '4', type: 'expense', amount: 40000, currency: 'MDL', rate: 1, base: 40000, date: '2026-09-15', account: 'wallet', category: 'food' },
+  );
+  const r = report(s, '2026-10-01', '2026-10-31');
+  assert.equal(r.income, 1750000);
+  assert.equal(r.expense, 50000);
+  assert.equal(r.loansOut, 20000);
+  assert.equal(r.perDay, Math.round(50000 / 31));
+  assert.equal(r.noSpendDays, 30);
+  assert.deepEqual(r.byCurrency.find((c) => c.id === 'USD'), { id: 'USD', income: 100000, expense: 0 });
+  assert.equal(r.byPerson[0].expense, 20000);
+  assert.equal(r.prev.expense, 40000);
+  const series = reportSeries(s, '2026-10-01', '2026-10-31');
+  assert.equal(series.unit, 'day');
+  assert.equal(series.rows.length, 31);
+  assert.equal(series.rows[1].expense, 50000);
+  assert.equal(reportSeries(s, '2026-01-01', '2026-12-31').rows.length, 12);
+});

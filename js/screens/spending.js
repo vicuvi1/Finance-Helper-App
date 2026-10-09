@@ -56,10 +56,11 @@ export function spendingCard({ period = 'month', type = 'expense', title } = {})
 }
 
 // Records of one category in a period, with its last 6 months for context.
+// `period` is a preset id ("month", "3m"...) or a { from, to, label } range.
 export function openCategory(id, period = 'month', type = 'expense') {
   const { state } = ctx;
   const today = todayISO();
-  const range = M.periodRange(period, today);
+  const range = typeof period === 'string' ? M.periodRange(period, today) : period;
   const { total, rows, list } = M.totalsByCategory(state, range.from, range.to, type);
   const restIds = new Set(rows.slice(TOP).map((r) => r.id));
   const match = (t) => (id === '__rest' ? restIds.has(t.category) : t.category === id);
