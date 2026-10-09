@@ -18,6 +18,7 @@ import * as PeopleScreen from './screens/people.js';
 import * as ReportsScreen from './screens/reports.js';
 import * as Security from './screens/security.js';
 import * as Updates from './screens/updates.js';
+import * as Binance from './screens/binance.js';
 import { tableHTML, calendarHTML } from './logviews.js';
 import { dailyChart } from './charts.js';
 
@@ -413,6 +414,7 @@ function viewSettings() {
     </div>
   </section>
 
+  ${Binance.settingsCard()}
   ${Security.settingsCard()}
   ${Updates.settingsCard()}
 
@@ -1274,7 +1276,7 @@ const SCREENS = {
   people: PeopleScreen,
   reports: ReportsScreen,
   rates: RatesScreen,
-  settings: { view: viewSettings, onClick: (a, el) => Security.onClick(a, el) || (a.startsWith('update-') && (Updates.onClick(a), true)), onChange: Security.onChange },
+  settings: { view: viewSettings, onClick: (a, el) => Security.onClick(a, el) || Binance.onClick(a) || (a.startsWith('update-') && (Updates.onClick(a), true)), onChange: Security.onChange },
 };
 
 function openMoreSheet() {
@@ -1441,6 +1443,12 @@ requestPersistence();
 if (!DEMO) Security.initLock();
 route();
 Updates.initUpdates();
+Binance.initBinance();
+
+document.addEventListener('submit', (e) => {
+  if (e.target.closest('.sheet') || !e.target.id) return;
+  if (e.target.id === 'bn-form') { e.preventDefault(); Binance.onSubmit(e.target); }
+});
 seedDemo();
 updateRates();
 setInterval(() => updateRates(), 30 * 60000);

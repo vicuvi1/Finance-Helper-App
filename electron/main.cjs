@@ -2,7 +2,8 @@
 // private app:// origin so ES modules and saved data work like on the web,
 // and nothing is loaded from the internet.
 
-const { app, BrowserWindow, protocol, net, shell, Menu, ipcMain } = require('electron');
+const { app, BrowserWindow, protocol, net, shell, Menu, ipcMain, safeStorage } = require('electron');
+const { createBinance } = require('./binance.cjs');
 const path = require('node:path');
 const fs = require('node:fs');
 const { pathToFileURL } = require('node:url');
@@ -79,6 +80,25 @@ ipcMain.handle('fetch-text', async (_e, url) => {
 });
 
 ipcMain.handle('app-info', () => ({ version: app.getVersion(), platform: process.platform, packaged: app.isPackaged }));
+
+// ---------- Binance (read-only key, stored encrypted) ----------
+
+const binance = createBinance({ app, net, safeStorage });
+ipcMain.handle('binance-status', () => binance.status());
+ipcMain.handle('binance-connect', async (_e, key, secret) => {
+  const k = String(key || '').trim();
+  const s = String(secret || '').trim();
+  if (!/^[A-Za-z0-9]{20,128}$/.test(k) || !/^[A-Za-z0-9]{20,128}$/.test(s)) throw new Error('That doesn\'t look like a Binance API key and secret.');
+  binance.saveKeys(k, s);
+  try {
+    return await binance.balances(); // proves the key works
+  } catch (e) {
+    binance.forget();
+    throw e;
+  }
+});
+ipcMain.handle('binance-balances', () => binance.balances());
+ipcMain.handle('binance-forget', () => { binance.forget(); return true; });
 
 // ---------- Updates (GitHub Releases, via electron-updater) ----------
 // The page asks; nothing downloads or installs without a click, except the

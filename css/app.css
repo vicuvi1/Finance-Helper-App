@@ -410,6 +410,9 @@ body.locked .app, body.locked .tabbar, body.locked #sheet-root, body.locked .toa
 .kv span { color: var(--muted); }
 .kv b { font-weight: 600; text-align: right; }
 
+.steps { margin: 0 0 14px; padding-left: 20px; color: var(--muted); display: grid; gap: 6px; }
+.steps b { color: var(--text); }
+
 /* Reports */
 .rep-bar { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; justify-content: space-between; margin-bottom: 14px; }
 .rep-bar .chips { margin: 0; }

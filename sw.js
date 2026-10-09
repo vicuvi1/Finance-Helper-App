@@ -28,6 +28,8 @@ const SHELL = [
   './js/lock.js',
   './js/version.js',
   './js/screens/updates.js',
+  './js/screens/binance.js',
+  './js/binance.js',
   './fonts/Geist-Variable.woff2',
   './fonts/GeistMono-Variable.woff2',
   './manifest.webmanifest',
