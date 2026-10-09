@@ -116,7 +116,7 @@ export async function refreshRates(state, { fetchText = defaultFetchText, now = 
   try {
     Object.assign(next.crypto, parseBinance(await fetchText(URLS.binance(coins.map((c) => `${c}USDT`)))));
     next.sources.crypto = { name: 'Binance' };
-  } catch (e) {
+  } catch {
     try {
       Object.assign(next.crypto, parseCoingecko(await fetchText(URLS.coingecko(coins.map((c) => GECKO_IDS[c]).filter(Boolean)))));
       next.sources.crypto = { name: 'CoinGecko' };

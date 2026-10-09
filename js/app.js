@@ -13,6 +13,7 @@ import { refreshRates } from './rates.js';
 import { ctx } from './ctx.js';
 import * as RatesScreen from './screens/rates.js';
 import * as AccountsScreen from './screens/accounts.js';
+import * as Spending from './screens/spending.js';
 import { tableHTML, calendarHTML } from './logviews.js';
 import { trendChart, dailyChart } from './charts.js';
 
@@ -24,6 +25,8 @@ const ui = {
   filter: 'all',
   search: '',
   sort: { col: 'date', dir: 1 },
+  spendPeriod: 'month',
+  incomePeriod: 'month',
   // Table view's empty "new row": keeps date/type/account between adds.
   draft: null,
 };
@@ -188,7 +191,7 @@ function goalCard() {
   else if (g.pace != null && g.pace < 0) line = `This went down by ${money(-g.pace)}/month lately. Keep more than you spend and I'll predict when you get there.`;
   else line = 'Log a month of income and spending and I\'ll predict when you get there.';
   return `<section class="card goal"><h2>${esc(goal.name)} <span class="right muted">${esc(where)}</span></h2>
-    <div class="row"><b class="money">${countUp(g.current, 'goal')}</b><span class="muted money">of ${money(g.target)} · ${Math.round(g.ratio * 100)}%</span></div>
+    <div class="row"><b class="money">${countUp(Math.round(g.current / 100) * 100, 'goal')}</b><span class="muted money">of ${money(g.target)} · ${Math.round(g.ratio * 100)}%</span></div>
     <div class="bar gold"><i style="width:${(g.ratio * 100).toFixed(1)}%"></i></div>
     <p>${line}</p></section>`;
 }
@@ -247,6 +250,7 @@ function viewHome() {
   </section>
   <div class="dash">
     <div class="dash-main">
+      ${Spending.spendingCard({ period: ui.spendPeriod })}
       <section class="card"><h2>Spending this month <span class="right muted">${money(perDay)} a day on average</span></h2>
         ${dailyChart(days, (c) => money(c))}</section>
       ${recent.length ? `<section class="card"><h2>Recent <button class="card-link right" data-go="log">Open log</button></h2><div class="list">${recent.map((t) => txRow(t, { showDate: true })).join('')}</div></section>` : ''}
@@ -1221,6 +1225,12 @@ document.addEventListener('click', (e) => {
   if (SCREENS[ui.tab]?.onClick?.(act, el)) return;
   if (act === 'acc-open') AccountsScreen.openAccount(el.dataset.id);
   else if (act === 'more') openMoreSheet();
+  else if (act === 'cat-open') Spending.openCategory(el.dataset.cat, el.dataset.period, el.dataset.type);
+  else if (act === 'spend-period') {
+    ui[el.dataset.type === 'income' ? 'incomePeriod' : 'spendPeriod'] = el.dataset.period;
+    render();
+    app.querySelector(`.spend[data-spend="${el.dataset.type}"]`)?.classList.add('flash-in');
+  }
   else if (act === 'add') openTxSheet();
   else if (act === 'edit') openTxSheet(state.tx.find((t) => t.id === el.dataset.id));
   else if (act === 'transfer') openTransferSheet(el.dataset.from);
@@ -1318,8 +1328,6 @@ function openMoreSheet() {
 }
 
 // ---------- Exchange rates ----------
-
-let ratesTimer = null;
 
 async function updateRates({ force = false, announce = false } = {}) {
   const fresh = state.rates?.fetchedAt && Date.now() - state.rates.fetchedAt < 30 * 60000;
@@ -1455,9 +1463,10 @@ async function seedDemo() {
   commit();
 }
 
+Spending.bindHover(app);
 requestPersistence();
 route();
 seedDemo();
 updateRates();
-ratesTimer = setInterval(() => updateRates(), 30 * 60000);
+setInterval(() => updateRates(), 30 * 60000);
 window.addEventListener('online', () => updateRates({ force: true }));

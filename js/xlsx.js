@@ -8,7 +8,7 @@
 const enc = new TextEncoder();
 const xml = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
   // Characters XML 1.0 does not allow.
-  .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, ''); // eslint-disable-line no-control-regex
+  .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, '');
 
 const STYLE = { normal: 0, header: 1, date: 2, money: 3, moneyBold: 4, bold: 5 };
 

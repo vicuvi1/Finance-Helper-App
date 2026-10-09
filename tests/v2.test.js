@@ -166,3 +166,22 @@ test('converter handles fiat and coins both ways', async () => {
   assert.equal(convertAny(5, 'USDT', 'USD', RATES), 5);
   assert.equal(convertAny(1, 'ETH', 'MDL', RATES), null);
 });
+
+test('spending by category over a period, loans left out', async () => {
+  const { totalsByCategory, periodRange } = await import('../js/model.js');
+  const s = defaultState();
+  s.tx.push(
+    { id: '1', type: 'expense', amount: 30000, base: 30000, date: '2026-10-02', category: 'food', account: 'wallet' },
+    { id: '2', type: 'expense', amount: 10000, base: 10000, date: '2026-10-05', category: 'food', account: 'wallet' },
+    { id: '3', type: 'expense', amount: 60000, base: 60000, date: '2026-10-06', category: 'home', account: 'wallet' },
+    { id: '4', type: 'expense', amount: 99900, base: 99900, date: '2026-10-07', category: 'other', account: 'wallet', loan: true },
+    { id: '5', type: 'expense', amount: 5000, base: 5000, date: '2026-09-30', category: 'food', account: 'wallet' },
+  );
+  const r = periodRange('month', '2026-10-09');
+  assert.deepEqual([r.from, r.to], ['2026-10-01', '2026-10-31']);
+  const { total, rows } = totalsByCategory(s, r.from, r.to);
+  assert.equal(total, 100000);
+  assert.deepEqual(rows.map((x) => [x.id, x.amount, x.share, x.count]), [['home', 60000, 0.6, 1], ['food', 40000, 0.4, 2]]);
+  assert.deepEqual(Object.values(periodRange('last', '2026-01-15')).slice(0, 2), ['2025-12-01', '2025-12-31']);
+  assert.equal(periodRange('3m', '2026-10-09').from, '2026-08-01');
+});

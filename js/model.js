@@ -552,3 +552,33 @@ export function restoreTx(state, t, now = Date.now()) {
   delete state.deleted[t.id];
   state.tx.push(touch(t, now));
 }
+
+// ---------- Spending by category over a period ----------
+
+export const PERIODS = [
+  { id: 'month', name: 'This month' },
+  { id: 'last', name: 'Last month' },
+  { id: '3m', name: '3 months' },
+  { id: 'year', name: 'This year' },
+];
+
+// Date range for a named period, inclusive, as YYYY-MM-DD.
+export function periodRange(id, today) {
+  const m = monthKey(today);
+  const end = (k) => `${k}-${String(daysInMonth(k)).padStart(2, '0')}`;
+  if (id === 'last') { const k = addMonths(m, -1); return { from: `${k}-01`, to: end(k), label: monthLabel(k) }; }
+  if (id === '3m') { const k = addMonths(m, -2); return { from: `${k}-01`, to: today, label: `${monthLabel(k, true)} – ${monthLabel(m, true)}` }; }
+  if (id === 'year') return { from: `${today.slice(0, 4)}-01-01`, to: today, label: today.slice(0, 4) };
+  return { from: `${m}-01`, to: end(m), label: monthLabel(m) };
+}
+
+// Spending (or income) per category between two dates, in the base currency,
+// biggest first, each with its share and number of records.
+export function totalsByCategory(state, from, to, type = 'expense') {
+  const list = state.tx.filter((t) => t.type === type && !t.loan && t.date >= from && t.date <= to);
+  const total = list.reduce((a, t) => a + B(t), 0);
+  const count = {};
+  for (const t of list) count[t.category] = (count[t.category] || 0) + 1;
+  const rows = sumBy(list, (t) => t.category).map((r) => ({ ...r, share: total ? r.amount / total : 0, count: count[r.id] }));
+  return { total, rows, list };
+}
