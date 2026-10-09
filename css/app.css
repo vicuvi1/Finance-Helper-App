@@ -761,3 +761,17 @@ kbd {
 .budget-edit .n { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .budget-edit input { text-align: right; min-height: 38px; }
 .budget-edit .card-link { font-size: 12px; white-space: nowrap; }
+
+/* Bank statement import */
+.bank-map { margin: 4px 0 12px; }
+.bank-map summary { cursor: pointer; font-size: 13px; color: var(--muted); padding: 6px 0; }
+.bank-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 10px; }
+.bank-prev { border-top: 1px solid var(--line); margin-top: 6px; }
+.bp-row { display: grid; grid-template-columns: 92px minmax(0, 1fr) auto auto; gap: 10px; align-items: baseline; padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+.bp-note { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bp-cat { color: var(--muted); font-size: 12px; white-space: nowrap; }
+.bp-row b { font-weight: 550; white-space: nowrap; }
+@media (max-width: 520px) {
+  .bp-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .bp-row .bp-cat, .bp-row > span:first-child { display: none; }
+}

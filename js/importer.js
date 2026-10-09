@@ -20,7 +20,7 @@ export const txKey = (t) => [t.date, t.type, t.amount, (t.note || '').trim().toL
 
 // Works out which column holds what. Google Sheets exports the whole tab, so
 // the header row may sit among other blocks (calculator, goal, etc.).
-function detectColumns(rows) {
+export function detectColumns(rows) {
   for (let r = 0; r < Math.min(rows.length, 10); r++) {
     const h = rows[r].map(norm);
     if (h.includes('type') && h.includes('amount') && h.includes('date')) {

@@ -13,6 +13,8 @@ const SHELL = [
   './js/store.js',
   './js/cipher.js',
   './js/recurring.js',
+  './js/bank.js',
+  './js/screens/bankimport.js',
   './js/screens/plan.js',
   './js/csv.js',
   './js/importer.js',

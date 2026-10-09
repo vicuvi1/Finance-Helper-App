@@ -7,7 +7,7 @@ import { formatMoney, evalAmount, centsToPlain } from './money.js';
 import { todayISO, monthKey, monthLabel, addMonths, dayLabel } from './dates.js';
 import { convert, pairRate } from './fx.js';
 import { parseCSV, toCSV } from './csv.js';
-import { importRows, importWorkbook, exportRows, toTSV, monthSheet, overviewSheet } from './importer.js';
+import { importRows, importWorkbook, exportRows, toTSV, monthSheet, overviewSheet, detectColumns } from './importer.js';
 import { readWorkbook } from './xlsx-read.js';
 import { workbook } from './xlsx.js';
 import { refreshRates } from './rates.js';
@@ -24,6 +24,8 @@ import * as Sync from './screens/sync.js';
 import * as SelfCheck from './screens/selfcheck.js';
 import * as Backups from './screens/backups.js';
 import * as Plan from './screens/plan.js';
+import { openBankImport, rowsFromFile, decodeText } from './screens/bankimport.js';
+import { guessMapping } from './bank.js';
 import { FREQS, markDone } from './recurring.js';
 import { tableHTML, calendarHTML } from './logviews.js';
 import { dailyChart } from './charts.js';
@@ -408,9 +410,10 @@ function viewSettings() {
       <button class="btn" data-act="export-xlsx">Export to Excel</button>
     </div>
     <div class="btns" style="margin-top:8px">
+      <button class="btn" data-act="import-bank">Import bank statement</button>
       <button class="btn" data-act="export-csv">Export CSV</button>
     </div>
-    <p class="muted small" style="margin-bottom:0">From Google Sheets: File → Download → <b>Microsoft Excel (.xlsx)</b> and import the whole file: every month tab at once, you pick which. A single tab as .csv works too. Importing the same month twice is safe.</p>
+    <p class="muted small" style="margin-bottom:0">From Google Sheets: File → Download → <b>Microsoft Excel (.xlsx)</b> and import the whole file: every month tab at once, you pick which. A single tab as .csv works too. Bank statements: export CSV or Excel from maib / Victoriabank online banking. Importing the same thing twice is safe.</p>
   </section>
 
   <section class="card"><h2>Look</h2>
@@ -1096,9 +1099,14 @@ async function readFile(input) {
   return file ? file.text() : null;
 }
 
+// A bank statement rather than the old sheet or this app's CSV.
+const isStatement = (rows) => detectColumns(rows).headerRow === -1 && !!guessMapping(rows);
+
 async function onCSVFile(text) {
   if (text == null) return;
-  const res = importRows(parseCSV(text), state);
+  const rows = parseCSV(text);
+  if (isStatement(rows)) { openBankImport(rows); return; }
+  const res = importRows(rows, state);
   if (!res.tx.length) {
     toast(res.duplicates ? `Already imported (${res.duplicates} records).` : 'No records found. Rows need a date and an amount.');
     return;
@@ -1129,6 +1137,7 @@ async function onCSVFile(text) {
 // A whole .xlsx: one line per tab with what it holds; untick tabs to skip.
 async function onWorkbookFile(buf) {
   const sheets = await readWorkbook(buf);
+  if (sheets.length === 1 && isStatement(sheets[0].rows)) { openBankImport(sheets[0].rows); return; }
   const res = importWorkbook(sheets, state);
   const tabs = res.sheets;
   const useful = tabs.filter((t) => t.tx.length);
@@ -1325,6 +1334,7 @@ document.addEventListener('click', (e) => {
   else if (act === 'export-json') exportJSON();
   else if (act === 'export-csv') exportCSV();
   else if (act === 'import-csv') document.getElementById('file-csv').click();
+  else if (act === 'import-bank') document.getElementById('file-bank').click();
   else if (act === 'import-json') document.getElementById('file-json').click();
   else if (act === 'install') installPrompt?.prompt().finally(() => { installPrompt = null; render(); });
   else if (act === 'add-cat') {
@@ -1349,7 +1359,12 @@ document.addEventListener('change', (e) => {
     e.target.value = '';
     if (!file) return;
     if (/\.xlsx$/i.test(file.name)) file.arrayBuffer().then(onWorkbookFile).catch((err) => toast(err.message));
-    else file.text().then(onCSVFile);
+    else file.arrayBuffer().then(decodeText).then(onCSVFile);
+  }
+  else if (e.target.id === 'file-bank') {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (file) rowsFromFile(file).then((rows) => openBankImport(rows, { fileName: file.name })).catch((err) => toast(err.message));
   }
   else if (e.target.id === 'file-json') readFile(e.target).then(onJSONFile);
   else onSettingsChange(e.target);

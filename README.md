@@ -28,6 +28,7 @@ A personal finance app that replaces the "finance 2026" Google Sheet: the same d
 | 📥 **Import your sheet** | Download a month tab as CSV and import it. Dates like `1 martie 2026` and amounts like `2 300MDL` just work. Importing the same month twice is safe. |
 | 🔁 **Recurring & bills** | Rent, subscriptions, salary, a client who pays monthly: the **Plan** screen shows what's due and the next 30 days, your regular costs per month, and spots payments that look regular in your log. One tap logs a bill; fixed ones can log themselves. Tick **Repeat** when adding a record. |
 | 🧾 **Budgets** | A monthly limit per category (with your 3-month average as a hint). Bars show what's used and where an even pace would be; you get a warning at 80%, when you go over, and when your pace would take you over. |
+| 🏦 **Bank statements** | Import the CSV or Excel statement from maib, Victoriabank or any bank. The app finds the headings (Romanian, Russian or English), the date, amount or debit/credit and description columns, shows a preview with totals, and remembers the layout next time. Statements already imported are skipped. |
 | 💾 **Backups** | One-tap JSON backup and restore, plus CSV export. The app reminds you when it's been a while. |
 
 ## Use it
