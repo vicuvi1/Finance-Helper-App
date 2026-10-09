@@ -3,7 +3,8 @@
 
 import { parseAmount, centsToPlain } from './money.js';
 import { parseLooseDate } from './dates.js';
-import { suggestCategory, uid } from './model.js';
+import { suggestCategory, uid, ensurePerson, B } from './model.js';
+import { pairRate } from './fx.js';
 
 const norm = (s) => String(s || '').trim().toLowerCase()
   .normalize('NFD').replace(/[̀-ͯ]/g, '');
@@ -59,10 +60,15 @@ export function importRows(rows, state, { account } = {}) {
   let skipped = 0;
   let base = Date.now();
 
+  const baseCur = state.settings.currency;
+  const accCur = (id) => state.settings.accounts.find((a) => a.id === id)?.currency || baseCur;
   const add = (t) => {
     const key = txKey(t);
     if (existing.get(key) > 0) { existing.set(key, existing.get(key) - 1); duplicates++; return; }
-    out.push({ id: uid(), createdAt: base++, ...t });
+    const currency = t.currency || accCur(t.account || t.from);
+    const rate = currency === baseCur ? 1 : pairRate(currency, baseCur, state.rates);
+    const stamp = base++;
+    out.push({ id: uid(), createdAt: stamp, updatedAt: stamp, ...t, currency, rate, base: rate ? Math.round(t.amount * rate) : t.amount });
   };
 
   const cell = (row, i) => (i >= 0 && i < row.length ? row[i] : '');
@@ -78,16 +84,21 @@ export function importRows(rows, state, { account } = {}) {
       const amount = Math.abs(parseAmount(cell(row, c.amount)) || 0);
       if (!date || !amount || !type) { skipped++; continue; }
       const note = String(cell(row, c.note ?? -1)).trim();
+      const cur = String(cell(row, c.currency ?? -1)).trim().toUpperCase();
+      const currency = /^[A-Z]{3,5}$/.test(cur) ? cur : undefined;
       if (type === 'transfer') {
         const from = findAcc(cell(row, c.from ?? -1));
         const to = findAcc(cell(row, c.to ?? -1));
         if (!from || !to || from === to) { skipped++; continue; }
-        add({ type, amount, date, from, to, note });
+        add({ type, amount, date, from, to, note, ...(currency ? { currency } : {}) });
       } else {
         const cat = findCat(cell(row, c.category ?? -1), type)
           || suggestCategory(state, note, type) || (type === 'income' ? 'other-in' : 'other');
         const acc = findAcc(cell(row, c.account ?? -1)) || defaultAccount;
-        add({ type, amount, date, category: cat, account: acc, note });
+        const who = String(cell(row, c.person ?? -1)).trim();
+        const personId = who ? ensurePerson(state, who) : null;
+        const loan = /^(yes|da|true|1|loan)$/i.test(String(cell(row, c.loan ?? -1)).trim());
+        add({ type, amount, date, category: cat, account: acc, note, ...(currency ? { currency } : {}), ...(personId ? { person: personId } : {}), ...(personId && loan ? { loan: true } : {}) });
       }
       continue;
     }
@@ -112,7 +123,7 @@ export function importRows(rows, state, { account } = {}) {
   return { format: cols.format, tx: out, duplicates, skipped, income, expense, months };
 }
 
-export const EXPORT_HEADER = ['Date', 'Type', 'Amount', 'Currency', 'Category', 'Account', 'From', 'To', 'Note'];
+export const EXPORT_HEADER = ['Date', 'Type', 'Amount', 'Currency', 'Category', 'Account', 'From', 'To', 'Note', 'Person', 'Loan'];
 
 // Rows as people read them (names, not ids), oldest first. Used for the CSV
 // export and for "Copy table", and the importer reads them back.
@@ -122,8 +133,9 @@ export function exportRows(state, list = state.tx) {
   const rows = [EXPORT_HEADER];
   const sorted = [...list].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : (a.createdAt || 0) - (b.createdAt || 0)));
   for (const t of sorted) {
-    rows.push([t.date, TYPE_LABEL[t.type], centsToPlain(t.amount), state.settings.currency, catName(t.category),
-      accName(t.account), accName(t.from), accName(t.to), t.note || '']);
+    rows.push([t.date, TYPE_LABEL[t.type], centsToPlain(t.amount), t.currency || state.settings.currency, catName(t.category),
+      accName(t.account), accName(t.from), accName(t.to), t.note || '',
+      state.people.find((p) => p.id === t.person)?.name || '', t.loan ? 'yes' : '']);
   }
   return rows;
 }
@@ -138,21 +150,27 @@ export function toTSV(rows) {
 export function monthSheet(state, key, list = state.tx.filter((t) => t.date.startsWith(key))) {
   const catName = (id) => state.settings.categories.find((c) => c.id === id)?.name || '';
   const accName = (id) => state.settings.accounts.find((a) => a.id === id)?.name || '';
+  const who = (id) => state.people.find((p) => p.id === id)?.name || '';
+  const baseCur = state.settings.currency;
   const sorted = [...list].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : (a.createdAt || 0) - (b.createdAt || 0)));
-  const rows = [['Date', 'Type', 'Category', 'Note', 'Account', `Amount (${state.settings.currency})`]];
+  // Loans get their own type so the Earned/Spent totals leave them out.
+  const typeOf = (t) => (t.loan ? (t.type === 'expense' ? 'Lent' : 'Borrowed') : TYPE_LABEL[t.type]);
+  const rows = [['Date', 'Type', 'Category', 'Note', 'Who', 'Account', 'Amount', 'Currency', `In ${baseCur}`]];
   for (const t of sorted) {
-    rows.push([{ v: t.date, t: 'date' }, TYPE_LABEL[t.type], t.type === 'transfer' ? '' : catName(t.category), t.note || '',
-      t.type === 'transfer' ? `${accName(t.from)} → ${accName(t.to)}` : accName(t.account), { v: t.amount / 100, t: 'money' }]);
+    rows.push([{ v: t.date, t: 'date' }, typeOf(t), t.type === 'transfer' ? '' : catName(t.category), t.note || '', who(t.person),
+      t.type === 'transfer' ? `${accName(t.from)} → ${accName(t.to)}` : accName(t.account),
+      { v: t.amount / 100, t: 'money' }, t.currency || baseCur, { v: B(t) / 100, t: 'money' }]);
   }
   const n = sorted.length;
-  const sum = (type) => sorted.filter((t) => t.type === type).reduce((a, t) => a + t.amount, 0) / 100;
+  const sum = (type) => sorted.filter((t) => t.type === type && !t.loan).reduce((a, t) => a + B(t), 0) / 100;
   const range = (col) => `${col}2:${col}${n + 1}`;
   const earnedRow = n + 3;
+  const label = (v) => ['', '', '', '', '', '', '', { v, bold: true }];
   rows.push([]);
-  rows.push(['', '', '', '', { v: 'Earned', bold: true }, { f: `SUMIF(${range('B')},"Earned",${range('F')})`, v: sum('income'), t: 'money', bold: true }]);
-  rows.push(['', '', '', '', { v: 'Spent', bold: true }, { f: `SUMIF(${range('B')},"Spent",${range('F')})`, v: sum('expense'), t: 'money', bold: true }]);
-  rows.push(['', '', '', '', { v: 'Kept', bold: true }, { f: `F${earnedRow}-F${earnedRow + 1}`, v: sum('income') - sum('expense'), t: 'money', bold: true }]);
-  return { cols: [13, 9, 22, 34, 18, 16], rows, filterRows: n };
+  rows.push([...label('Earned'), { f: `SUMIF(${range('B')},"Earned",${range('I')})`, v: sum('income'), t: 'money', bold: true }]);
+  rows.push([...label('Spent'), { f: `SUMIF(${range('B')},"Spent",${range('I')})`, v: sum('expense'), t: 'money', bold: true }]);
+  rows.push([...label('Kept'), { f: `I${earnedRow}-I${earnedRow + 1}`, v: sum('income') - sum('expense'), t: 'money', bold: true }]);
+  return { cols: [13, 10, 20, 30, 14, 18, 13, 9, 14], rows, filterRows: n };
 }
 
 // The "Overview" tab: earned / spent / kept for every month of a year.
@@ -162,8 +180,8 @@ export function overviewSheet(state, year) {
   months.forEach((m, i) => {
     const key = `${year}-${String(i + 1).padStart(2, '0')}`;
     const list = state.tx.filter((t) => t.date.startsWith(key));
-    const inc = list.filter((t) => t.type === 'income').reduce((a, t) => a + t.amount, 0);
-    const exp = list.filter((t) => t.type === 'expense').reduce((a, t) => a + t.amount, 0);
+    const inc = list.filter((t) => t.type === 'income' && !t.loan).reduce((a, t) => a + B(t), 0);
+    const exp = list.filter((t) => t.type === 'expense' && !t.loan).reduce((a, t) => a + B(t), 0);
     const r = i + 2;
     rows.push([m, { v: inc / 100, t: 'money' }, { v: exp / 100, t: 'money' }, { f: `B${r}-C${r}`, v: (inc - exp) / 100, t: 'money' },
       inc ? `${Math.round(((inc - exp) / inc) * 100)}%` : '']);

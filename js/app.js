@@ -5,6 +5,7 @@ import { load, save, backupJSON, restoreJSON, requestPersistence } from './store
 import * as M from './model.js';
 import { formatMoney, evalAmount, centsToPlain } from './money.js';
 import { todayISO, monthKey, monthLabel, addMonths, dayLabel } from './dates.js';
+import { convert, pairRate } from './fx.js';
 import { parseCSV, toCSV } from './csv.js';
 import { importRows, exportRows, toTSV, monthSheet, overviewSheet } from './importer.js';
 import { workbook } from './xlsx.js';
@@ -96,19 +97,20 @@ function txRow(t, { showDate = false } = {}) {
   let title;
   let sub;
   let amount;
+  const cur = t.currency || state.settings.currency;
+  const fm = (c, o) => formatMoney(c, cur, o);
   if (t.type === 'transfer') {
     av = '<span class="av av-move" aria-hidden="true">⇄</span>';
     title = t.note || `To ${accOf(t.to).name}`;
     sub = `${accOf(t.from).name} → ${accOf(t.to).name}`;
-    amount = `<span class="amount">${money(t.amount)}</span>`;
+    amount = `<span class="amount">${fm(t.amount)}${Number.isInteger(t.toAmount) ? ` <span class="muted">→ ${formatMoney(t.toAmount, accOf(t.to).currency || cur)}</span>` : ''}</span>`;
   } else {
     const c = catOf(t.category);
+    const who = t.person ? M.person(state, t.person)?.name : null;
     av = `<span class="av" style="--c:${catColor(t.category)}" aria-hidden="true">${initial(c.name)}</span>`;
     title = t.note || c.name;
-    sub = `${c.name} · ${accOf(t.account).name}`;
-    amount = t.type === 'income'
-      ? `<span class="amount income">${money(t.amount, { sign: true })}</span>`
-      : `<span class="amount">${money(-t.amount)}</span>`;
+    sub = [c.name, who ? `${t.type === 'income' ? 'from' : 'to'} ${who}` : null, accOf(t.account).name].filter(Boolean).join(' · ');
+    amount = `<span class="amount ${t.type === 'income' ? 'income' : ''}">${t.loan ? '<span class="pill">loan</span> ' : ''}${t.type === 'income' ? fm(t.amount, { sign: true }) : fm(-t.amount)}</span>`;
   }
   if (showDate) sub = `${dayLabel(t.date)} · ${sub}`;
   return `<button class="tx" data-act="edit" data-id="${esc(t.id)}">
@@ -191,8 +193,8 @@ function goalCard() {
 function viewHome() {
   const today = todayISO();
   const key = monthKey(today);
-  const bal = M.accountBalances(state);
-  const total = Object.values(bal).reduce((a, b) => a + b, 0);
+  const values = M.accountValues(state).filter((v) => !v.account.archived);
+  const { total, missing } = M.totalBalance(state);
   const s = M.monthSummary(state, key);
   const recent = M.sortTx(state.tx).slice(0, 5);
   const tips = M.insights(state, key, today).filter((t) => t.level !== 'info').slice(0, 2);
@@ -229,8 +231,9 @@ function viewHome() {
       <div class="label">All my money</div>
       <div class="big ${total < 0 ? 'expense' : ''}">${bigMoney(total)}</div>
       <div class="accounts">
-        ${state.settings.accounts.map((a) => `<button class="acc ${bal[a.id] < 0 ? 'neg' : ''}" data-act="transfer" data-from="${esc(a.id)}" title="Move money from ${esc(a.name)}"><span class="n">${esc(a.name)}</span><b class="money">${money(bal[a.id])}</b></button>`).join('')}
+        ${values.map(({ account: a, own, coins }) => `<button class="acc ${own < 0 ? 'neg' : ''}" data-act="transfer" data-from="${esc(a.id)}" title="Move money from ${esc(a.name)}"><span class="n">${dot(`var(--c${a.color || 1})`)}${esc(a.name)}</span><b class="money">${a.kind === 'crypto' && (a.holdings || []).length ? money(coins + (convert(own, a.currency, state.settings.currency, state.rates) || 0)) : formatMoney(own, a.currency)}</b></button>`).join('')}
       </div>
+      ${missing.length ? `<p class="muted small" style="margin:10px 0 0">Not counted yet (no exchange rate): ${missing.map((v) => esc(v.account.name)).join(', ')}.</p>` : ''}
     </div>
     <div class="hero-month">
       <div class="label">${monthLabel(key)}</div>
@@ -285,7 +288,8 @@ function viewLog() {
   if (view === 'calendar') {
     content = `<section class="card">${calendarHTML(state, ui.month)}</section>`;
   } else if (view === 'table') {
-    content = tableHTML(state, list, { sort: ui.sort, draft: draftRow(), fmt: (c) => money(c) });
+    content = tableHTML(state, list, { sort: ui.sort, draft: draftRow(), fmt: (c) => money(c) })
+      + `<datalist id="people-list">${state.people.map((p) => `<option value="${esc(p.name)}">`).join('')}</datalist>`;
   } else {
     const groups = new Map();
     for (const t of M.sortTx(list)) {
@@ -558,37 +562,74 @@ function categoryOrder(type) {
     .map((c, i) => ({ c, i })).sort((a, b) => (count[b.c.id] || 0) - (count[a.c.id] || 0) || a.i - b.i).map((x) => x.c);
 }
 
+function accLabel(a) {
+  const multi = state.settings.accounts.some((x) => x.currency !== state.settings.currency);
+  return `${a.name}${a.bank && !a.name.toLowerCase().includes(a.bank.toLowerCase()) ? ` · ${a.bank}` : ''}${multi ? ` · ${a.currency}` : ''}`;
+}
+
+// Rate to the base currency we'd suggest for a new record: today's rate if
+// known, else the last one you used for that currency.
+function suggestedRate(cur) {
+  if (cur === state.settings.currency) return 1;
+  const live = pairRate(cur, state.settings.currency, state.rates);
+  if (live) return Math.round(live * 10000) / 10000;
+  const last = M.sortTx(state.tx).find((t) => t.currency === cur && t.rate);
+  return last?.rate || null;
+}
+
 function openTxSheet(existing = null, preset = {}) {
-  const accounts = state.settings.accounts;
+  const accounts = M.activeAccounts(state).length ? M.activeAccounts(state) : state.settings.accounts;
+  const baseCur = state.settings.currency;
   const last = M.sortTx(state.tx).find((t) => t.type !== 'transfer');
-  const draft = existing ? { ...existing } : {
+  const draft = existing ? { ...existing, personName: M.person(state, existing.person)?.name || '' } : {
     type: 'expense',
     date: todayISO(),
-    account: last?.account || accounts[0]?.id,
+    account: (last && M.account(state, last.account) && !M.account(state, last.account).archived) ? last.account : accounts[0]?.id,
     from: accounts[0]?.id,
     to: state.settings.savingsAccount || accounts[1]?.id,
     category: null,
     note: '',
+    personName: '',
+    loan: false,
     ...preset,
   };
   let amountText = existing ? centsToPlain(existing.amount) : preset.amountText || '';
+  let toText = existing?.toAmount ? centsToPlain(existing.toAmount) : '';
+  let toTouched = !!existing?.toAmount;
+  let rateText = existing?.rate && existing.currency !== baseCur ? String(existing.rate) : '';
   let catTouched = !!existing;
+  let addingCat = false;
+
+  const curOf = () => M.account(state, draft.type === 'transfer' ? draft.from : draft.account)?.currency || baseCur;
+  const toCur = () => M.account(state, draft.to)?.currency || baseCur;
 
   const accSelect = (field, label) => `<label class="field"><span>${label}</span><select id="tx-${field}">
-    ${accounts.map((a) => `<option value="${esc(a.id)}" ${draft[field] === a.id ? 'selected' : ''}>${esc(a.name)}</option>`).join('')}</select></label>`;
+    ${accounts.concat(existing && !accounts.some((a) => a.id === existing[field]) && M.account(state, existing[field]) ? [M.account(state, existing[field])] : [])
+    .map((a) => `<option value="${esc(a.id)}" ${draft[field] === a.id ? 'selected' : ''}>${esc(accLabel(a))}</option>`).join('')}</select></label>`;
 
   const html = () => {
     const isT = draft.type === 'transfer';
+    const cur = curOf();
+    if (!isT && cur !== baseCur && !rateText) rateText = String(suggestedRate(cur) || '');
+    const cross = isT && cur !== toCur();
     const segBtn = (t, label) => `<button type="button" data-type="${t}" aria-pressed="${draft.type === t}">${label}</button>`;
+    const people = state.people.map((p) => `<option value="${esc(p.name)}">`).join('');
     return `<form id="tx-form" novalidate>
       <h3>${existing ? 'Edit record' : 'New record'} <button type="button" class="icon-btn" data-close aria-label="Close">✕</button></h3>
       <div class="seg" role="group" aria-label="Type">${segBtn('expense', 'Spent')}${segBtn('income', 'Earned')}${segBtn('transfer', 'Move')}</div>
-      <div class="amount-input"><input id="tx-amount" type="text" inputmode="decimal" autocomplete="off" placeholder="0" value="${esc(amountText)}" aria-label="Amount"><span class="cur">${esc(state.settings.currency)}</span></div>
+      <div class="amount-input"><input id="tx-amount" type="text" inputmode="decimal" autocomplete="off" placeholder="0" value="${esc(amountText)}" aria-label="Amount in ${cur}"><span class="cur">${esc(cur)}</span></div>
       <div class="calc-hint" id="calc-hint">${isT ? 'Move money between your accounts' : 'Tip: type 120+45 and it adds up'}</div>
+      ${!isT && cur !== baseCur ? `<label class="field fx-row"><span>Rate</span><span class="fx-line">1 ${esc(cur)} = <input id="tx-rate" type="text" inputmode="decimal" value="${esc(rateText)}" placeholder="?" aria-label="Rate to ${esc(baseCur)}"> ${esc(baseCur)}</span></label>` : ''}
+      ${cross ? `<label class="field"><span>Arrives as (${esc(toCur())})</span><input id="tx-to-amount" type="text" inputmode="decimal" value="${esc(toText)}" placeholder="0"></label>` : ''}
       <label class="field"><span>${isT ? 'Note (optional)' : 'What for?'}</span>
-        <input id="tx-note" type="text" list="note-list" autocomplete="off" value="${esc(draft.note)}" placeholder="${draft.type === 'income' ? 'e.g. from work, mother, competition' : isT ? 'e.g. to the safe' : 'e.g. food, taxi, gift for brother'}"></label>
+        <input id="tx-note" type="text" list="note-list" autocomplete="off" value="${esc(draft.note)}" placeholder="${draft.type === 'income' ? 'e.g. salary, project for a client' : isT ? 'e.g. to the safe' : 'e.g. groceries, taxi, rent'}"></label>
       <datalist id="note-list">${M.noteSuggestions(state, draft.type).map((n) => `<option value="${esc(n)}">`).join('')}</datalist>
-      ${isT ? '' : `<div class="cats" role="group" aria-label="Category">${categoryOrder(draft.type).map((c) => `<button type="button" class="cat" data-cat="${esc(c.id)}" aria-pressed="${draft.category === c.id}">${dot(catColor(c.id))}<span>${esc(c.name)}</span></button>`).join('')}</div>`}
+      ${isT ? '' : `<div class="cats" role="group" aria-label="Category">${categoryOrder(draft.type).map((c) => `<button type="button" class="cat" data-cat="${esc(c.id)}" aria-pressed="${draft.category === c.id}">${dot(catColor(c.id))}<span>${esc(c.name)}</span></button>`).join('')}
+        ${addingCat ? `<span class="cat-new"><input id="new-cat" type="text" placeholder="New category" aria-label="New category name"><button type="button" class="btn primary" data-act="cat-create">Add</button></span>` : '<button type="button" class="cat cat-add" data-act="cat-new">+ New</button>'}</div>`}
+      ${isT ? '' : `<div class="row2">
+        <label class="field"><span>${draft.type === 'income' ? 'From who? (optional)' : 'To who? (optional)'}</span><input id="tx-person" type="text" list="people-list" autocomplete="off" value="${esc(draft.personName)}" placeholder="Name"></label>
+        <label class="field check"><input id="tx-loan" type="checkbox" ${draft.loan ? 'checked' : ''}><span>${draft.type === 'income' ? 'Borrowed: I pay it back' : 'Lent: they pay it back'}</span></label>
+      </div><datalist id="people-list">${people}</datalist>`}
       <div class="row2">
         ${isT ? accSelect('from', 'From') + accSelect('to', 'To') : accSelect('account', draft.type === 'income' ? 'Into' : 'Paid from')}
       </div>
@@ -601,62 +642,117 @@ function openTxSheet(existing = null, preset = {}) {
   };
 
   const readInputs = (sheet) => {
-    amountText = sheet.querySelector('#tx-amount').value;
-    draft.note = sheet.querySelector('#tx-note').value;
-    draft.date = sheet.querySelector('#tx-date').value || draft.date;
+    const v = (id) => sheet.querySelector(id);
+    amountText = v('#tx-amount').value;
+    draft.note = v('#tx-note').value;
+    draft.date = v('#tx-date').value || draft.date;
+    if (v('#tx-rate')) rateText = v('#tx-rate').value;
+    if (v('#tx-to-amount')) toText = v('#tx-to-amount').value;
+    if (v('#tx-person')) draft.personName = v('#tx-person').value;
+    if (v('#tx-loan')) draft.loan = v('#tx-loan').checked;
     for (const f of ['account', 'from', 'to']) {
-      const el = sheet.querySelector(`#tx-${f}`);
+      const el = v(`#tx-${f}`);
       if (el) draft[f] = el.value;
     }
+  };
+
+  // Live line under the amount: the calculator result and the value in MDL.
+  const updateHint = (sheet) => {
+    const hint = sheet.querySelector('#calc-hint');
+    const raw = sheet.querySelector('#tx-amount').value;
+    const v = evalAmount(raw);
+    const cur = curOf();
+    const parts = [];
+    if (/[+\-*/x×÷()]/i.test(raw.slice(1))) parts.push(v != null && v > 0 ? `= ${formatMoney(v, cur)}` : '…');
+    const rate = Number(String(sheet.querySelector('#tx-rate')?.value || '').replace(',', '.'));
+    if (v > 0 && cur !== baseCur && draft.type !== 'transfer' && rate > 0) parts.push(`≈ ${money(Math.round(v * rate))}`);
+    const toEl = sheet.querySelector('#tx-to-amount');
+    if (toEl && !toTouched && v > 0) {
+      const conv = convert(v, cur, toCur(), state.rates);
+      if (conv != null) { toEl.value = centsToPlain(conv); toText = toEl.value; }
+    }
+    hint.style.color = '';
+    hint.textContent = parts.join('  ') || (draft.type === 'transfer' ? 'Move money between your accounts' : 'Tip: type 120+45 and it adds up');
   };
 
   const paint = (sheet, focus = true) => {
     sheet.innerHTML = `<div class="grab"></div>${html()}`;
     const amount = sheet.querySelector('#tx-amount');
-    const hint = sheet.querySelector('#calc-hint');
-    amount.addEventListener('input', () => {
-      const v = evalAmount(amount.value);
-      if (/[+\-*/x×÷()]/i.test(amount.value.slice(1))) hint.textContent = v != null && v > 0 ? `= ${money(v)}` : '…';
-    });
+    amount.addEventListener('input', () => updateHint(sheet));
+    sheet.querySelector('#tx-rate')?.addEventListener('input', () => updateHint(sheet));
+    sheet.querySelector('#tx-to-amount')?.addEventListener('input', () => { toTouched = true; });
+    for (const f of ['account', 'from', 'to']) {
+      sheet.querySelector(`#tx-${f}`)?.addEventListener('change', () => {
+        const before = curOf();
+        const beforeTo = draft.type === 'transfer' ? toCur() : null;
+        readInputs(sheet);
+        // Currency changed: repaint so the currency label and rate line follow.
+        if (curOf() !== before || (beforeTo && toCur() !== beforeTo)) { rateText = ''; toTouched = false; paint(sheet, false); updateHint(sheet); }
+      });
+    }
     sheet.querySelector('#tx-note').addEventListener('input', (e) => {
       if (catTouched || draft.type === 'transfer') return;
       const s = M.suggestCategory(state, e.target.value, draft.type);
       draft.category = s;
-      for (const b of sheet.querySelectorAll('.cat')) b.setAttribute('aria-pressed', String(b.dataset.cat === s));
+      for (const b of sheet.querySelectorAll('.cat[data-cat]')) b.setAttribute('aria-pressed', String(b.dataset.cat === s));
+    });
+    sheet.querySelector('#new-cat')?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); sheet.querySelector('[data-act="cat-create"]').click(); }
     });
     sheet.querySelector('#tx-form').addEventListener('submit', (e) => {
       e.preventDefault();
       readInputs(sheet);
       saveDraft(sheet);
     });
-    if (focus && !existing) amount.focus();
+    if (addingCat) sheet.querySelector('#new-cat')?.focus();
+    else if (focus && !existing) amount.focus();
+    if (amountText) updateHint(sheet);
+  };
+
+  const fail = (sheet, msg, focusSel) => {
+    const hint = sheet.querySelector('#calc-hint');
+    hint.textContent = msg;
+    hint.style.color = 'var(--expense)';
+    if (focusSel) sheet.querySelector(focusSel)?.focus();
   };
 
   const saveDraft = (sheet) => {
     const amount = evalAmount(amountText);
-    const hint = sheet.querySelector('#calc-hint');
-    if (!amount || amount <= 0) {
-      hint.textContent = 'Enter an amount bigger than 0';
-      hint.style.color = 'var(--expense)';
-      sheet.querySelector('#tx-amount').focus();
-      return;
+    if (!amount || amount <= 0) return fail(sheet, 'Enter an amount bigger than 0', '#tx-amount');
+    const cur = curOf();
+    const now = Date.now();
+    const common = { id: existing?.id || M.uid(), createdAt: existing?.createdAt || now, updatedAt: now, type: draft.type, amount, currency: cur, date: draft.date, note: draft.note.trim() };
+    let tx;
+    if (draft.type === 'transfer') {
+      if (draft.from === draft.to) return fail(sheet, 'Pick two different accounts');
+      let toAmount;
+      if (cur !== toCur()) {
+        toAmount = evalAmount(toText);
+        if (!toAmount || toAmount <= 0) return fail(sheet, `How much arrives in ${toCur()}?`, '#tx-to-amount');
+      }
+      const rate = suggestedRate(cur);
+      tx = { ...common, from: draft.from, to: draft.to, ...(toAmount ? { toAmount } : {}), rate, base: rate ? Math.round(amount * rate) : amount };
+    } else {
+      const rate = cur === baseCur ? 1 : Number(String(rateText).replace(',', '.'));
+      if (!(rate > 0)) return fail(sheet, `Enter the rate: 1 ${cur} = ? ${baseCur}`, '#tx-rate');
+      const personId = M.ensurePerson(state, draft.personName, now);
+      tx = {
+        ...common,
+        account: draft.account,
+        category: draft.category || (draft.type === 'income' ? 'other-in' : 'other'),
+        rate,
+        base: Math.round(amount * rate),
+        ...(personId ? { person: personId } : {}),
+        ...(personId && draft.loan ? { loan: true } : {}),
+      };
     }
-    if (draft.type === 'transfer' && draft.from === draft.to) {
-      hint.textContent = 'Pick two different accounts';
-      hint.style.color = 'var(--expense)';
-      return;
-    }
-    const base = { id: existing?.id || M.uid(), createdAt: existing?.createdAt || Date.now(), type: draft.type, amount, date: draft.date, note: draft.note.trim() };
-    const tx = draft.type === 'transfer'
-      ? { ...base, from: draft.from, to: draft.to }
-      : { ...base, account: draft.account, category: draft.category || (draft.type === 'income' ? 'other-in' : 'other') };
     if (existing) state.tx = state.tx.map((t) => (t.id === existing.id ? tx : t));
     else state.tx.push(tx);
     ui.flashId = tx.id;
     commit();
     closeSheet();
-    if (!existing && tx.type === 'income') openSplitSheet(tx);
-    else toast(existing ? 'Saved' : `${tx.type === 'expense' ? 'Spent' : 'Moved'} ${money(tx.amount)}`);
+    if (!existing && tx.type === 'income' && !tx.loan) openSplitSheet(tx);
+    else toast(existing ? 'Saved' : `${tx.type === 'expense' ? 'Spent' : tx.type === 'income' ? 'Earned' : 'Moved'} ${formatMoney(tx.amount, tx.currency)}`);
   };
 
   // paint() replaces the sheet's contents (fresh inputs each time); this click
@@ -670,15 +766,35 @@ function openTxSheet(existing = null, preset = {}) {
           draft.type = seg.dataset.type;
           draft.category = catTouched ? null : M.suggestCategory(state, draft.note, draft.type);
           catTouched = false;
+          addingCat = false;
           paint(sheet);
         }
         return;
       }
-      const cat = e.target.closest('.cat');
+      if (e.target.closest('[data-act="cat-new"]')) {
+        readInputs(sheet);
+        addingCat = true;
+        paint(sheet, false);
+        return;
+      }
+      if (e.target.closest('[data-act="cat-create"]')) {
+        const name = sheet.querySelector('#new-cat')?.value;
+        readInputs(sheet);
+        const id = M.ensureCategory(state, name, draft.type);
+        if (id) {
+          draft.category = id;
+          catTouched = true;
+          persist();
+        }
+        addingCat = false;
+        paint(sheet, false);
+        return;
+      }
+      const cat = e.target.closest('.cat[data-cat]');
       if (cat) {
         draft.category = cat.dataset.cat;
         catTouched = true;
-        for (const b of sheet.querySelectorAll('.cat')) b.setAttribute('aria-pressed', String(b === cat));
+        for (const b of sheet.querySelectorAll('.cat[data-cat]')) b.setAttribute('aria-pressed', String(b === cat));
         return;
       }
       if (e.target.closest('[data-act="tx-delete"]')) deleteTx(existing.id);
@@ -692,35 +808,44 @@ function openSplitSheet(tx) {
   const sj = M.savingsJar(state);
   const target = state.settings.savingsAccount;
   const save = parts.find((p) => p.jar.id === sj?.id)?.amount || 0;
-  const canMove = target && M.account(state, target) && target !== tx.account && save > 0;
-  openSheet(`<h3>Split ${money(tx.amount)} <button type="button" class="icon-btn" data-close aria-label="Close">✕</button></h3>
-    <div>${parts.map((p) => `<div class="split-row"><span>${dot(jarColor(p.jar))}${esc(p.jar.name)} <span class="muted">${p.jar.pct}%</span></span><b class="money ${p.jar.savings ? 'income' : ''}">${money(p.amount)}</b></div>`).join('')}</div>
+  const from = M.account(state, tx.account);
+  const to = M.account(state, target);
+  const arrives = to && from ? convert(save, from.currency, to.currency, state.rates) : null;
+  const canMove = to && target !== tx.account && save > 0 && arrives != null;
+  const fm = (c) => formatMoney(c, tx.currency);
+  openSheet(`<h3>Split ${fm(tx.amount)} <button type="button" class="icon-btn" data-close aria-label="Close">✕</button></h3>
+    <div>${parts.map((p) => `<div class="split-row"><span>${dot(jarColor(p.jar))}${esc(p.jar.name)} <span class="muted">${p.jar.pct}%</span></span><b class="money ${p.jar.savings ? 'income' : ''}">${fm(p.amount)}</b></div>`).join('')}</div>
     <div class="btns" style="margin-top:14px">
-      ${canMove ? `<button class="btn primary" data-act="move-savings">Move ${money(save)} to ${esc(accOf(target).name)}</button>` : ''}
+      ${canMove ? `<button class="btn primary" data-act="move-savings">Move ${fm(save)} to ${esc(to.name)}</button>` : ''}
       <button class="btn" data-close>Done</button>
     </div>`, (sheet) => {
     sheet.querySelector('[data-act="move-savings"]')?.addEventListener('click', () => {
-      state.tx.push({ id: M.uid(), createdAt: Date.now(), type: 'transfer', amount: save, date: tx.date, from: tx.account, to: target, note: `Deposit ${sj.pct}%${tx.note ? ` · ${tx.note}` : ''}` });
+      const now = Date.now();
+      state.tx.push({
+        id: M.uid(), createdAt: now, updatedAt: now, type: 'transfer', amount: save, currency: from.currency,
+        ...(from.currency !== to.currency ? { toAmount: arrives } : {}),
+        rate: tx.rate || 1, base: Math.round(save * (tx.rate || 1)),
+        date: tx.date, from: tx.account, to: target, note: `Deposit ${sj.pct}%${tx.note ? ` · ${tx.note}` : ''}`,
+      });
       commit();
       closeSheet();
-      toast(`${money(save)} is in the ${accOf(target).name}. Don't touch it.`);
+      toast(`${fm(save)} is in ${to.name}. Don't touch it.`);
     });
   });
 }
 
 function openTransferSheet(fromId) {
-  const other = state.settings.accounts.find((a) => a.id !== fromId);
+  const other = state.settings.accounts.find((a) => a.id !== fromId && !a.archived);
   openTxSheet(null, { type: 'transfer', from: fromId, to: fromId === state.settings.savingsAccount ? other?.id : state.settings.savingsAccount || other?.id });
 }
 
 function deleteTx(id) {
-  const idx = state.tx.findIndex((t) => t.id === id);
-  if (idx < 0) return;
-  const [removed] = state.tx.splice(idx, 1);
+  const removed = M.removeTx(state, id);
+  if (!removed) return;
   commit();
   closeSheet();
   toast('Deleted', 'Undo', () => {
-    state.tx.push(removed);
+    M.restoreTx(state, removed);
     commit();
   });
 }
@@ -846,6 +971,7 @@ function onCellChange(el) {
         if (sel && d.category) sel.value = d.category;
       }
     } else if (col === 'amount') d.amountText = v;
+    else if (col === 'person') d.personName = v;
     else d[col] = v;
     return;
   }
@@ -855,6 +981,7 @@ function onCellChange(el) {
     const c = evalAmount(v);
     if (!c || c <= 0) { toast('Amount must be a number bigger than 0'); el.value = formatMoney(t.amount, ''); return; }
     t.amount = c;
+    t.base = Math.round(c * (t.rate || 1));
   } else if (col === 'date') {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) { el.value = t.date; return; }
     t.date = v;
@@ -876,9 +1003,23 @@ function onCellChange(el) {
     const other = col === 'from' ? t.to : t.from;
     if (v === other) { toast('Pick two different accounts'); el.value = t[col]; return; }
     t[col] = v;
-  } else if (['category', 'account', 'note'].includes(col)) {
+  } else if (col === 'account') {
+    t.account = v;
+    // Moved to an account in another currency: the amount is now in that
+    // currency, priced at today's rate (or the last one used).
+    const cur = M.account(state, v)?.currency || state.settings.currency;
+    if (cur !== t.currency) {
+      t.currency = cur;
+      t.rate = suggestedRate(cur) || t.rate || 1;
+      t.base = Math.round(t.amount * t.rate);
+    }
+  } else if (col === 'person') {
+    const id = M.ensurePerson(state, v);
+    if (id) t.person = id; else { delete t.person; delete t.loan; }
+  } else if (['category', 'note'].includes(col)) {
     t[col] = col === 'note' ? v.trim() : v;
   } else return;
+  M.touch(t);
   persist();
   renderKeepFocus();
 }
@@ -888,6 +1029,7 @@ function addDraftRow() {
   const row = document.querySelector('#tx-table tr[data-draft]');
   if (row) for (const el of row.querySelectorAll('[data-col]')) {
     if (el.dataset.col === 'amount') d.amountText = el.value;
+    else if (el.dataset.col === 'person') d.personName = el.value;
     else d[el.dataset.col] = el.value;
   }
   const amount = evalAmount(d.amountText);
@@ -897,12 +1039,21 @@ function addDraftRow() {
     return;
   }
   if (d.type === 'transfer' && d.from === d.to) { toast('Pick two different accounts'); return; }
-  const base = { id: M.uid(), createdAt: Date.now(), type: d.type, amount, date: d.date, note: (d.note || '').trim() };
+  const now = Date.now();
+  const cur = M.account(state, d.type === 'transfer' ? d.from : d.account)?.currency || state.settings.currency;
+  const rate = suggestedRate(cur);
+  if (!rate) { toast(`No rate for ${cur} yet. Use + New record to enter it.`); return; }
+  const base = { id: M.uid(), createdAt: now, updatedAt: now, type: d.type, amount, currency: cur, rate, base: Math.round(amount * rate), date: d.date, note: (d.note || '').trim() };
+  if (d.type === 'transfer' && cur !== (M.account(state, d.to)?.currency || cur)) {
+    const toAmount = convert(amount, cur, M.account(state, d.to).currency, state.rates);
+    if (toAmount == null) { toast('Different currencies: use + New record to enter what arrives.'); return; }
+    base.toAmount = toAmount;
+  }
   ui.flashId = base.id;
   state.tx.push(d.type === 'transfer'
     ? { ...base, from: d.from, to: d.to }
-    : { ...base, account: d.account, category: d.category || M.suggestCategory(state, d.note, d.type) || (d.type === 'income' ? 'other-in' : 'other') });
-  ui.draft = { ...d, note: '', category: '', amountText: '' };
+    : { ...base, account: d.account, category: d.category || M.suggestCategory(state, d.note, d.type) || (d.type === 'income' ? 'other-in' : 'other'), ...(M.ensurePerson(state, d.personName) ? { person: M.ensurePerson(state, d.personName) } : {}) });
+  ui.draft = { ...d, note: '', category: '', amountText: '', personName: '' };
   commit();
   toast(`Added ${money(amount)}`);
   document.querySelector('#tx-table tr[data-draft] [data-col="note"]')?.focus();
@@ -927,8 +1078,8 @@ function onTableEnter(el) {
 
 function openDaySheet(date) {
   const items = M.sortTx(state.tx.filter((t) => t.date === date));
-  const inc = items.filter((t) => t.type === 'income').reduce((a, t) => a + t.amount, 0);
-  const exp = items.filter((t) => t.type === 'expense').reduce((a, t) => a + t.amount, 0);
+  const inc = items.filter((t) => t.type === 'income' && !t.loan).reduce((a, t) => a + M.B(t), 0);
+  const exp = items.filter((t) => t.type === 'expense' && !t.loan).reduce((a, t) => a + M.B(t), 0);
   openSheet(`<h3>${dayLabel(date)} <button type="button" class="icon-btn" data-close aria-label="Close">✕</button></h3>
     <div class="stats" style="margin-bottom:12px">
       <div class="stat"><span class="k">Earned</span><b class="income">${money(inc)}</b></div>

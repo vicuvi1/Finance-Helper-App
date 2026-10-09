@@ -3,8 +3,24 @@
 
 import { splitByPercent, formatMoney } from './money.js';
 import { monthKey, addMonths, daysInMonth, monthLabel } from './dates.js';
+import { convert, coinValue } from './fx.js';
 
-export const SCHEMA_VERSION = 1;
+// v1: first release. v2: custom multi-currency accounts, people, loans,
+// per-record timestamps and deletion markers for sync.
+export const SCHEMA_VERSION = 2;
+
+// What an account can be. Order is the order they are grouped on screen.
+export const ACCOUNT_KINDS = [
+  { id: 'cash', name: 'Cash' },
+  { id: 'card', name: 'Card' },
+  { id: 'virtual', name: 'Virtual card' },
+  { id: 'business', name: 'Business' },
+  { id: 'savings', name: 'Savings' },
+  { id: 'crypto', name: 'Crypto' },
+  { id: 'other', name: 'Other' },
+];
+
+const ACCOUNT_DEFAULTS = { bank: '', kind: 'cash', currency: 'MDL', start: 0, last4: '', color: 1, savings: false, archived: false, holdings: [] };
 
 export function defaultState() {
   return {
@@ -19,9 +35,9 @@ export function defaultState() {
         { id: 'care', name: 'Hygiene & cosmetics', emoji: '🧴', pct: 10 },
       ],
       accounts: [
-        { id: 'wallet', name: 'Wallet', emoji: '👛', start: 0 },
-        { id: 'safe', name: 'Safe', emoji: '🔒', start: 0 },
-        { id: 'card', name: 'Card', emoji: '💳', start: 0 },
+        { ...ACCOUNT_DEFAULTS, id: 'wallet', name: 'Wallet', kind: 'cash', color: 2 },
+        { ...ACCOUNT_DEFAULTS, id: 'safe', name: 'Safe', kind: 'savings', savings: true, color: 1 },
+        { ...ACCOUNT_DEFAULTS, id: 'card', name: 'Card', kind: 'card', color: 5 },
       ],
       categories: [
         { id: 'work', type: 'income', name: 'Work', emoji: '💼' },
@@ -52,31 +68,62 @@ export function defaultState() {
       smallPurchase: 10000, // under 100 MDL counts as a "small" purchase
     },
     tx: [],
+    people: [],
+    // id -> time it was deleted, so a sync can tell "deleted here" from
+    // "never existed there".
+    deleted: {},
+    // Last known exchange rates and coin prices (see fx.js). Not synced.
+    rates: null,
     meta: { lastBackup: null, createdAt: null },
   };
 }
 
-// Brings any saved or imported state up to the current shape without losing data.
+// Brings any saved or imported state up to the current shape without losing
+// data, including v1 data (MDL-only accounts, no people).
 export function normalizeState(raw) {
   const base = defaultState();
   if (!raw || typeof raw !== 'object') return base;
   const s = raw.settings || {};
+  const accounts = (Array.isArray(s.accounts) && s.accounts.length ? s.accounts : base.settings.accounts)
+    .map((a, i) => ({ ...ACCOUNT_DEFAULTS, color: (i % 8) + 1, ...a, holdings: Array.isArray(a.holdings) ? a.holdings : [] }));
   const settings = {
     ...base.settings,
     ...s,
     goal: { ...base.settings.goal, ...(s.goal || {}) },
     jars: Array.isArray(s.jars) && s.jars.length ? s.jars : base.settings.jars,
-    accounts: Array.isArray(s.accounts) && s.accounts.length ? s.accounts : base.settings.accounts,
+    accounts,
     categories: Array.isArray(s.categories) && s.categories.length ? s.categories : base.settings.categories,
   };
-  const tx = (Array.isArray(raw.tx) ? raw.tx : []).filter(validTx);
-  return { version: SCHEMA_VERSION, settings, tx, meta: { ...base.meta, ...(raw.meta || {}) } };
+  const baseCur = settings.currency || 'MDL';
+  const accCur = Object.fromEntries(accounts.map((a) => [a.id, a.currency || baseCur]));
+  const tx = (Array.isArray(raw.tx) ? raw.tx : []).filter(validTx).map((t) => {
+    const currency = t.currency || accCur[t.account ?? t.from] || baseCur;
+    const out = { ...t, currency, updatedAt: t.updatedAt || t.createdAt || 0 };
+    if (!Number.isInteger(out.base)) {
+      out.base = currency === baseCur ? t.amount : Math.round(t.amount * (t.rate || 1));
+      out.rate = currency === baseCur ? 1 : t.rate || null;
+    }
+    return out;
+  });
+  const people = (Array.isArray(raw.people) ? raw.people : [])
+    .filter((p) => p && typeof p.id === 'string' && p.name)
+    .map((p) => ({ note: '', ...p, updatedAt: p.updatedAt || 0 }));
+  const deleted = raw.deleted && typeof raw.deleted === 'object' ? { ...raw.deleted } : {};
+  return { version: SCHEMA_VERSION, settings, tx, people, deleted, rates: raw.rates || null, meta: { ...base.meta, ...(raw.meta || {}) } };
 }
 
 function validTx(t) {
   return t && typeof t.id === 'string' && ['income', 'expense', 'transfer'].includes(t.type)
     && Number.isInteger(t.amount) && t.amount > 0 && /^\d{4}-\d{2}-\d{2}$/.test(t.date);
 }
+
+// A record's value in the base currency (MDL), fixed at the rate of the day it
+// was logged so old months never change when rates move.
+export const B = (t) => (Number.isInteger(t.base) ? t.base : t.amount);
+
+// Loans are money that comes back: they move balances but are not income or
+// spending.
+const counts = (t) => !t.loan;
 
 export function uid() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
@@ -90,6 +137,8 @@ export function sortTx(list) {
 
 export const category = (state, id) => state.settings.categories.find((c) => c.id === id);
 export const account = (state, id) => state.settings.accounts.find((a) => a.id === id);
+export const person = (state, id) => state.people.find((p) => p.id === id);
+export const activeAccounts = (state) => state.settings.accounts.filter((a) => !a.archived);
 export const jar = (state, id) => state.settings.jars.find((j) => j.id === id);
 export const savingsJar = (state) => state.settings.jars.find((j) => j.savings) || state.settings.jars[0];
 
@@ -101,30 +150,58 @@ export function accountBalances(state, upTo = null) {
     else if (t.type === 'expense' && t.account in bal) bal[t.account] -= t.amount;
     else if (t.type === 'transfer') {
       if (t.from in bal) bal[t.from] -= t.amount;
-      if (t.to in bal) bal[t.to] += t.amount;
+      // Between currencies the receiving side gets its own amount.
+      if (t.to in bal) bal[t.to] += Number.isInteger(t.toAmount) ? t.toAmount : t.amount;
     }
   }
   return bal;
 }
 
-export function totalBalance(state) {
-  return Object.values(accountBalances(state)).reduce((a, b) => a + b, 0);
+// Each account in its own currency and in the base currency (today's rate),
+// plus coins held in crypto accounts. `inBase` is null when no rate is known.
+export function accountValues(state, upTo = null) {
+  const baseCur = state.settings.currency;
+  const bal = accountBalances(state, upTo);
+  return state.settings.accounts.map((a) => {
+    const own = bal[a.id] || 0;
+    let inBase = convert(own, a.currency, baseCur, state.rates);
+    let coins = 0;
+    let coinsKnown = true;
+    for (const h of a.holdings || []) {
+      const v = coinValue(Number(h.qty), h.asset, baseCur, state.rates);
+      if (v == null) coinsKnown = false; else coins += v;
+    }
+    if (inBase != null) inBase += coins;
+    return { account: a, own, coins, coinsKnown, inBase };
+  });
+}
+
+// Total of all money in the base currency; `missing` lists accounts that
+// could not be converted yet (no rate).
+export function totalBalance(state, { includeArchived = false } = {}) {
+  let total = 0;
+  const missing = [];
+  for (const v of accountValues(state)) {
+    if (v.account.archived && !includeArchived) continue;
+    if (v.inBase == null) missing.push(v); else total += v.inBase;
+  }
+  return { total, missing };
 }
 
 export const txInMonth = (state, key) => state.tx.filter((t) => monthKey(t.date) === key);
 
 function sumBy(list, keyFn) {
   const out = new Map();
-  for (const t of list) out.set(keyFn(t), (out.get(keyFn(t)) || 0) + t.amount);
+  for (const t of list) out.set(keyFn(t), (out.get(keyFn(t)) || 0) + B(t));
   return [...out.entries()].map(([id, amount]) => ({ id, amount })).sort((a, b) => b.amount - a.amount);
 }
 
 export function monthSummary(state, key) {
   const list = txInMonth(state, key);
-  const incomes = list.filter((t) => t.type === 'income');
-  const expenses = list.filter((t) => t.type === 'expense');
-  const income = incomes.reduce((a, t) => a + t.amount, 0);
-  const expense = expenses.reduce((a, t) => a + t.amount, 0);
+  const incomes = list.filter((t) => t.type === 'income' && counts(t));
+  const expenses = list.filter((t) => t.type === 'expense' && counts(t));
+  const income = incomes.reduce((a, t) => a + B(t), 0);
+  const expense = expenses.reduce((a, t) => a + B(t), 0);
   const net = income - expense;
   return {
     key,
@@ -155,7 +232,7 @@ export function jarStatus(state, key) {
   const spentByJar = {};
   for (const t of sum.expenses) {
     const j = category(state, t.category)?.jar || jarFallback(state);
-    spentByJar[j] = (spentByJar[j] || 0) + t.amount;
+    spentByJar[j] = (spentByJar[j] || 0) + B(t);
   }
   return state.settings.jars.map((j) => {
     // Whole lei: nobody budgets 2 446,30.
@@ -175,10 +252,7 @@ function jarFallback(state) {
 }
 
 function goalCurrent(state) {
-  const { goal } = state.settings;
-  const bal = accountBalances(state);
-  if (goal.account && goal.account !== 'all' && goal.account in bal) return bal[goal.account];
-  return Object.values(bal).reduce((a, b) => a + b, 0);
+  return goalValueAt(state, null);
 }
 
 // Average monthly growth of the goal's money over your last (up to 3) months
@@ -211,11 +285,13 @@ export function goalStatus(state, today) {
   return { target, current, remaining, ratio: target ? Math.min(1, Math.max(0, current / target)) : 0, pace, monthsLeft, eta };
 }
 
+// The goal's money in the base currency at the end of a day (null = now).
+// Past values use today's rates; good enough for a pace estimate.
 function goalValueAt(state, iso) {
   const { goal } = state.settings;
-  const bal = accountBalances(state, iso);
-  if (goal.account && goal.account !== 'all' && goal.account in bal) return bal[goal.account];
-  return Object.values(bal).reduce((a, b) => a + b, 0);
+  const vals = accountValues(state, iso);
+  const pick = goal.account && goal.account !== 'all' ? vals.filter((v) => v.account.id === goal.account) : vals.filter((v) => !v.account.archived);
+  return pick.reduce((a, v) => a + (v.inBase ?? 0), 0);
 }
 
 export function yearOverview(state, year) {
@@ -317,14 +393,14 @@ export function insights(state, key, today) {
   }
 
   // 4. Biggest single expense.
-  const biggest = [...s.expenses].sort((a, b) => b.amount - a.amount)[0];
-  if (biggest && s.expense && biggest.amount / s.expense >= 0.25) {
-    out.push({ level: 'info', icon: '🔎', title: `One expense is ${Math.round((biggest.amount / s.expense) * 100)}% of the month`, text: `${fmt(biggest.amount)}${biggest.note ? ` for "${biggest.note}"` : ''} (${cat(biggest.category).name}). Big ones are where planning pays most.` });
+  const biggest = [...s.expenses].sort((a, b) => B(b) - B(a))[0];
+  if (biggest && s.expense && B(biggest) / s.expense >= 0.25) {
+    out.push({ level: 'info', icon: '🔎', title: `One expense is ${Math.round((B(biggest) / s.expense) * 100)}% of the month`, text: `${fmt(B(biggest))}${biggest.note ? ` for "${biggest.note}"` : ''} (${cat(biggest.category).name}). Big ones are where planning pays most.` });
   }
 
   // 5. Small purchases add up.
-  const small = s.expenses.filter((t) => t.amount < state.settings.smallPurchase);
-  const smallSum = small.reduce((a, t) => a + t.amount, 0);
+  const small = s.expenses.filter((t) => B(t) < state.settings.smallPurchase);
+  const smallSum = small.reduce((a, t) => a + B(t), 0);
   if (small.length >= 5) {
     out.push({ level: 'info', icon: '🪙', title: `${small.length} small purchases = ${fmt(smallSum)}`, text: `Each was under ${fmt(state.settings.smallPurchase)}. Over a year that pace is about ${fmt(smallSum * 12)}.` });
   }
@@ -361,7 +437,7 @@ export function insights(state, key, today) {
   // 9. Recurring costs, priced for the year.
   const subs = s.expenses.filter((t) => t.category === 'subscriptions');
   if (subs.length) {
-    const subSum = subs.reduce((a, t) => a + t.amount, 0);
+    const subSum = subs.reduce((a, t) => a + B(t), 0);
     out.push({ level: 'info', icon: '📱', title: `Subscriptions: ${fmt(subSum * 12)} a year`, text: `${fmt(subSum)} this month. Cancel any you didn't use this week.` });
   }
 
@@ -415,4 +491,64 @@ export function noteSuggestions(state, type, limit = 30) {
     counts.set(t.note, (counts.get(t.note) || 0) + 1);
   }
   return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, limit).map(([n]) => n);
+}
+
+// ---------- People ----------
+
+// Everything that happened with each person: money received from them, money
+// given to them, and open loans. `owesMe` > 0 means they owe you; < 0 means
+// you owe them.
+export function peopleSummary(state, { from = null, to = null } = {}) {
+  const rows = new Map(state.people.map((p) => [p.id, { person: p, received: 0, given: 0, owesMe: 0, count: 0, last: null }]));
+  for (const t of state.tx) {
+    if (!t.person || !rows.has(t.person) || t.type === 'transfer') continue;
+    const r = rows.get(t.person);
+    const v = B(t);
+    if (t.loan) r.owesMe += t.type === 'expense' ? v : -v;
+    if (from && t.date < from) continue;
+    if (to && t.date > to) continue;
+    if (t.type === 'income') r.received += v; else r.given += v;
+    r.count++;
+    if (!r.last || t.date > r.last) r.last = t.date;
+  }
+  return [...rows.values()].sort((a, b) => (b.last || '').localeCompare(a.last || '') || a.person.name.localeCompare(b.person.name));
+}
+
+// Finds a person by name (any case) or adds them. Returns the id.
+export function ensurePerson(state, name, now = Date.now()) {
+  const n = String(name || '').trim();
+  if (!n) return null;
+  const found = state.people.find((p) => p.name.toLowerCase() === n.toLowerCase());
+  if (found) return found.id;
+  const p = { id: `p-${uid()}`, name: n, note: '', updatedAt: now };
+  state.people.push(p);
+  return p.id;
+}
+
+// Adds a category while logging ("+ New" in the picker). Returns its id.
+export function ensureCategory(state, name, type, now = Date.now()) {
+  const n = String(name || '').trim();
+  if (!n) return null;
+  const found = state.settings.categories.find((c) => c.type === type && c.name.toLowerCase() === n.toLowerCase());
+  if (found) return found.id;
+  const jarId = type === 'expense' ? (state.settings.jars.find((j) => !j.savings)?.id) : undefined;
+  const c = { id: `c-${uid()}`, type, name: n, emoji: '', ...(jarId ? { jar: jarId } : {}), updatedAt: now };
+  state.settings.categories.push(c);
+  return c.id;
+}
+
+// Marks a record as changed now (sync uses this to pick the newest copy).
+export const touch = (obj, now = Date.now()) => Object.assign(obj, { updatedAt: now });
+
+export function removeTx(state, id, now = Date.now()) {
+  const i = state.tx.findIndex((t) => t.id === id);
+  if (i < 0) return null;
+  const [t] = state.tx.splice(i, 1);
+  state.deleted[id] = now;
+  return t;
+}
+
+export function restoreTx(state, t, now = Date.now()) {
+  delete state.deleted[t.id];
+  state.tx.push(touch(t, now));
 }

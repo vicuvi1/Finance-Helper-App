@@ -16,6 +16,7 @@ const SHELL = [
   './js/charts.js',
   './js/logviews.js',
   './js/xlsx.js',
+  './js/fx.js',
   './fonts/Geist-Variable.woff2',
   './fonts/GeistMono-Variable.woff2',
   './manifest.webmanifest',

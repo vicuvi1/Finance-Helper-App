@@ -332,6 +332,17 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--gold); outl
 .cat:active { transform: scale(0.96); }
 .cat[aria-pressed="true"] { border-color: var(--gold); color: var(--text); background: var(--gold-soft); font-weight: 600; }
 
+.pill { display: inline-block; font: 600 10px/1 var(--font); text-transform: uppercase; letter-spacing: 0.06em; padding: 3px 6px; border-radius: 5px; background: var(--info-soft); color: var(--info); vertical-align: 2px; }
+.fx-row .fx-line { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); }
+.fx-row .fx-line input { width: 120px; min-height: 38px; text-align: right; font-feature-settings: "tnum"; }
+label.field.check { display: flex; align-items: center; gap: 10px; margin-top: 22px; cursor: pointer; }
+label.field.check span { margin: 0; color: var(--text); font-size: 13px; }
+label.field.check input { width: 18px; height: 18px; accent-color: var(--gold); flex: none; }
+.cat-add { border-style: dashed; }
+.cat-new { display: inline-flex; gap: 6px; align-items: center; }
+.cat-new input { width: 170px; min-height: 36px; padding: 6px 10px; font-size: 14px; }
+.cat-new .btn { min-height: 36px; padding: 6px 12px; }
+
 /* Settings rows */
 .set-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px 0; border-top: 1px solid var(--line); }
 .set-row:first-of-type { border-top: 0; }
@@ -426,7 +437,7 @@ details.card[open] > summary { margin-bottom: 14px; }
 /* Table view: reads like a spreadsheet, every cell edits in place. Controls
    only show their arrows and pickers on hover or focus. */
 .grid-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); margin-bottom: 10px; }
-table.grid { width: 100%; min-width: 940px; border-collapse: separate; border-spacing: 0; table-layout: fixed; font-size: 14px; }
+table.grid { width: 100%; min-width: 960px; border-collapse: separate; border-spacing: 0; table-layout: fixed; font-size: 14px; }
 table.grid th {
   position: sticky; top: 0; z-index: 1; background: var(--surface); padding: 0; text-align: left;
   border-bottom: 1px solid var(--line-strong);
@@ -457,6 +468,8 @@ table.grid input[type="date"]::-webkit-calendar-picker-indicator { opacity: 0; c
 table.grid tr:hover input[type="date"]::-webkit-calendar-picker-indicator,
 table.grid input[type="date"]:focus::-webkit-calendar-picker-indicator { opacity: 0.6; }
 table.grid :is(input, select):focus { outline: 2px solid var(--gold); outline-offset: -2px; background-color: var(--surface-3); }
+table.grid .amt-cell { display: flex; align-items: center; }
+table.grid .cur-tag { font-size: 11px; color: var(--muted); padding-right: 10px; font-weight: 600; }
 table.grid input.amt { text-align: right; font-feature-settings: "tnum"; font-weight: 550; }
 table.grid tr.t-income input.amt { color: var(--income); }
 table.grid tr.t-expense input.amt { color: var(--text); }

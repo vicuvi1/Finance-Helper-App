@@ -4,6 +4,7 @@
 import { formatMoney } from './money.js';
 import { daysInMonth, weekday, todayISO } from './dates.js';
 import { TYPE_LABEL } from './importer.js';
+import { B } from './model.js';
 
 export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const plain = (c) => formatMoney(c, '');
@@ -14,6 +15,7 @@ export const COLUMNS = [
   { id: 'type', label: 'Type' },
   { id: 'category', label: 'Category' },
   { id: 'note', label: 'Note' },
+  { id: 'person', label: 'Who' },
   { id: 'account', label: 'Account' },
   { id: 'amount', label: 'Amount', num: true },
 ];
@@ -25,8 +27,9 @@ export function sortRows(state, list, { col = 'date', dir = 1 } = {}) {
     type: (t) => TYPE_LABEL[t.type],
     category: (t) => (t.type === 'transfer' ? '' : name(state.settings.categories, t.category)),
     note: (t) => (t.note || '').toLowerCase(),
+    person: (t) => name(state.people, t.person).toLowerCase(),
     account: (t) => name(state.settings.accounts, t.account || t.from),
-    amount: (t) => t.amount,
+    amount: (t) => B(t),
   }[col] || ((t) => t.date);
   return [...list].sort((a, b) => {
     const x = key(a);
@@ -54,8 +57,9 @@ function cells(state, t) {
   return `<td><input type="date" data-col="date" value="${esc(t.date)}" aria-label="Date"></td>
     <td>${typeSel}</td><td>${cat}</td>
     <td><input type="text" data-col="note" value="${esc(t.note)}" placeholder="What for?" aria-label="Note"></td>
+    <td>${isT ? '' : `<input type="text" data-col="person" list="people-list" value="${esc(state.people.find((p) => p.id === t.person)?.name || t.personName || '')}" placeholder="—" aria-label="Who" autocomplete="off">`}</td>
     <td>${acc}</td>
-    <td><input type="text" inputmode="decimal" class="amt" data-col="amount" value="${t.amount ? plain(t.amount) : ''}" placeholder="0" aria-label="Amount" autocomplete="off"></td>`;
+    <td><span class="amt-cell"><input type="text" inputmode="decimal" class="amt" data-col="amount" value="${t.amount ? plain(t.amount) : ''}" placeholder="0" aria-label="Amount" autocomplete="off">${t.currency && t.currency !== state.settings.currency ? `<span class="cur-tag">${esc(t.currency)}</span>` : ''}</span></td>`;
 }
 
 export function tableHTML(state, list, { sort, draft, fmt }) {
@@ -67,17 +71,17 @@ export function tableHTML(state, list, { sort, draft, fmt }) {
     return `<tr data-id="${esc(t.id)}" class="t-${t.type}${newDay ? ' newday' : ''}">${cells(state, t)}
       <td><button type="button" class="row-del" data-act="row-del" data-id="${esc(t.id)}" aria-label="Delete this record" title="Delete">×</button></td></tr>`;
   }).join('');
-  const income = list.filter((t) => t.type === 'income').reduce((a, t) => a + t.amount, 0);
-  const expense = list.filter((t) => t.type === 'expense').reduce((a, t) => a + t.amount, 0);
+  const income = list.filter((t) => t.type === 'income' && !t.loan).reduce((a, t) => a + B(t), 0);
+  const expense = list.filter((t) => t.type === 'expense' && !t.loan).reduce((a, t) => a + B(t), 0);
   const arrow = (id) => (sort.col === id ? (sort.dir > 0 ? ' ▲' : ' ▼') : '');
   return `<div class="grid-wrap"><table class="grid" id="tx-table">
-    <colgroup><col style="width:142px"><col style="width:98px"><col style="width:190px"><col><col style="width:140px"><col style="width:120px"><col style="width:42px"></colgroup>
+    <colgroup><col style="width:128px"><col style="width:88px"><col style="width:160px"><col><col style="width:118px"><col style="width:132px"><col style="width:132px"><col style="width:36px"></colgroup>
     <thead><tr>${COLUMNS.map((c) => `<th class="${c.num ? 'num' : ''}"><button type="button" data-act="sort" data-col="${c.id}" aria-label="Sort by ${c.label}">${c.label}${arrow(c.id)}</button></th>`).join('')}<th></th></tr></thead>
     <tbody>${body}
       <tr class="draft t-${draft.type}" data-draft>${cells(state, { ...draft, amount: 0 })}
         <td><button type="button" class="row-add" data-act="row-add" aria-label="Add this record" title="Add (Enter)">＋</button></td></tr>
     </tbody>
-    <tfoot><tr><td colspan="4">${list.length} record${list.length === 1 ? '' : 's'}</td>
+    <tfoot><tr><td colspan="5">${list.length} record${list.length === 1 ? '' : 's'}</td>
       <td colspan="3" class="num"><span class="income">+${fmt(income)}</span> &nbsp; <span class="expense">−${fmt(expense)}</span> &nbsp; <b>= ${fmt(income - expense)}</b></td></tr></tfoot>
   </table></div>`;
 }
@@ -91,7 +95,8 @@ export function calendarHTML(state, key) {
   for (const t of state.tx) {
     if (!t.date.startsWith(key) || t.type === 'transfer') continue;
     const d = (per[t.date] ||= { in: 0, out: 0, n: 0 });
-    if (t.type === 'income') d.in += t.amount; else d.out += t.amount;
+    if (t.loan) continue;
+    if (t.type === 'income') d.in += B(t); else d.out += B(t);
     d.n++;
   }
   const maxOut = Math.max(1, ...Object.values(per).map((d) => d.out));

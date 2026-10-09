@@ -221,9 +221,9 @@ test('Excel export: a valid .xlsx with one tab per month and formulas', async ()
   const { state } = withMarch();
   const month = monthSheet(state, '2026-03');
   assert.equal(month.rows.length, 1 + 34 + 4);
-  assert.equal(month.rows.at(-3)[5].v, 24465);
-  assert.equal(month.rows.at(-2)[5].v, 6605);
-  assert.match(month.rows.at(-3)[5].f, /^SUMIF\(B2:B35,"Earned",F2:F35\)$/);
+  assert.equal(month.rows.at(-3)[8].v, 24465);
+  assert.equal(month.rows.at(-2)[8].v, 6605);
+  assert.match(month.rows.at(-3)[8].f, /^SUMIF\(B2:B35,"Earned",I2:I35\)$/);
   const bytes = workbook([{ name: '2026 Overview', ...overviewSheet(state, 2026) }, { name: 'March 2026', ...month }]);
   // Zip signature, and every stored file's CRC matches Node's own crc32.
   assert.equal(bytes[0], 0x50);
