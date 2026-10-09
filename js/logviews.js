@@ -38,7 +38,7 @@ export function sortRows(state, list, { col = 'date', dir = 1 } = {}) {
 }
 
 function options(items, selected) {
-  return items.map((i) => `<option value="${esc(i.id)}" ${i.id === selected ? 'selected' : ''}>${esc(i.emoji)} ${esc(i.name)}</option>`).join('');
+  return items.map((i) => `<option value="${esc(i.id)}" ${i.id === selected ? 'selected' : ''}>${esc(i.name)}</option>`).join('');
 }
 
 function cells(state, t) {

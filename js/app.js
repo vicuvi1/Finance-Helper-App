@@ -9,7 +9,7 @@ import { parseCSV, toCSV } from './csv.js';
 import { importRows, exportRows, toTSV, monthSheet, overviewSheet } from './importer.js';
 import { workbook } from './xlsx.js';
 import { tableHTML, calendarHTML } from './logviews.js';
-import { trendChart } from './charts.js';
+import { trendChart, dailyChart } from './charts.js';
 
 let state = load();
 const ui = {
@@ -37,6 +37,28 @@ const money = (c, opts) => formatMoney(c, state.settings.currency, opts);
 const pct = (r) => (r == null ? '–' : `${Math.round(r * 100)}%`);
 const catOf = (id) => M.category(state, id) || { name: 'Unknown', emoji: '❔' };
 const accOf = (id) => M.account(state, id) || { name: 'Unknown', emoji: '❔' };
+
+// Each category gets one of 8 theme colors (by its position), shown as a dot
+// or as the colored initial on a record.
+function catColor(id) {
+  const i = state.settings.categories.findIndex((c) => c.id === id);
+  return i < 0 ? 'var(--muted)' : `var(--c${(i % 8) + 1})`;
+}
+function jarColor(j) {
+  if (j.savings) return 'var(--gold)';
+  const i = state.settings.jars.filter((x) => !x.savings).findIndex((x) => x.id === j.id);
+  return `var(--c${((i * 3) % 8) + 1})`;
+}
+const dot = (color) => `<i class="dot" style="--c:${color}" aria-hidden="true"></i>`;
+const initial = (name) => esc((String(name).match(/\p{L}|\p{N}/u) || ['•'])[0].toUpperCase());
+
+// Big figure with the currency set smaller beside it.
+function bigMoney(c) {
+  return `<span class="fig" data-count="${c}" data-ck="total">${formatMoney(c, '')}</span><span class="cur-sm">${esc(state.settings.currency)}</span>`;
+}
+
+// Money that counts up to its value when a screen opens.
+const countUp = (c, key, opts) => `<span data-count="${c}" data-ck="${key}" data-cur="1"${opts?.sign ? ' data-sign="1"' : ''}>${money(c, opts)}</span>`;
 
 function persist() {
   if (!save(state)) toast('Could not save. Is your browser storage full or blocked?');
@@ -70,18 +92,18 @@ function monthSwitch() {
 }
 
 function txRow(t, { showDate = false } = {}) {
-  let emoji;
+  let av;
   let title;
   let sub;
   let amount;
   if (t.type === 'transfer') {
-    emoji = '↔️';
+    av = '<span class="av av-move" aria-hidden="true">⇄</span>';
     title = t.note || `To ${accOf(t.to).name}`;
     sub = `${accOf(t.from).name} → ${accOf(t.to).name}`;
     amount = `<span class="amount">${money(t.amount)}</span>`;
   } else {
     const c = catOf(t.category);
-    emoji = c.emoji;
+    av = `<span class="av" style="--c:${catColor(t.category)}" aria-hidden="true">${initial(c.name)}</span>`;
     title = t.note || c.name;
     sub = `${c.name} · ${accOf(t.account).name}`;
     amount = t.type === 'income'
@@ -90,14 +112,16 @@ function txRow(t, { showDate = false } = {}) {
   }
   if (showDate) sub = `${dayLabel(t.date)} · ${sub}`;
   return `<button class="tx" data-act="edit" data-id="${esc(t.id)}">
-    <span class="e" aria-hidden="true">${esc(emoji)}</span>
+    ${av}
     <span class="t"><b>${esc(title)}</b><span>${esc(sub)}</span></span>
     ${amount}
   </button>`;
 }
 
+const TIP_LABEL = { bad: 'Over', warn: 'Watch', good: 'Good', info: 'Note' };
+
 function tipCard(t) {
-  return `<div class="tip ${t.level}"><span class="i" aria-hidden="true">${esc(t.icon)}</span>
+  return `<div class="tip ${t.level}"><span class="tag">${TIP_LABEL[t.level]}</span>
     <div><b>${esc(t.title)}</b><p>${esc(t.text)}</p></div></div>`;
 }
 
@@ -112,11 +136,11 @@ function rateBar(summary) {
   </div>`;
 }
 
-function stats(s) {
+function stats(s, key = 'm') {
   return `<div class="stats">
-    <div class="stat"><span class="k">Earned</span><b class="income">${money(s.income)}</b></div>
-    <div class="stat"><span class="k">Spent</span><b class="expense">${money(s.expense)}</b></div>
-    <div class="stat"><span class="k">Kept</span><b>${money(s.net)}</b></div>
+    <div class="stat"><span class="k">Earned</span><b class="income">${countUp(s.income, `${key}-in`)}</b></div>
+    <div class="stat"><span class="k">Spent</span><b class="expense">${countUp(s.expense, `${key}-out`)}</b></div>
+    <div class="stat"><span class="k">Kept</span><b>${countUp(s.net, `${key}-net`)}</b></div>
   </div>`;
 }
 
@@ -127,7 +151,7 @@ function jarsCard(key) {
     if (j.savings) {
       const r = j.budget ? Math.min(1, j.used / j.budget) : 0;
       return `<div class="jar">
-        <div class="row"><span>${esc(j.jar.emoji)} ${esc(j.jar.name)} <span class="muted">${j.jar.pct}%</span></span><span class="money">${money(j.used)}</span></div>
+        <div class="row"><span>${dot(jarColor(j.jar))}${esc(j.jar.name)} <span class="muted">${j.jar.pct}%</span></span><span class="money">${money(j.used)}</span></div>
         <div class="bar"><i style="width:${(r * 100).toFixed(1)}%"></i></div>
         <div class="foot">${!j.budget ? 'Waiting for this month\'s income' : j.left >= 0 ? `Plan ${money(j.budget)} reached ✓` : `Plan ${money(j.budget)}, ${money(-j.left)} to go`}</div>
       </div>`;
@@ -135,12 +159,12 @@ function jarsCard(key) {
     const over = j.used > j.budget;
     const r = j.budget ? Math.min(1, j.used / j.budget) : j.used ? 1 : 0;
     return `<div class="jar">
-      <div class="row"><span>${esc(j.jar.emoji)} ${esc(j.jar.name)} <span class="muted">${j.jar.pct}%</span></span><span class="money">${money(j.used)} <span class="muted">/ ${money(j.budget, { compact: true })}</span></span></div>
+      <div class="row"><span>${dot(jarColor(j.jar))}${esc(j.jar.name)} <span class="muted">${j.jar.pct}%</span></span><span class="money">${money(j.used)} <span class="muted">/ ${money(j.budget, { compact: true })}</span></span></div>
       <div class="bar ${over ? 'over' : 'gold'}"><i style="width:${(r * 100).toFixed(1)}%"></i></div>
       <div class="foot ${over ? 'bad' : ''}">${over ? `Over by ${money(j.used - j.budget)}` : `${money(j.left)} left`}</div>
     </div>`;
   }).join('');
-  return `<section class="card"><h2>Smart split · ${monthLabel(key, true)}</h2>
+  return `<section class="card"><h2>Smart split</h2>
     ${income ? '' : '<p class="muted small" style="margin-top:0">Log your income this month and each jar gets its share.</p>'}
     ${body}</section>`;
 }
@@ -152,12 +176,12 @@ function goalCard() {
   const where = goal.account === 'all' ? 'all my money' : accOf(goal.account).name;
   let line;
   if (!g.target) line = 'Set a goal in Settings.';
-  else if (g.monthsLeft === 0) line = '🎉 Goal reached. Time to set a bigger one.';
+  else if (g.monthsLeft === 0) line = 'Goal reached. Time to set a bigger one.';
   else if (g.eta) line = `At ${money(g.pace)}/month you reach it in <b>${monthLabel(g.eta)}</b> (${g.monthsLeft} month${g.monthsLeft === 1 ? '' : 's'}). Save ${money(Math.ceil(g.remaining / Math.max(1, g.monthsLeft - 1) / 100) * 100)}/month to get there a month sooner.`;
   else if (g.pace != null && g.pace < 0) line = `This went down by ${money(-g.pace)}/month lately. Keep more than you spend and I'll predict when you get there.`;
   else line = 'Log a month of income and spending and I\'ll predict when you get there.';
-  return `<section class="card goal"><h2>🎯 ${esc(goal.name)} <span class="right muted">${esc(where)}</span></h2>
-    <div class="row"><b class="money">${money(g.current)}</b><span class="muted money">of ${money(g.target)}</span></div>
+  return `<section class="card goal"><h2>${esc(goal.name)} <span class="right muted">${esc(where)}</span></h2>
+    <div class="row"><b class="money">${countUp(g.current, 'goal')}</b><span class="muted money">of ${money(g.target)} · ${Math.round(g.ratio * 100)}%</span></div>
     <div class="bar gold"><i style="width:${(g.ratio * 100).toFixed(1)}%"></i></div>
     <p>${line}</p></section>`;
 }
@@ -188,22 +212,43 @@ function viewHome() {
     <p class="muted small" style="margin-bottom:0">Already have money in the wallet or safe? Set it under Settings → Accounts.</p>
   </section>`;
 
+  const days = [];
+  const dim = Number(today.slice(8, 10));
+  for (let d = 1; d <= new Date(Date.UTC(Number(key.slice(0, 4)), Number(key.slice(5, 7)), 0)).getUTCDate(); d++) {
+    const iso = `${key}-${String(d).padStart(2, '0')}`;
+    days.push({ day: d, iso, amount: s.expenses.filter((t) => t.date === iso).reduce((a, t) => a + t.amount, 0), future: d > dim });
+  }
+  const perDay = dim ? Math.round(s.expense / dim) : 0;
+
   return `<header class="top"><div><h1>${hello}</h1><div class="sub">${dayLabel(today)}</div></div></header>
-  ${DEMO ? '<div class="banner"><p>👀 Live preview with <b>example data</b> from your March 2026 sheet. What you add here stays in this browser only.</p></div>' : ''}
-  ${!DEMO && needsBackup ? `<div class="banner"><p>💾 Your data lives only on this device. Make a backup.</p><button class="btn primary" data-act="export-json">Back up</button></div>` : ''}
+  ${DEMO ? '<div class="banner"><p>Live preview with <b>example data</b> (a made-up month). What you add here stays in this browser only.</p></div>' : ''}
+  ${!DEMO && needsBackup ? `<div class="banner"><p>Your data lives only on this device. Make a backup.</p><button class="btn primary" data-act="export-json">Back up</button></div>` : ''}
   ${welcome}
-  <section class="card hero">
-    <div class="label">All my money</div>
-    <div class="big money ${total < 0 ? 'expense' : ''}">${money(total)}</div>
-    <div class="accounts">
-      ${state.settings.accounts.map((a) => `<button class="acc ${bal[a.id] < 0 ? 'neg' : ''}" data-act="transfer" data-from="${esc(a.id)}"><span class="n">${esc(a.emoji)} ${esc(a.name)}</span><b class="money">${money(bal[a.id])}</b></button>`).join('')}
+  <section class="hero">
+    <div class="hero-main">
+      <div class="label">All my money</div>
+      <div class="big ${total < 0 ? 'expense' : ''}">${bigMoney(total)}</div>
+      <div class="accounts">
+        ${state.settings.accounts.map((a) => `<button class="acc ${bal[a.id] < 0 ? 'neg' : ''}" data-act="transfer" data-from="${esc(a.id)}" title="Move money from ${esc(a.name)}"><span class="n">${esc(a.name)}</span><b class="money">${money(bal[a.id])}</b></button>`).join('')}
+      </div>
+    </div>
+    <div class="hero-month">
+      <div class="label">${monthLabel(key)}</div>
+      ${stats(s)}${rateBar(s)}
     </div>
   </section>
-  <section class="card"><h2>${monthLabel(key)}</h2>${stats(s)}${rateBar(s)}</section>
-  ${goalCard()}
-  ${tips.length ? `<section class="card"><h2>Heads up <button class="card-link right" data-go="insights">All insights</button></h2>${tips.map(tipCard).join('')}</section>` : ''}
-  ${jarsCard(key)}
-  ${recent.length ? `<section class="card"><h2>Recent <button class="card-link right" data-go="log">See all</button></h2><div class="list">${recent.map((t) => txRow(t, { showDate: true })).join('')}</div></section>` : ''}`;
+  <div class="dash">
+    <div class="dash-main">
+      <section class="card"><h2>Spending this month <span class="right muted">${money(perDay)} a day on average</span></h2>
+        ${dailyChart(days, (c) => money(c))}</section>
+      ${recent.length ? `<section class="card"><h2>Recent <button class="card-link right" data-go="log">Open log</button></h2><div class="list">${recent.map((t) => txRow(t, { showDate: true })).join('')}</div></section>` : ''}
+    </div>
+    <div class="dash-side">
+      ${goalCard()}
+      ${tips.length ? `<section class="card"><h2>Heads up <button class="card-link right" data-go="insights">All insights</button></h2>${tips.map(tipCard).join('')}</section>` : ''}
+      ${jarsCard(key)}
+    </div>
+  </div>`;
 }
 
 function logView() {
@@ -251,7 +296,7 @@ function viewLog() {
       const net = items.reduce((a, t) => a + (t.type === 'income' ? t.amount : t.type === 'expense' ? -t.amount : 0), 0);
       return `<div class="day"><div class="day-head"><span>${dayLabel(date)}${q ? ` ${date.slice(0, 4)}` : ''}</span><span class="money ${net > 0 ? 'income' : ''}">${net ? money(net, { sign: true }) : ''}</span></div>
         <div class="list">${items.map((t) => txRow(t)).join('')}</div></div>`;
-    }).join('') || `<div class="empty"><div class="big">🧾</div><b>${q ? 'Nothing found' : 'No records this month'}</b>${q ? 'Try another word.' : 'Tap + to add one.'}</div>`;
+    }).join('') || `<div class="empty"><b>${q ? 'Nothing found' : 'No records this month'}</b>${q ? 'Try another word.' : 'Tap + to add one.'}</div>`;
   }
 
   const chip = (id, label) => `<button class="chip" data-act="filter" data-filter="${id}" aria-pressed="${ui.filter === id}">${label}</button>`;
@@ -287,13 +332,13 @@ function viewInsights() {
       const p = Math.round((d / c.avg) * 100);
       vs = `<div class="vs">normal month ${money(c.avg)} · <span class="${d > 0 ? 'up' : 'down'}">${d > 0 ? '▲' : '▼'} ${Math.abs(p)}%</span></div>`;
     }
-    return `<div class="cbar"><div class="row"><span>${esc(k.emoji)} ${esc(k.name)} <span class="muted">${pct(c.share)}</span></span><span class="money">${money(c.amount)}</span></div>
+    return `<div class="cbar"><div class="row"><span>${dot(catColor(c.id))}${esc(k.name)} <span class="muted">${pct(c.share)}</span></span><span class="money">${money(c.amount)}</span></div>
       <div class="bar"><i style="width:${((c.amount / maxCat) * 100).toFixed(1)}%"></i></div>${vs}</div>`;
   }).join('');
   const maxSrc = s.bySource[0]?.amount || 1;
   const srcs = s.bySource.map((c) => {
     const k = catOf(c.id);
-    return `<div class="cbar in"><div class="row"><span>${esc(k.emoji)} ${esc(k.name)} <span class="muted">${pct(c.amount / s.income)}</span></span><span class="money">${money(c.amount)}</span></div>
+    return `<div class="cbar in"><div class="row"><span>${dot(catColor(c.id))}${esc(k.name)} <span class="muted">${pct(c.amount / s.income)}</span></span><span class="money">${money(c.amount)}</span></div>
       <div class="bar"><i style="width:${((c.amount / maxSrc) * 100).toFixed(1)}%"></i></div></div>`;
   }).join('');
 
@@ -328,11 +373,11 @@ function viewInsights() {
 function viewSettings() {
   const st = state.settings;
   const accOptions = (sel, withAll) => (withAll ? `<option value="all" ${sel === 'all' ? 'selected' : ''}>All my money</option>` : '')
-    + st.accounts.map((a) => `<option value="${esc(a.id)}" ${sel === a.id ? 'selected' : ''}>${esc(a.emoji)} ${esc(a.name)}</option>`).join('');
-  const jarOptions = (sel) => st.jars.filter((j) => !j.savings).map((j) => `<option value="${esc(j.id)}" ${sel === j.id ? 'selected' : ''}>${esc(j.emoji)} ${esc(j.name)}</option>`).join('');
+    + st.accounts.map((a) => `<option value="${esc(a.id)}" ${sel === a.id ? 'selected' : ''}>${esc(a.name)}</option>`).join('');
+  const jarOptions = (sel) => st.jars.filter((j) => !j.savings).map((j) => `<option value="${esc(j.id)}" ${sel === j.id ? 'selected' : ''}>${esc(j.name)}</option>`).join('');
   const used = new Set(state.tx.map((t) => t.category));
   const catRow = (c) => `<div class="cat-row">
-    <input type="text" class="emoji" value="${esc(c.emoji)}" data-cat="${esc(c.id)}" data-field="emoji" aria-label="Emoji" maxlength="4">
+    ${dot(catColor(c.id))}
     <input type="text" value="${esc(c.name)}" data-cat="${esc(c.id)}" data-field="name" aria-label="Name">
     ${c.type === 'expense'
     ? `<select data-cat="${esc(c.id)}" data-field="jar" aria-label="Jar">${jarOptions(c.jar)}</select>`
@@ -342,10 +387,10 @@ function viewSettings() {
   const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.navigator.standalone;
 
   return `<header class="top"><h1>Settings</h1></header>
-  ${installPrompt ? '<div class="banner"><p>📲 Install the app for one-tap access, even offline.</p><button class="btn primary" data-act="install">Install</button></div>' : ''}
-  ${isIOS ? '<div class="banner"><p>📲 To install on iPhone: tap Share, then “Add to Home Screen”.</p></div>' : ''}
+  ${installPrompt ? '<div class="banner"><p>Install the app for one-tap access, even offline.</p><button class="btn primary" data-act="install">Install</button></div>' : ''}
+  ${isIOS ? '<div class="banner"><p>To install on iPhone: tap Share, then “Add to Home Screen”.</p></div>' : ''}
 
-  <section class="card"><h2>🎯 Goal</h2>
+  <section class="card"><h2>Goal</h2>
     <label class="field"><span>Name</span><input type="text" data-set="goal.name" value="${esc(st.goal.name)}"></label>
     <div class="row2">
       <label class="field"><span>Target (${esc(st.currency)})</span><input type="text" inputmode="decimal" data-set="goal.target" value="${centsToPlain(st.goal.target)}"></label>
@@ -353,24 +398,24 @@ function viewSettings() {
     </div>
   </section>
 
-  <section class="card"><h2>🧮 Smart split <span class="right" id="jar-sum"></span></h2>
+  <section class="card"><h2>Smart split <span class="right" id="jar-sum"></span></h2>
     <p class="muted small" style="margin-top:0">Every income is split like this. Spending is checked against each jar.</p>
     ${st.jars.map((j) => `<div class="set-row">
-      <input type="text" value="${esc(j.emoji)} ${esc(j.name)}" data-jar="${esc(j.id)}" data-field="label" aria-label="Jar name">
+      <input type="text" value="${esc(j.name)}" data-jar="${esc(j.id)}" data-field="label" aria-label="Jar name">
       <label style="display:flex;align-items:center;gap:6px"><input type="number" class="pct" min="0" max="100" step="1" value="${j.pct}" data-jar="${esc(j.id)}" data-field="pct" aria-label="Percent for ${esc(j.name)}">%</label>
     </div>`).join('')}
   </section>
 
-  <section class="card"><h2>👛 Accounts</h2>
+  <section class="card"><h2>Accounts</h2>
     <p class="muted small" style="margin-top:0">Starting balance = what was there before you started logging.</p>
     ${st.accounts.map((a) => `<div class="set-row">
-      <input type="text" value="${esc(a.emoji)} ${esc(a.name)}" data-acc="${esc(a.id)}" data-field="label" aria-label="Account name">
+      <input type="text" value="${esc(a.name)}" data-acc="${esc(a.id)}" data-field="label" aria-label="Account name">
       <input type="text" inputmode="decimal" class="pct" style="width:120px" value="${centsToPlain(a.start || 0)}" data-acc="${esc(a.id)}" data-field="start" aria-label="Starting balance of ${esc(a.name)}">
     </div>`).join('')}
     <label class="field" style="margin:12px 0 0"><span>Savings go to</span><select data-set="savingsAccount">${accOptions(st.savingsAccount, false)}</select></label>
   </section>
 
-  <details class="card"><summary>🏷️ Categories</summary>
+  <details class="card"><summary>Categories</summary>
     <p class="muted small" style="margin-top:0">Spending: pick which jar it comes from.</p>
     ${st.categories.filter((c) => c.type === 'expense').map(catRow).join('')}
     <p class="muted small">Income sources</p>
@@ -381,7 +426,7 @@ function viewSettings() {
     </div>
   </details>
 
-  <section class="card"><h2>💾 Your data</h2>
+  <section class="card"><h2>Your data</h2>
     <p class="muted small" style="margin-top:0">${state.tx.length} records, saved only on this device. Last backup: ${esc(lastBackup)}.</p>
     <div class="btns">
       <button class="btn primary" data-act="export-json">Back up</button>
@@ -397,7 +442,7 @@ function viewSettings() {
     <p class="muted small" style="margin-bottom:0">From Google Sheets: open a month tab → File → Download → Comma-separated values (.csv), then import it here. Repeat for each month. Importing the same month twice is safe.</p>
   </section>
 
-  <section class="card"><h2>🎨 Look</h2>
+  <section class="card"><h2>Look</h2>
     <div class="row2">
       <label class="field"><span>Theme</span><select data-set="theme">
         ${['system', 'dark', 'light'].map((t) => `<option value="${t}" ${st.theme === t ? 'selected' : ''}>${t[0].toUpperCase() + t.slice(1)}</option>`).join('')}
@@ -420,11 +465,61 @@ function updateJarSum() {
   el.textContent = sum === 100 ? '100% ✓' : `${sum}% (must be 100)`;
 }
 
-function render() {
+// ---------- Motion ----------
+
+const reducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+let enterTimer = null;
+const shownCounts = new Map();
+
+// Staggered entrance for the screen that just opened.
+function playEnter() {
+  clearTimeout(enterTimer);
+  if (reducedMotion()) return;
+  const kids = [...app.children, ...app.querySelectorAll('.dash-main > *, .dash-side > *')];
+  kids.forEach((el, i) => el.style.setProperty('--i', Math.min(i, 12)));
+  app.querySelectorAll('.chart rect, .cal-day').forEach((el, i) => el.style.setProperty('--b', i));
+  app.classList.add('enter');
+  enterTimer = setTimeout(() => app.classList.remove('enter'), 1600);
+}
+
+// Numbers roll from where they were (or from 0 on a fresh screen) to the new value.
+function runCounters(entering) {
+  for (const el of app.querySelectorAll('[data-count]')) {
+    const to = Number(el.dataset.count);
+    const key = el.dataset.ck;
+    const from = shownCounts.has(key) ? shownCounts.get(key) : entering ? 0 : to;
+    shownCounts.set(key, to);
+    if (from === to || reducedMotion()) continue;
+    const fmt = (v) => (el.dataset.cur ? money(v, { sign: !!el.dataset.sign }) : formatMoney(v, ''));
+    const start = performance.now();
+    const dur = 800;
+    const step = (now) => {
+      const t = Math.min(1, (now - start) / dur);
+      const e = 1 - (1 - t) ** 3;
+      const v = from + (to - from) * e;
+      // Whole lei while counting unless the real value has bani.
+      el.textContent = fmt(to % 100 ? Math.round(v) : Math.round(v / 100) * 100);
+      if (t < 1 && el.isConnected) requestAnimationFrame(step);
+    };
+    el.textContent = fmt(from);
+    requestAnimationFrame(step);
+  }
+}
+
+function render({ enter = false } = {}) {
   applyTheme();
   const views = { home: viewHome, log: viewLog, insights: viewInsights, settings: viewSettings };
   app.className = `app view-${ui.tab}`;
   app.innerHTML = (views[ui.tab] || viewHome)();
+  if (enter) {
+    shownCounts.clear();
+    playEnter();
+  }
+  runCounters(enter);
+  if (ui.flashId) {
+    app.querySelector(`[data-id="${CSS.escape(ui.flashId)}"]`)?.classList.add('flash');
+    ui.flashId = null;
+  }
   for (const a of document.querySelectorAll('.tabbar a')) {
     if (a.dataset.tab === ui.tab) a.setAttribute('aria-current', 'page');
     else a.removeAttribute('aria-current');
@@ -435,6 +530,7 @@ function render() {
 // ---------- Bottom sheet ----------
 
 function openSheet(html, onMount) {
+  sheetRoot.innerHTML = '';
   sheetRoot.innerHTML = `<div class="sheet-backdrop" data-close><div class="sheet" role="dialog" aria-modal="true"><div class="grab"></div>${html}</div></div>`;
   const sheet = sheetRoot.querySelector('.sheet');
   document.body.style.overflow = 'hidden';
@@ -443,8 +539,14 @@ function openSheet(html, onMount) {
 }
 
 function closeSheet() {
-  sheetRoot.innerHTML = '';
+  const el = sheetRoot.firstElementChild;
   document.body.style.overflow = '';
+  if (!el) return;
+  if (reducedMotion()) { el.remove(); return; }
+  // Slide out, then remove only this sheet (a new one may already be open).
+  el.classList.add('closing');
+  el.removeAttribute('data-close');
+  setTimeout(() => el.remove(), 180);
 }
 
 function categoryOrder(type) {
@@ -473,7 +575,7 @@ function openTxSheet(existing = null, preset = {}) {
   let catTouched = !!existing;
 
   const accSelect = (field, label) => `<label class="field"><span>${label}</span><select id="tx-${field}">
-    ${accounts.map((a) => `<option value="${esc(a.id)}" ${draft[field] === a.id ? 'selected' : ''}>${esc(a.emoji)} ${esc(a.name)}</option>`).join('')}</select></label>`;
+    ${accounts.map((a) => `<option value="${esc(a.id)}" ${draft[field] === a.id ? 'selected' : ''}>${esc(a.name)}</option>`).join('')}</select></label>`;
 
   const html = () => {
     const isT = draft.type === 'transfer';
@@ -486,7 +588,7 @@ function openTxSheet(existing = null, preset = {}) {
       <label class="field"><span>${isT ? 'Note (optional)' : 'What for?'}</span>
         <input id="tx-note" type="text" list="note-list" autocomplete="off" value="${esc(draft.note)}" placeholder="${draft.type === 'income' ? 'e.g. from work, mother, competition' : isT ? 'e.g. to the safe' : 'e.g. food, taxi, gift for brother'}"></label>
       <datalist id="note-list">${M.noteSuggestions(state, draft.type).map((n) => `<option value="${esc(n)}">`).join('')}</datalist>
-      ${isT ? '' : `<div class="cats" role="group" aria-label="Category">${categoryOrder(draft.type).map((c) => `<button type="button" class="cat" data-cat="${esc(c.id)}" aria-pressed="${draft.category === c.id}"><span class="e">${esc(c.emoji)}</span>${esc(c.name)}</button>`).join('')}</div>`}
+      ${isT ? '' : `<div class="cats" role="group" aria-label="Category">${categoryOrder(draft.type).map((c) => `<button type="button" class="cat" data-cat="${esc(c.id)}" aria-pressed="${draft.category === c.id}">${dot(catColor(c.id))}<span>${esc(c.name)}</span></button>`).join('')}</div>`}
       <div class="row2">
         ${isT ? accSelect('from', 'From') + accSelect('to', 'To') : accSelect('account', draft.type === 'income' ? 'Into' : 'Paid from')}
       </div>
@@ -550,6 +652,7 @@ function openTxSheet(existing = null, preset = {}) {
       : { ...base, account: draft.account, category: draft.category || (draft.type === 'income' ? 'other-in' : 'other') };
     if (existing) state.tx = state.tx.map((t) => (t.id === existing.id ? tx : t));
     else state.tx.push(tx);
+    ui.flashId = tx.id;
     commit();
     closeSheet();
     if (!existing && tx.type === 'income') openSplitSheet(tx);
@@ -590,8 +693,8 @@ function openSplitSheet(tx) {
   const target = state.settings.savingsAccount;
   const save = parts.find((p) => p.jar.id === sj?.id)?.amount || 0;
   const canMove = target && M.account(state, target) && target !== tx.account && save > 0;
-  openSheet(`<h3>💰 Split ${money(tx.amount)} <button type="button" class="icon-btn" data-close aria-label="Close">✕</button></h3>
-    <div>${parts.map((p) => `<div class="split-row"><span>${esc(p.jar.emoji)} ${esc(p.jar.name)} <span class="muted">${p.jar.pct}%</span></span><b class="money ${p.jar.savings ? 'income' : ''}">${money(p.amount)}</b></div>`).join('')}</div>
+  openSheet(`<h3>Split ${money(tx.amount)} <button type="button" class="icon-btn" data-close aria-label="Close">✕</button></h3>
+    <div>${parts.map((p) => `<div class="split-row"><span>${dot(jarColor(p.jar))}${esc(p.jar.name)} <span class="muted">${p.jar.pct}%</span></span><b class="money ${p.jar.savings ? 'income' : ''}">${money(p.amount)}</b></div>`).join('')}</div>
     <div class="btns" style="margin-top:14px">
       ${canMove ? `<button class="btn primary" data-act="move-savings">Move ${money(save)} to ${esc(accOf(target).name)}</button>` : ''}
       <button class="btn" data-close>Done</button>
@@ -600,7 +703,7 @@ function openSplitSheet(tx) {
       state.tx.push({ id: M.uid(), createdAt: Date.now(), type: 'transfer', amount: save, date: tx.date, from: tx.account, to: target, note: `Deposit ${sj.pct}%${tx.note ? ` · ${tx.note}` : ''}` });
       commit();
       closeSheet();
-      toast(`🔒 ${money(save)} is in the ${accOf(target).name}. Don't touch it.`);
+      toast(`${money(save)} is in the ${accOf(target).name}. Don't touch it.`);
     });
   });
 }
@@ -795,6 +898,7 @@ function addDraftRow() {
   }
   if (d.type === 'transfer' && d.from === d.to) { toast('Pick two different accounts'); return; }
   const base = { id: M.uid(), createdAt: Date.now(), type: d.type, amount, date: d.date, note: (d.note || '').trim() };
+  ui.flashId = base.id;
   state.tx.push(d.type === 'transfer'
     ? { ...base, from: d.from, to: d.to }
     : { ...base, account: d.account, category: d.category || M.suggestCategory(state, d.note, d.type) || (d.type === 'income' ? 'other-in' : 'other') });
@@ -858,11 +962,11 @@ async function onCSVFile(text) {
   const expenses = res.tx.filter((t) => t.type === 'expense').length;
   openSheet(`<h3>Import ${res.format === 'app' ? 'CSV' : 'from your sheet'} <button type="button" class="icon-btn" data-close aria-label="Close">✕</button></h3>
     <p style="margin-top:0">${res.months.map((m) => monthLabel(m)).join(', ')}</p>
-    <div class="split-row"><span>💚 ${incomes} incomes</span><b class="money income">${money(res.income)}</b></div>
-    <div class="split-row"><span>🧾 ${expenses} expenses</span><b class="money expense">${money(res.expense)}</b></div>
+    <div class="split-row"><span>${incomes} incomes</span><b class="money income">${money(res.income)}</b></div>
+    <div class="split-row"><span>${expenses} expenses</span><b class="money expense">${money(res.expense)}</b></div>
     ${res.duplicates ? `<div class="split-row"><span class="muted">Already here, skipped</span><b>${res.duplicates}</b></div>` : ''}
     <p class="muted small">Check these totals match your sheet. Categories are guessed from your notes; tap any record later to fix it.</p>
-    ${res.format === 'sheet' ? `<label class="field"><span>Put them in</span><select id="imp-acc">${state.settings.accounts.map((a) => `<option value="${esc(a.id)}">${esc(a.emoji)} ${esc(a.name)}</option>`).join('')}</select></label>` : ''}
+    ${res.format === 'sheet' ? `<label class="field"><span>Put them in</span><select id="imp-acc">${state.settings.accounts.map((a) => `<option value="${esc(a.id)}">${esc(a.name)}</option>`).join('')}</select></label>` : ''}
     <div class="btns"><button class="btn" data-close>Cancel</button><button class="btn primary" id="imp-go">Import ${res.tx.length}</button></div>`, (sheet) => {
     sheet.querySelector('#imp-go').addEventListener('click', () => {
       const acc = sheet.querySelector('#imp-acc')?.value;
@@ -965,8 +1069,8 @@ document.addEventListener('click', (e) => {
   if (act === 'add') openTxSheet();
   else if (act === 'edit') openTxSheet(state.tx.find((t) => t.id === el.dataset.id));
   else if (act === 'transfer') openTransferSheet(el.dataset.from);
-  else if (act === 'month') { ui.month = addMonths(ui.month, Number(el.dataset.step)); render(); }
-  else if (act === 'year') { ui.year += Number(el.dataset.step); render(); }
+  else if (act === 'month') { ui.month = addMonths(ui.month, Number(el.dataset.step)); render({ enter: true }); }
+  else if (act === 'year') { ui.year += Number(el.dataset.step); render({ enter: true }); }
   else if (act === 'open-month') { ui.month = el.dataset.key; ui.search = ''; location.hash = '#log'; }
   else if (act === 'filter') { ui.filter = el.dataset.filter; render(); }
   else if (act === 'log-view') { state.settings.logView = el.dataset.view; commit(); }
@@ -1039,7 +1143,7 @@ function route() {
   const tab = location.hash.slice(1) || 'home';
   ui.tab = ['home', 'log', 'insights', 'settings'].includes(tab) ? tab : 'home';
   closeSheet();
-  render();
+  render({ enter: true });
   window.scrollTo(0, 0);
   // "Add a record" shortcut from the home-screen icon.
   if (tab === 'add') {

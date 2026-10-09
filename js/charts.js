@@ -27,3 +27,34 @@ export function trendChart(rows, fmt) {
   const base = `<line x1="0" x2="${W}" y1="${top + plotH + 0.5}" y2="${top + plotH + 0.5}" style="stroke:var(--line)"/>`;
   return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Earned and spent per month">${base}${bars}</svg>`;
 }
+
+// Spending per day this month: one bar per day, a dashed line at the daily
+// average, days still ahead shown as faint stubs.
+export function dailyChart(days, fmt) {
+  const W = 620;
+  const H = 168;
+  const top = 18;
+  const bottom = 22;
+  const left = 4;
+  const plotH = H - top - bottom;
+  const past = days.filter((d) => !d.future);
+  const max = Math.max(1, ...past.map((d) => d.amount));
+  const avg = past.length ? past.reduce((a, d) => a + d.amount, 0) / past.length : 0;
+  const slot = (W - left) / days.length;
+  const bw = Math.max(3, slot * 0.62);
+  const y = (v) => top + plotH - (v / max) * plotH;
+  const bars = days.map((d, i) => {
+    const x = left + slot * i + (slot - bw) / 2;
+    if (d.future) return `<rect x="${x.toFixed(1)}" y="${top + plotH - 2}" width="${bw.toFixed(1)}" height="2" rx="1" style="fill:var(--line)"/>`;
+    const h = d.amount ? Math.max(2, top + plotH - y(d.amount)) : 2;
+    const color = d.amount ? (d.amount > avg * 1.5 ? 'var(--expense)' : 'var(--chart-bar)') : 'var(--line)';
+    return `<g><title>${d.iso}: ${d.amount ? fmt(d.amount) : 'nothing spent'}</title><rect x="${x.toFixed(1)}" y="${(top + plotH - h).toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" rx="2" style="fill:${color}"/></g>`;
+  }).join('');
+  const labels = days.filter((d) => [1, 8, 15, 22, 29].includes(d.day))
+    .map((d) => `<text x="${(left + slot * (d.day - 1) + slot / 2).toFixed(1)}" y="${H - 5}" text-anchor="middle">${d.day}</text>`).join('');
+  const avgY = y(avg).toFixed(1);
+  const avgLine = avg ? `<line x1="${left}" x2="${W}" y1="${avgY}" y2="${avgY}" style="stroke:var(--muted);stroke-dasharray:3 4;opacity:.7"/>
+    <text x="${W}" y="${(Number(avgY) - 5).toFixed(1)}" text-anchor="end">avg ${fmt(Math.round(avg))}</text>` : '';
+  const base = `<line x1="0" x2="${W}" y1="${top + plotH + 0.5}" y2="${top + plotH + 0.5}" style="stroke:var(--line)"/>`;
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Spending per day this month">${base}${bars}${avgLine}${labels}</svg>`;
+}

@@ -17,7 +17,7 @@ if (!out) {
 
 rmSync(out, { recursive: true, force: true });
 mkdirSync(out, { recursive: true });
-for (const dir of ['css', 'js', 'icons']) cpSync(join(root, dir), join(out, dir), { recursive: true });
+for (const dir of ['css', 'js', 'icons', 'fonts']) cpSync(join(root, dir), join(out, dir), { recursive: true });
 cpSync(join(root, 'tests/fixtures/sample-month.csv'), join(out, 'sample.csv'));
 
 // The host wraps the page in its own <html>/<head>/<body>, so publish only
