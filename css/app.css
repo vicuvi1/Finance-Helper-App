@@ -391,6 +391,20 @@ label.field.check input { width: 18px; height: 18px; accent-color: var(--gold); 
 
 @media (max-width: 420px) { .stat b { font-size: 16px; } }
 
+/* Lock screen */
+body.locked .app, body.locked .tabbar, body.locked #sheet-root, body.locked .toast { display: none !important; }
+.lock-root { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 24px 16px; background: var(--bg); }
+.lock-card { width: 100%; max-width: 360px; display: grid; gap: 12px; justify-items: center; text-align: center; animation: rise 0.5s var(--ease-out) both; }
+.lock-card img { border-radius: 14px; }
+.lock-card h2 { margin: 6px 0 0; font-size: 22px; letter-spacing: -0.01em; }
+.lock-card p { margin: 0; }
+.lock-card input { text-align: center; font-size: 22px; letter-spacing: 0.3em; }
+.lock-msg { min-height: 20px; color: var(--expense); font-size: 13px; margin: 0; }
+.lock-reset { display: grid; gap: 10px; text-align: left; font-size: 13px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 14px; width: 100%; }
+.lock-reset input { letter-spacing: 0; font-size: 15px; text-align: left; }
+.shake { animation: shake 0.4s; }
+@keyframes shake { 20%, 60% { transform: translateX(-8px); } 40%, 80% { transform: translateX(8px); } }
+
 /* Reports */
 .rep-bar { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; justify-content: space-between; margin-bottom: 14px; }
 .rep-bar .chips { margin: 0; }

@@ -16,6 +16,7 @@ import * as AccountsScreen from './screens/accounts.js';
 import * as Spending from './screens/spending.js';
 import * as PeopleScreen from './screens/people.js';
 import * as ReportsScreen from './screens/reports.js';
+import * as Security from './screens/security.js';
 import { tableHTML, calendarHTML } from './logviews.js';
 import { dailyChart } from './charts.js';
 
@@ -409,6 +410,8 @@ function viewSettings() {
       <label class="field"><span>Currency</span><input type="text" data-set="currency" value="${esc(st.currency)}" maxlength="5"></label>
     </div>
   </section>
+
+  ${Security.settingsCard()}
 
   <section class="card"><h2>Danger zone</h2>
     <button class="btn danger block" data-act="wipe">Erase everything on this device</button>
@@ -1245,8 +1248,10 @@ document.addEventListener('keydown', (e) => {
     onTableEnter(e.target);
     return;
   }
+  if (Security.isLocked()) return;
   if (e.ctrlKey || e.metaKey || e.altKey || sheetRoot.firstChild) return;
   if (e.target.closest('input, select, textarea')) return;
+  if ((e.key === 'l' || e.key === 'L') && Security.hasLock()) { Security.lock(); return; }
   const tabs = { 1: 'home', 2: 'log', 3: 'accounts', 4: 'people', 5: 'reports', 6: 'rates', 7: 'settings' };
   if (e.key === 'n' || e.key === 'N') { e.preventDefault(); openTxSheet(); }
   else if (e.key === '/') {
@@ -1265,7 +1270,7 @@ const SCREENS = {
   people: PeopleScreen,
   reports: ReportsScreen,
   rates: RatesScreen,
-  settings: { view: viewSettings },
+  settings: { view: viewSettings, onClick: Security.onClick, onChange: Security.onChange },
 };
 
 function openMoreSheet() {
@@ -1320,6 +1325,13 @@ Object.assign(ctx, {
   openTxSheet,
   openTransferSheet,
   updateRates,
+  // Lock screen "Reset this device": wipe local data and start fresh.
+  resetDevice: () => {
+    state = M.defaultState();
+    state.meta.createdAt = Date.now();
+    persist();
+    location.reload();
+  },
 });
 
 function route() {
@@ -1422,6 +1434,7 @@ async function seedDemo() {
 
 Spending.bindHover(app);
 requestPersistence();
+if (!DEMO) Security.initLock();
 route();
 seedDemo();
 updateRates();
