@@ -42,7 +42,7 @@ import { bindTilt } from './cards.js';
 import { FREQS, markDone, dueItems } from './recurring.js';
 import { invoiceStatus } from './invoices.js';
 import { tableHTML, calendarHTML, dayLabelHTML } from './logviews.js';
-import { sheetHTML, monthTabs, calcResult } from './sheetview.js';
+import { sheetHTML, monthTabs } from './sheetview.js';
 import { createHistory } from './history.js';
 import { searchTx, searchSummary, SEARCH_HINT } from './search.js';
 
@@ -63,10 +63,8 @@ const ui = {
   draft: null,
   // Table rows ticked for a bulk change.
   selected: new Set(),
-  // Sheet view: days with an extra empty row, and the side panel's boxes.
+  // Sheet view: days with an extra empty row.
   sheetExtra: new Set(),
-  share: '',
-  calc: { sum: [], dif: [], mul: [] },
   lastSel: null,
 };
 let installPrompt = null;
@@ -636,26 +634,6 @@ function onSheetEnter(el) {
   }, 20);
 }
 
-// The sheet's SMART SHARING and My CALCULATOR update as you type.
-function onPanelInput(el) {
-  if (el.id === 'mp-share') {
-    ui.share = el.value;
-    const v = evalAmount(el.value);
-    const parts = v ? M.splitIncome(state, v) : [];
-    document.querySelectorAll('#sheet-grid [data-jar]').forEach((b, i) => { b.textContent = v ? formatMoney(parts[i].amount, '') : ''; });
-    return true;
-  }
-  if (el.dataset.calc) {
-    const [kind, i] = el.dataset.calc.split('|');
-    ui.calc[kind][Number(i)] = el.value;
-    const v = calcResult(kind, ui.calc[kind]);
-    const out = document.querySelector(`#sheet-grid [data-calc-out="${kind}"]`);
-    if (out) out.textContent = v == null ? '' : (Math.round(v * 100) / 100).toLocaleString('ro-RO').replace(/\./g, ' ');
-    return true;
-  }
-  return false;
-}
-
 function draftRow() {
   const inMonth = monthKey(todayISO()) === ui.month ? todayISO() : `${ui.month}-01`;
   if (!ui.draft || !ui.draft.date.startsWith(ui.month)) {
@@ -672,16 +650,7 @@ function viewLog() {
 
   let content;
   if (view === 'sheet' && !q) {
-    const shareVal = evalAmount(ui.share);
-    const g = M.mainGoal(state);
-    const gs = g?.target ? M.goalStatus(state, todayISO(), g) : null;
-    content = sheetHTML(state, ui.month, {
-      today: todayISO(), extra: ui.sheetExtra, fmt: (c) => formatMoney(c, ''), tabs: monthTabs(state, ui.month, todayISO()),
-      summary: s, values: M.accountValues(state).filter((v) => !v.account.archived), total: M.totalBalance(state).total, jars: state.settings.jars,
-      share: { text: ui.share, value: shareVal, parts: shareVal ? M.splitIncome(state, shareVal).map((p) => p.amount) : [] },
-      calc: ui.calc,
-      goal: gs ? { name: g.name, target: gs.target, ratio: gs.ratio, left: gs.remaining } : null,
-    });
+    content = sheetHTML(state, ui.month, { today: todayISO(), extra: ui.sheetExtra, fmt: (c) => formatMoney(c, ''), tabs: monthTabs(state, ui.month, todayISO()) });
   } else if (view === 'calendar') {
     content = `<section class="card">${calendarHTML(state, ui.month)}</section>`;
   } else if (view === 'table' || view === 'sheet') {
@@ -1832,7 +1801,6 @@ document.addEventListener('change', (e) => {
   if (SCREENS[ui.tab]?.onChange?.(e.target)) return;
   if (e.target.dataset.bulk) onBulkChange(e.target);
   else if (e.target.dataset.sh) onSheetChange(e.target);
-  else if (e.target.id === 'mp-share' || e.target.dataset.calc) return;
   else if (e.target.classList.contains('sel')) return;
   else if (e.target.closest('#tx-table')) onCellChange(e.target);
   else if (e.target.id === 'file-csv') {
@@ -1853,7 +1821,6 @@ document.addEventListener('change', (e) => {
 
 document.addEventListener('input', (e) => {
   if (!e.target.closest('.sheet') && SCREENS[ui.tab]?.onInput?.(e.target)) return;
-  if (ui.tab === 'log' && onPanelInput(e.target)) return;
   if (e.target.id === 'search') {
     ui.search = e.target.value;
     const pos = e.target.selectionStart;
