@@ -48,6 +48,10 @@
   --c5: #d55181; --c6: #008300; --c7: #9085e9; --c8: #e66767;
   --backdrop: rgb(3 5 8 / 64%);
   --shadow-pop: 0 18px 50px rgb(0 0 0 / 45%);
+  /* Polish: the light under the mouse, the glow behind the page, card depth. */
+  --spot: rgb(214 180 106 / 9%);
+  --ambient: rgb(214 180 106 / 6%);
+  --shadow-card: 0 1px 0 rgb(255 255 255 / 3%) inset, 0 10px 30px -18px rgb(0 0 0 / 70%);
 
   --font: "Geist", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --mono: "Geist Mono", ui-monospace, "SF Mono", "Cascadia Mono", Consolas, monospace;
@@ -68,6 +72,8 @@
     --c1: #2a78d6; --c2: #eb6834; --c3: #1baf7a; --c4: #eda100; --c5: #e87ba4; --c6: #008300; --c7: #6250d6; --c8: #e34948;
     --backdrop: rgb(14 19 27 / 40%);
     --shadow-pop: 0 18px 50px rgb(14 19 27 / 18%);
+    --spot: rgb(176 136 52 / 9%); --ambient: rgb(214 180 106 / 10%);
+    --shadow-card: 0 1px 2px rgb(14 19 27 / 4%), 0 10px 30px -20px rgb(14 19 27 / 25%);
     color-scheme: light;
   }
 }
@@ -81,6 +87,8 @@
   --c1: #2a78d6; --c2: #eb6834; --c3: #1baf7a; --c4: #eda100; --c5: #e87ba4; --c6: #008300; --c7: #6250d6; --c8: #e34948;
   --backdrop: rgb(14 19 27 / 40%);
   --shadow-pop: 0 18px 50px rgb(14 19 27 / 18%);
+  --spot: rgb(176 136 52 / 9%); --ambient: rgb(214 180 106 / 10%);
+  --shadow-card: 0 1px 2px rgb(14 19 27 / 4%), 0 10px 30px -20px rgb(14 19 27 / 25%);
   color-scheme: light;
 }
 
@@ -1512,3 +1520,77 @@ table.grid tr.selected td { background: var(--gold-soft); }
 .tgb-e[aria-pressed="true"] { border-color: var(--gold); background: var(--surface-3); }
 .tgb-pick-top #tgb-emoji { flex: none; width: 64px; text-align: center; font-size: 18px; }
 @media (hover: none) { .tgb-move { opacity: 1; } }
+
+/* ---------- Polish: depth, light and motion (js/motion.js) ---------- */
+
+/* A soft glow behind the top of every screen. */
+body { background-image: radial-gradient(1200px 520px at 70% -180px, var(--ambient), transparent 70%); background-repeat: no-repeat; background-attachment: fixed; }
+
+/* Cards: a little depth, and a light that follows the mouse. */
+.card { position: relative; isolation: isolate; box-shadow: var(--shadow-card); transition: border-color 0.3s, box-shadow 0.3s; }
+.card::after { content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit; pointer-events: none; opacity: 0; transition: opacity 0.35s;
+  background: radial-gradient(520px circle at var(--mx, 50%) var(--my, 0), var(--spot), transparent 45%); }
+.card.lit::after { opacity: 1; }
+.card.lit { border-color: color-mix(in srgb, var(--gold) 18%, var(--line)); }
+
+/* Gold buttons: a sheen passes over on hover, and they lift a touch. */
+.btn.primary, .fab { position: relative; overflow: hidden; }
+.btn.primary::after, .fab::after { content: ""; position: absolute; top: 0; bottom: 0; left: -60%; width: 40%; pointer-events: none;
+  background: linear-gradient(100deg, transparent, rgb(255 255 255 / 38%), transparent); transform: skewX(-18deg); opacity: 0; }
+.btn.primary:hover::after, .fab:hover::after { animation: btn-sheen 0.75s var(--ease-out); }
+.btn.primary:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 8px 22px -10px color-mix(in srgb, var(--btn-bg) 80%, transparent); }
+.btn.primary:active:not(:disabled) { transform: translateY(0) scale(0.98); }
+@keyframes btn-sheen { from { left: -60%; opacity: 1; } to { left: 130%; opacity: 1; } }
+
+/* Switches (Spent / Earned / Move, Sheet / Table…): the highlight slides. */
+.seg.has-thumb { position: relative; }
+.seg.has-thumb::before { content: ""; position: absolute; left: 0; top: 0; width: var(--tw); height: var(--th); transform: translate(var(--tx), var(--ty));
+  border-radius: 9px; background: var(--surface-3); box-shadow: 0 1px 0 var(--line-strong), 0 4px 14px -8px rgb(0 0 0 / 50%);
+  transition: transform 0.38s var(--ease-out), width 0.38s var(--ease-out); }
+.seg.has-thumb.no-anim::before { transition: none; }
+.seg.has-thumb button { position: relative; z-index: 1; }
+.seg.has-thumb button[aria-pressed="true"] { background: transparent; }
+
+/* Sidebar: icons nudge on hover, the active one pops in. */
+.tabbar a .ni { transition: transform 0.25s var(--ease-out); }
+.tabbar a:hover .ni { transform: translateY(-1px) scale(1.06); }
+.tabbar a[aria-current="page"] .ni { animation: ni-pop 0.45s var(--ease-out); }
+@keyframes ni-pop { 0% { transform: scale(0.8); } 60% { transform: scale(1.12); } 100% { transform: scale(1); } }
+
+/* The balance changed: a "+1 200" floats up and the number glows. */
+.sc-body { position: relative; }
+.delta-float { position: absolute; right: 12px; top: 28px; font-weight: 700; font-size: 13px; pointer-events: none; padding: 2px 8px; border-radius: 99px;
+  font-variant-numeric: tabular-nums; animation: delta-up 1.5s var(--ease-out) forwards; }
+.delta-float.up { color: var(--income); background: var(--income-soft); }
+.delta-float.down { color: var(--expense); background: var(--expense-soft); }
+@keyframes delta-up { 0% { opacity: 0; transform: translateY(8px) scale(0.9); } 15% { opacity: 1; transform: translateY(0) scale(1); } 70% { opacity: 1; } 100% { opacity: 0; transform: translateY(-22px); } }
+.sc-body.bump .sc-total { animation: total-glow 1.1s ease-out; }
+@keyframes total-glow { 0% { text-shadow: 0 0 0 transparent; } 30% { text-shadow: 0 0 18px color-mix(in srgb, var(--gold) 60%, transparent); } 100% { text-shadow: 0 0 0 transparent; } }
+
+/* Toasts: a check that draws itself and a bar that counts down. */
+.toast { overflow: hidden; padding-left: 12px; }
+.toast-ic { width: 20px; height: 20px; flex: none; fill: none; stroke: var(--gold); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.toast-ic circle { opacity: 0.35; }
+.toast-ic path { stroke-dasharray: 14; stroke-dashoffset: 14; animation: toast-check 0.45s 0.15s var(--ease-out) forwards; }
+@keyframes toast-check { to { stroke-dashoffset: 0; } }
+.toast-bar { position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: var(--gold); opacity: 0.55; transform-origin: left; animation: toast-time var(--t, 2600ms) linear forwards; }
+@keyframes toast-time { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+
+/* Rows, chips and pills answer the mouse. */
+.chip, .pick, .cat, .mpill { transition: background 0.15s, border-color 0.15s, color 0.15s, transform 0.15s var(--ease-out); }
+.chip:active, .pick:active, .cat:active { transform: scale(0.96); }
+.cat[aria-pressed="true"] { animation: cat-pop 0.3s var(--ease-out); }
+@keyframes cat-pop { 50% { transform: scale(1.06); } }
+
+/* Screens cross-fade (View Transitions). */
+::view-transition-old(root) { animation: vt-out 0.16s ease-in both; }
+::view-transition-new(root) { animation: vt-in 0.26s var(--ease-out) both; }
+@keyframes vt-out { to { opacity: 0; } }
+@keyframes vt-in { from { opacity: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .card::after, .btn.primary::after, .fab::after, .delta-float, .toast-bar, .toast-ic path, .tabbar a .ni, .cat[aria-pressed="true"], .sc-body.bump .sc-total { animation: none !important; transition: none !important; }
+  .toast-ic path { stroke-dashoffset: 0; }
+  .seg.has-thumb::before { transition: none; }
+  ::view-transition-old(root), ::view-transition-new(root) { animation: none; }
+}

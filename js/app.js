@@ -30,6 +30,7 @@ import * as Rules from './screens/rules.js';
 import * as Goals from './screens/goals.js';
 import * as Telegram from './screens/telegram.js';
 import * as TgBlocks from './screens/tgblocks.js';
+import * as Motion from './motion.js';
 import * as Buddy from './screens/buddy.js';
 import * as ImportCheck from './screens/importcheck.js';
 import * as WorkHour from './screens/workhour.js';
@@ -208,12 +209,21 @@ function renderSidebar() {
   const { total } = M.totalBalance(state);
   const series = M.netWorthSeries(state, today, 6).map((p) => p.value);
   const s = M.monthSummary(state, monthKey(today));
+  const shown = Math.round(total / 100) * 100;
+  const before = renderSidebar.last;
+  renderSidebar.last = shown;
   top.innerHTML = `<button type="button" class="sc-body" data-go="accounts" title="Open Accounts">
     <span class="sc-label">All my money</span>
     <span class="sc-total">${formatMoney(Math.round(total / 100) * 100, '')}<small>${esc(state.settings.currency)}</small></span>
     ${sparkline(series)}
     <span class="sc-row"><span>This month</span><b class="${s.net >= 0 ? 'income' : 'expense'}">${money(Math.round(s.net / 100) * 100, { sign: true, compact: true })}</b></span>
   </button>`;
+  // The balance moved (a record, an undo, a sync): show by how much.
+  if (before != null && before !== shown) {
+    const body = top.querySelector('.sc-body');
+    Motion.floatDelta(body, money(shown - before, { sign: true, compact: true }), shown > before ? 'up' : 'down');
+    body?.classList.add('bump');
+  }
   const badge = (tab, text, kind = '') => {
     const el = document.querySelector(`.tabbar [data-badge="${tab}"]`);
     if (!el) return;
@@ -861,6 +871,7 @@ function render({ enter = false } = {}) {
     playEnter();
   }
   runCounters(enter);
+  Motion.slideSegs(app);
   // Phone: keep the chosen month visible in the scrolling month strip.
   const strip = app.querySelector('.mnav-months');
   const on = strip?.querySelector('.mpill.on');
@@ -889,6 +900,7 @@ function openSheet(html, onMount) {
   const sheet = sheetRoot.querySelector('.sheet');
   document.body.style.overflow = 'hidden';
   onMount?.(sheet);
+  requestAnimationFrame(() => Motion.slideSegs(sheet));
   return sheet;
 }
 
@@ -1279,7 +1291,11 @@ function deleteTx(id) {
 
 function toast(text, actionLabel, action) {
   const el = document.getElementById('toast');
-  el.innerHTML = `<span>${esc(text)}</span>${actionLabel ? `<button type="button">${esc(actionLabel)}</button>` : ''}`;
+  const ms = actionLabel ? 6000 : 2600;
+  el.innerHTML = `<svg class="toast-ic" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="8.5"/><path d="M6 10.4l2.6 2.5L14 7.6"/></svg><span>${esc(text)}</span>${actionLabel ? `<button type="button">${esc(actionLabel)}</button>` : ''}<i class="toast-bar" style="--t:${ms}ms" aria-hidden="true"></i>`;
+  // Restart the entrance even when a toast is already showing.
+  el.hidden = true;
+  void el.offsetWidth;
   el.hidden = false;
   if (actionLabel) {
     el.querySelector('button').onclick = () => {
@@ -1288,7 +1304,7 @@ function toast(text, actionLabel, action) {
     };
   }
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { el.hidden = true; }, actionLabel ? 6000 : 2600);
+  toastTimer = setTimeout(() => { el.hidden = true; }, ms);
 }
 
 // ---------- Import / export ----------
@@ -2003,10 +2019,12 @@ Object.assign(ctx, {
 function route() {
   let tab = location.hash.slice(1) || 'home';
   if (tab === 'insights') tab = 'reports'; // old links
+  const from = ui.tab;
   ui.tab = tab in SCREENS ? tab : 'home';
   closeSheet();
-  render({ enter: true });
-  window.scrollTo(0, 0);
+  const show = () => { render({ enter: true }); window.scrollTo(0, 0); };
+  // Another screen: the old one fades into the new one.
+  if (from && from !== ui.tab && app.firstChild) Motion.crossFade(show); else show();
   // "Add a record" shortcut from the home-screen icon.
   if (tab === 'add' || tab === 'add-income' || tab === 'add-expense') {
     history.replaceState(null, '', '#home');
@@ -2156,6 +2174,7 @@ Sync.initSync();
 Backups.initBackups();
 Plan.initPlan();
 Telegram.initTelegram();
+Motion.initMotion();
 Buddy.initBuddy();
 
 // One net-worth snapshot a day (crypto and rates of that day included).
