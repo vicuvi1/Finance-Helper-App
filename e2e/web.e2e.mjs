@@ -79,3 +79,27 @@ test('import the sample sheet: records in, import check flags the stray row', as
   assert.deepEqual(errors, []);
   await context.close();
 });
+
+test('sheet view: type an amount in a day row, edit it, clear it', async () => {
+  const { page, errors, context } = await openPage(browser, server.url, { width: 1800, height: 1000 });
+  await page.goto(`${server.url}#log`);
+  await page.waitForSelector('#sheet-grid');
+  const day = await page.evaluate(() => document.querySelector('#sheet-grid tbody tr').dataset.date);
+  const key = (f) => `[data-sh="${day}|out|0|${f}"]`;
+  const find = () => page.evaluate(() => JSON.parse(localStorage.getItem('finance-helper.state')).tx.find((t) => t.note === 'sheet bread'));
+  await page.fill(key('note'), 'sheet bread');
+  await page.fill(key('amount'), '10+5');
+  await page.keyboard.press('Tab');
+  await page.waitForFunction(() => JSON.parse(localStorage.getItem('finance-helper.state')).tx.some((t) => t.note === 'sheet bread'));
+  assert.equal((await find()).amount, 1500);
+  assert.equal((await find()).date, day);
+  await page.fill(key('amount'), '20');
+  await page.keyboard.press('Enter');
+  await page.waitForFunction(() => JSON.parse(localStorage.getItem('finance-helper.state')).tx.find((t) => t.note === 'sheet bread')?.amount === 2000);
+  await page.fill(key('amount'), '');
+  await page.keyboard.press('Tab');
+  await page.waitForFunction(() => !JSON.parse(localStorage.getItem('finance-helper.state')).tx.some((t) => t.note === 'sheet bread'));
+  assert.match(await page.textContent('.money-panel'), /All my money/);
+  assert.deepEqual(errors, []);
+  await context.close();
+});

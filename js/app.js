@@ -42,6 +42,7 @@ import { bindTilt } from './cards.js';
 import { FREQS, markDone, dueItems } from './recurring.js';
 import { invoiceStatus } from './invoices.js';
 import { tableHTML, calendarHTML, dayLabelHTML } from './logviews.js';
+import { sheetHTML, moneyPanelHTML } from './sheetview.js';
 import { createHistory } from './history.js';
 import { searchTx, searchSummary, SEARCH_HINT } from './search.js';
 
@@ -62,6 +63,10 @@ const ui = {
   draft: null,
   // Table rows ticked for a bulk change.
   selected: new Set(),
+  // Sheet view: days with an extra empty row, and the side panel's boxes.
+  sheetExtra: new Set(),
+  share: '',
+  calc: '',
   lastSel: null,
 };
 let installPrompt = null;
@@ -406,7 +411,13 @@ function viewHome() {
 }
 
 function logView() {
-  return state.settings.logView || (window.innerWidth >= 720 ? 'table' : 'list');
+  // Once: wide screens switch to the new Sheet view (like the Google Sheet).
+  if (!state._sealed && !state.meta.sheetIntro) {
+    state.meta.sheetIntro = 1;
+    if (window.innerWidth >= 720) state.settings.logView = 'sheet';
+    persist({ quiet: true });
+  }
+  return state.settings.logView || (window.innerWidth >= 720 ? 'sheet' : 'list');
 }
 
 function logRecords() {
@@ -541,6 +552,108 @@ function bulkDelete() {
   toast(`Deleted ${list.length} record${list.length === 1 ? '' : 's'}`, 'Undo', () => undoRedo(-1));
 }
 
+// ---------- Sheet view (Log) ----------
+
+// The account a new record goes to: the one you used last for that kind.
+function defaultAccount(type) {
+  const last = M.sortTx(state.tx).find((t) => t.type === type && M.account(state, t.account) && !M.account(state, t.account).archived);
+  return last?.account || state.settings.accounts.find((a) => !a.archived && !a.savings)?.id || state.settings.accounts[0]?.id;
+}
+
+function renderSheetKeepFocus() {
+  setTimeout(() => {
+    const key = document.activeElement?.dataset?.sh;
+    render();
+    const el = key && document.querySelector(`#sheet-grid [data-sh="${CSS.escape(key)}"]`);
+    if (el) { el.focus(); if (el.select && el.type === 'text') el.select(); }
+  }, 0);
+}
+
+function onSheetChange(el) {
+  const [date, side, k, field] = el.dataset.sh.split('|');
+  const type = side === 'in' ? 'income' : 'expense';
+  const v = el.value.trim();
+  const t = el.dataset.id ? state.tx.find((x) => x.id === el.dataset.id) : null;
+  if (t) {
+    if (field === 'amount') {
+      if (!v) {
+        M.removeTx(state, t.id);
+        persist();
+        Sync.changed();
+        toast(`Deleted ${formatMoney(t.amount, t.currency)}`, 'Undo', () => undoRedo(-1));
+        renderSheetKeepFocus();
+        return;
+      }
+      const c = evalAmount(v);
+      if (!c || c <= 0) { toast('Type a number, e.g. 120 or 120+45'); el.value = formatMoney(t.amount, ''); return; }
+      t.amount = c;
+      t.base = Math.round(c * (t.rate || 1));
+    } else if (field === 'note') {
+      t.note = v;
+      if (t.category === 'other' || t.category === 'other-in') t.category = M.suggestCategory(state, v, t.type) || t.category;
+    } else if (field === 'category') t.category = v;
+    M.touch(t);
+    persist();
+    Sync.changed();
+    renderSheetKeepFocus();
+    return;
+  }
+  // An empty cell: an amount makes a new record for that day.
+  if (field !== 'amount' || !v) return;
+  const amount = evalAmount(v);
+  if (!amount || amount <= 0) { toast('Type a number, e.g. 120 or 120+45'); return; }
+  const note = (document.querySelector(`#sheet-grid [data-sh="${CSS.escape(`${date}|${side}|${k}|note`)}"]`)?.value || '').trim();
+  const account = defaultAccount(type);
+  const cur = M.account(state, account)?.currency || state.settings.currency;
+  const rate = suggestedRate(cur);
+  if (!rate) { toast(`No ${cur} rate yet. Update rates first.`); return; }
+  const now = Date.now();
+  const tx = { id: M.uid(), createdAt: now, updatedAt: now, type, amount, currency: cur, rate, base: Math.round(amount * rate), date, account, note,
+    category: M.suggestCategory(state, note, type) || (type === 'income' ? 'other-in' : 'other') };
+  state.tx.push(tx);
+  ui.sheetExtra.delete(date);
+  ui.flashId = tx.id;
+  persist();
+  Sync.changed();
+  const alert = type === 'expense' ? M.budgetAlert(state, tx) : null;
+  toast(alert ? alert.text : `${type === 'income' ? 'Earned' : 'Spent'} ${formatMoney(amount, cur)} · ${catOf(tx.category).name}`);
+  renderSheetKeepFocus();
+}
+
+// Excel-style: Enter goes to the same column one row down.
+function onSheetEnter(el) {
+  const [, side, , field] = el.dataset.sh.split('|');
+  const cells = [...document.querySelectorAll('#sheet-grid input[data-sh]')].filter((x) => {
+    const p = x.dataset.sh.split('|');
+    return p[1] === side && p[3] === field;
+  });
+  const key = cells[cells.indexOf(el) + 1]?.dataset.sh;
+  el.blur();
+  setTimeout(() => {
+    const n = key && document.querySelector(`#sheet-grid [data-sh="${CSS.escape(key)}"]`);
+    n?.focus();
+    n?.select?.();
+  }, 20);
+}
+
+// The side panel's smart sharing and calculator update as you type.
+function onPanelInput(el) {
+  if (el.id === 'mp-share') {
+    ui.share = el.value;
+    const v = evalAmount(el.value);
+    const parts = v ? M.splitIncome(state, v) : [];
+    document.querySelectorAll('.mp-jars [data-jar]').forEach((b, i) => { b.textContent = v ? formatMoney(parts[i].amount, '') : '–'; });
+    return true;
+  }
+  if (el.id === 'mp-calc') {
+    ui.calc = el.value;
+    const v = evalAmount(el.value);
+    document.getElementById('mp-calc-out').textContent = el.value ? (v == null ? '…' : `= ${formatMoney(v, '')}`) : '';
+    return true;
+  }
+  return false;
+}
+
 function draftRow() {
   const inMonth = monthKey(todayISO()) === ui.month ? todayISO() : `${ui.month}-01`;
   if (!ui.draft || !ui.draft.date.startsWith(ui.month)) {
@@ -556,9 +669,18 @@ function viewLog() {
   const list = logRecords();
 
   let content;
-  if (view === 'calendar') {
+  if (view === 'sheet' && !q) {
+    const accs = M.accountValues(state).filter((v) => !v.account.archived);
+    const shareVal = evalAmount(ui.share);
+    content = `<div class="sheet-layout">${sheetHTML(state, ui.month, { today: todayISO(), extra: ui.sheetExtra, fmt: (c) => money(c) })}
+      ${moneyPanelHTML(state, ui.month, {
+    summary: s, values: accs, total: M.totalBalance(state).total, jars: state.settings.jars, fmt: (c) => formatMoney(c, ''), money: (c) => money(c),
+    share: { text: ui.share, value: shareVal, parts: shareVal ? M.splitIncome(state, shareVal).map((p) => p.amount) : [] },
+    calc: { text: ui.calc, value: evalAmount(ui.calc) },
+  })}</div>`;
+  } else if (view === 'calendar') {
     content = `<section class="card">${calendarHTML(state, ui.month)}</section>`;
-  } else if (view === 'table') {
+  } else if (view === 'table' || view === 'sheet') {
     const shown = new Set(list.map((t) => t.id));
     for (const id of ui.selected) if (!shown.has(id)) ui.selected.delete(id);
     content = `<div id="bulk-slot">${bulkBar()}</div>`
@@ -584,9 +706,9 @@ function viewLog() {
   return `<header class="top"><div><h1>Log</h1><div class="sub">${q ? 'Searching all months' : monthLabel(ui.month)}</div></div>${todayChip()}</header>
   ${q ? '' : monthNav()}
   <div class="log-body${dir ? ` slide-${dir > 0 ? 'l' : 'r'}` : ''}">
-  ${q ? '' : `<section class="card">${stats(s)}${rateBar(s)}</section>`}
+  ${q || view === 'sheet' ? '' : `<section class="card">${stats(s)}${rateBar(s)}</section>`}
   <div class="log-tools">
-    <div class="seg seg-views" role="group" aria-label="View">${viewBtn('table', 'Table')}${viewBtn('calendar', 'Calendar')}${viewBtn('list', 'List')}</div>
+    <div class="seg seg-views" role="group" aria-label="View">${viewBtn('sheet', 'Sheet')}${viewBtn('table', 'Table')}${viewBtn('calendar', 'Calendar')}${viewBtn('list', 'List')}</div>
     ${view === 'calendar' ? '' : `<input type="search" id="search" placeholder="Search all months: coffee, maib, >1000, march…" value="${esc(ui.search)}" aria-label="Search all records">`}
     <div class="log-actions">
       ${undoButtons()}
@@ -594,9 +716,10 @@ function viewLog() {
       <button type="button" class="btn" data-act="export-month" title="Download this month as a file Excel opens">Export month</button>
     </div>
   </div>
-  ${view === 'calendar' ? '' : `<div class="chips">${chip('all', 'All')}${chip('expense', 'Spent')}${chip('income', 'Earned')}${chip('transfer', 'Moves')}</div>`}
+  ${view === 'calendar' || (view === 'sheet' && !q) ? '' : `<div class="chips">${chip('all', 'All')}${chip('expense', 'Spent')}${chip('income', 'Earned')}${chip('transfer', 'Moves')}</div>`}
   ${q && view !== 'calendar' ? searchCard(list) : view === 'calendar' ? '' : `<p class="search-hint muted small">Search all months: <span>${esc(SEARCH_HINT)}</span></p>`}
   ${content}
+  ${view === 'sheet' && !q ? '<p class="muted small">Type in any cell, like your Google Sheet: an amount in <b>Amount earned</b> or <b>Amount spent</b> saves a record for that day; the category is picked from the description. Clear an amount to delete it. <b>+</b> on a date adds another row for that day. <b>Enter</b> moves down. Moves between accounts and the account of each record are in the <b>Table</b> view.</p>' : ''}
   ${view === 'table' ? '<p class="muted small">Edit any cell; it saves by itself. <b>Enter</b> moves down a row. <b>←</b> / <b>→</b> switch months. Tick rows (Shift+click for a range) to change many at once. <b>Ctrl+Z</b> undoes anything. Paste rows copied from Excel or Google Sheets anywhere on this page to import them.</p>' : ''}
   </div>`;
 }
@@ -1664,6 +1787,12 @@ document.addEventListener('click', (e) => {
     render();
   } else if (act === 'row-del') deleteTx(el.dataset.id);
   else if (act === 'sel') onSelect(el, e.shiftKey);
+  else if (act === 'sh-add') {
+    ui.sheetExtra.add(el.dataset.date);
+    render();
+    const rows = [...document.querySelectorAll(`#sheet-grid tr[data-date="${el.dataset.date}"]`)];
+    rows.at(-1)?.querySelectorAll('input')[2]?.focus();
+  }
   else if (act === 'sel-all') onSelectAll(el);
   else if (act === 'bulk-clear') { ui.selected.clear(); refreshSelection(); }
   else if (act === 'bulk-del') bulkDelete();
@@ -1698,6 +1827,8 @@ document.addEventListener('change', (e) => {
   if (e.target.closest('.sheet')) return;
   if (SCREENS[ui.tab]?.onChange?.(e.target)) return;
   if (e.target.dataset.bulk) onBulkChange(e.target);
+  else if (e.target.dataset.sh) onSheetChange(e.target);
+  else if (e.target.closest('.money-panel')) return;
   else if (e.target.classList.contains('sel')) return;
   else if (e.target.closest('#tx-table')) onCellChange(e.target);
   else if (e.target.id === 'file-csv') {
@@ -1718,6 +1849,7 @@ document.addEventListener('change', (e) => {
 
 document.addEventListener('input', (e) => {
   if (!e.target.closest('.sheet') && SCREENS[ui.tab]?.onInput?.(e.target)) return;
+  if (ui.tab === 'log' && onPanelInput(e.target)) return;
   if (e.target.id === 'search') {
     ui.search = e.target.value;
     const pos = e.target.selectionStart;
@@ -1732,6 +1864,11 @@ document.addEventListener('input', (e) => {
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && sheetRoot.firstChild) { closeSheet(); return; }
   if (e.key === 'Escape' && ui.selected.size && !e.target.closest('input:not(.sel), select, textarea')) { ui.selected.clear(); refreshSelection(); return; }
+  if (e.key === 'Enter' && e.target.closest('#sheet-grid') && e.target.matches('input')) {
+    e.preventDefault();
+    onSheetEnter(e.target);
+    return;
+  }
   if (e.key === 'Enter' && e.target.closest('#tx-table') && e.target.matches('input')) {
     e.preventDefault();
     onTableEnter(e.target);
