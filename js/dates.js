@@ -73,6 +73,11 @@ export function weekday(iso) {
   return utc(iso).getUTCDay();
 }
 
+// Monday = 0 … Sunday = 6 (the order the app's calendars use).
+export const dowIndex = (iso) => (weekday(iso) + 6) % 7;
+export const DOW_LONG = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+export const DOW_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
 // "Sun, 1 Mar"
 export function dayLabel(iso) {
   const d = utc(iso);

@@ -4,7 +4,7 @@
 import { load, save, backupText, restoreJSON, requestPersistence, isSealed, openImported, wipeStore, hasSession, reopen, STORAGE_KEYS } from './store.js';
 import * as M from './model.js';
 import { formatMoney, evalAmount, centsToPlain } from './money.js';
-import { todayISO, monthKey, monthLabel, addMonths, dayLabel } from './dates.js';
+import { todayISO, monthKey, monthLabel, addMonths, dayLabel, dowIndex, DOW_LONG, MONTHS } from './dates.js';
 import { convert, pairRate } from './fx.js';
 import { parseCSV, toCSV } from './csv.js';
 import { importRows, importWorkbook, exportRows, toTSV, monthSheet, overviewSheet, detectColumns } from './importer.js';
@@ -31,7 +31,7 @@ import { guessMapping } from './bank.js';
 import { forecast } from './forecast.js';
 import { bindTilt } from './cards.js';
 import { FREQS, markDone } from './recurring.js';
-import { tableHTML, calendarHTML } from './logviews.js';
+import { tableHTML, calendarHTML, dayLabelHTML } from './logviews.js';
 import { dailyChart } from './charts.js';
 
 let state = load();
@@ -109,14 +109,58 @@ function applyTheme() {
 
 // ---------- Shared pieces ----------
 
-function monthSwitch() {
-  const isNow = ui.month >= monthKey(todayISO());
-  return `<div class="month-switch">
-    <button class="icon-btn" data-act="month" data-step="-1" aria-label="Previous month">‹</button>
-    <b>${monthLabel(ui.month)}</b>
-    <button class="icon-btn" data-act="month" data-step="1" aria-label="Next month" ${isNow ? 'disabled' : ''}>›</button>
-  </div>`;
+// Log: the year and its 12 months, each with a bar for what you spent;
+// one click jumps to any month.
+function monthNav() {
+  const now = monthKey(todayISO());
+  const year = Number(ui.month.slice(0, 4));
+  const firstYear = Math.min(year, Number((state.tx.reduce((m, t) => (t.date < m ? t.date : m), todayISO())).slice(0, 4)));
+  const spent = {};
+  const count = {};
+  for (const t of state.tx) {
+    if (!t.date.startsWith(String(year))) continue;
+    const k = t.date.slice(0, 7);
+    count[k] = (count[k] || 0) + 1;
+    if (t.type === 'expense' && !t.loan) spent[k] = (spent[k] || 0) + M.B(t);
+  }
+  const max = Math.max(1, ...Object.values(spent));
+  const pills = MONTHS.map((name, i) => {
+    const k = `${year}-${String(i + 1).padStart(2, '0')}`;
+    const future = k > now;
+    const h = spent[k] ? 0.12 + 0.88 * (spent[k] / max) : 0;
+    return `<button type="button" class="mpill${k === ui.month ? ' on' : ''}${k === now ? ' now' : ''}" data-act="goto-month" data-month="${k}" ${future ? 'disabled' : ''} style="--h:${h.toFixed(3)};--i:${i}" title="${monthLabel(k)}${spent[k] ? `: spent ${money(spent[k])}` : ''}${count[k] ? ` · ${count[k]} records` : ''}">
+      <span class="mp-bar"><i></i></span><span class="mp-name">${name.slice(0, 3)}</span><span class="mp-amt">${spent[k] ? formatMoney(spent[k], '', { compact: true }) : count[k] ? '·' : ''}</span></button>`;
+  }).join('');
+  return `<section class="mnav" aria-label="Choose a month">
+    <div class="mnav-year">
+      <button class="icon-btn" data-act="year" data-step="-1" aria-label="Previous year" ${year <= firstYear - 1 ? 'disabled' : ''}>‹</button>
+      <b>${year}</b>
+      <button class="icon-btn" data-act="year" data-step="1" aria-label="Next year" ${year >= Number(now.slice(0, 4)) ? 'disabled' : ''}>›</button>
+    </div>
+    <div class="mnav-months">${pills}</div>
+    <div class="mnav-side">
+      <button class="icon-btn" data-act="month" data-step="-1" aria-label="Previous month" title="Previous month (←)">‹</button>
+      <button class="icon-btn" data-act="month" data-step="1" aria-label="Next month" title="Next month (→)" ${ui.month >= now ? 'disabled' : ''}>›</button>
+      <button class="btn today-btn" data-act="goto-month" data-month="${now}" ${ui.month === now ? 'disabled' : ''}>Today</button>
+    </div>
+  </section>`;
 }
+
+// "Today · Saturday, 10 October" in today's weekday color.
+function todayChip() {
+  const t = todayISO();
+  return `<span class="today-chip dow-${dowIndex(t)}"><i aria-hidden="true"></i>Today · ${DOW_LONG[dowIndex(t)]}, ${Number(t.slice(8, 10))} ${MONTHS[Number(t.slice(5, 7)) - 1]}</span>`;
+}
+
+function goToMonth(k) {
+  const now = monthKey(todayISO());
+  const next = k > now ? now : k;
+  if (next === ui.month) return;
+  ui.monthDir = next > ui.month ? 1 : -1;
+  ui.month = next;
+  render();
+}
+
 
 function txRow(t, { showDate = false } = {}) {
   let av;
@@ -338,14 +382,18 @@ function viewLog() {
     }
     content = [...groups.entries()].map(([date, items]) => {
       const net = items.reduce((a, t) => a + (t.type === 'income' ? t.amount : t.type === 'expense' ? -t.amount : 0), 0);
-      return `<div class="day"><div class="day-head"><span>${dayLabel(date)}${q ? ` ${date.slice(0, 4)}` : ''}</span><span class="money ${net > 0 ? 'income' : ''}">${net ? money(net, { sign: true }) : ''}</span></div>
+      return `<div class="day dow-${dowIndex(date)}${date === todayISO() ? ' is-today' : ''}"><div class="day-head"><span class="dh">${dayLabelHTML(date, todayISO())}${q ? ` ${date.slice(0, 4)}` : ''}</span><span class="money ${net > 0 ? 'income' : ''}">${net ? money(net, { sign: true }) : ''}</span></div>
         <div class="list">${items.map((t) => txRow(t)).join('')}</div></div>`;
     }).join('') || `<div class="empty"><b>${q ? 'Nothing found' : 'No records this month'}</b>${q ? 'Try another word.' : 'Tap + to add one.'}</div>`;
   }
 
   const chip = (id, label) => `<button class="chip" data-act="filter" data-filter="${id}" aria-pressed="${ui.filter === id}">${label}</button>`;
   const viewBtn = (id, label) => `<button type="button" data-act="log-view" data-view="${id}" aria-pressed="${view === id}">${label}</button>`;
-  return `<header class="top"><h1>Log</h1>${monthSwitch()}</header>
+  const dir = ui.monthDir;
+  ui.monthDir = 0;
+  return `<header class="top"><div><h1>Log</h1><div class="sub">${monthLabel(ui.month)}</div></div>${todayChip()}</header>
+  ${q ? '' : monthNav()}
+  <div class="log-body${dir ? ` slide-${dir > 0 ? 'l' : 'r'}` : ''}">
   ${q ? '' : `<section class="card">${stats(s)}${rateBar(s)}</section>`}
   <div class="log-tools">
     <div class="seg seg-views" role="group" aria-label="View">${viewBtn('table', 'Table')}${viewBtn('calendar', 'Calendar')}${viewBtn('list', 'List')}</div>
@@ -358,7 +406,8 @@ function viewLog() {
   ${view === 'calendar' ? '' : `<div class="chips">${chip('all', 'All')}${chip('expense', 'Spent')}${chip('income', 'Earned')}${chip('transfer', 'Moves')}</div>`}
   ${q && view !== 'calendar' ? `<p class="muted small">${list.length} result${list.length === 1 ? '' : 's'} in all months</p>` : ''}
   ${content}
-  ${view === 'table' ? '<p class="muted small">Edit any cell; it saves by itself. <b>Enter</b> moves down a row. Paste rows copied from Excel or Google Sheets anywhere on this page to import them.</p>' : ''}`;
+  ${view === 'table' ? '<p class="muted small">Edit any cell; it saves by itself. <b>Enter</b> moves down a row. <b>←</b> / <b>→</b> switch months. Paste rows copied from Excel or Google Sheets anywhere on this page to import them.</p>' : ''}
+  </div>`;
 }
 
 function viewSettings() {
@@ -506,6 +555,8 @@ function runCounters(entering) {
 
 function render({ enter = false } = {}) {
   applyTheme();
+  // Today's weekday color, used to mark today everywhere.
+  document.documentElement.style.setProperty('--today-c', `var(--dow${dowIndex(todayISO())})`);
   app.className = `app view-${ui.tab}`;
   app.innerHTML = (SCREENS[ui.tab] || SCREENS.home).view();
   if (enter) {
@@ -513,6 +564,10 @@ function render({ enter = false } = {}) {
     playEnter();
   }
   runCounters(enter);
+  // Phone: keep the chosen month visible in the scrolling month strip.
+  const strip = app.querySelector('.mnav-months');
+  const on = strip?.querySelector('.mpill.on');
+  if (on && strip.scrollWidth > strip.clientWidth) strip.scrollLeft = on.offsetLeft - strip.clientWidth / 2 + on.offsetWidth / 2;
   if (ui.flashId) {
     app.querySelector(`[data-id="${CSS.escape(ui.flashId)}"]`)?.classList.add('flash');
     ui.flashId = null;
@@ -1114,7 +1169,7 @@ function onTableEnter(el) {
   }
   el.blur();
   setTimeout(() => {
-    const rows = [...document.querySelectorAll('#tx-table tbody tr')];
+    const rows = [...document.querySelectorAll('#tx-table tbody tr[data-id], #tx-table tbody tr[data-draft]')];
     const i = rows.findIndex((r) => r.dataset.id === row.dataset.id);
     rows[i + 1]?.querySelector(`[data-col="${el.dataset.col}"]`)?.focus();
   }, 10);
@@ -1340,6 +1395,8 @@ function onSettingsChange(el) {
 // ---------- Events ----------
 
 document.addEventListener('click', (e) => {
+  // Table dates: the weekday text is on top; a click opens the date picker.
+  if (e.target.matches?.('.dpick')) { try { e.target.showPicker?.(); } catch { /* not supported */ } }
   if (e.target.matches('[data-close]') || e.target.closest('button[data-close]')) {
     if (e.target.classList.contains('sheet-backdrop') || e.target.closest('button[data-close]')) closeSheet();
     return;
@@ -1367,7 +1424,9 @@ document.addEventListener('click', (e) => {
   else if (act === 'add') openTxSheet();
   else if (act === 'edit') openTxSheet(state.tx.find((t) => t.id === el.dataset.id));
   else if (act === 'transfer') openTransferSheet(el.dataset.from);
-  else if (act === 'month') { ui.month = addMonths(ui.month, Number(el.dataset.step)); render({ enter: true }); }
+  else if (act === 'month') goToMonth(addMonths(ui.month, Number(el.dataset.step)));
+  else if (act === 'goto-month') goToMonth(el.dataset.month);
+  else if (act === 'year') goToMonth(`${Number(ui.month.slice(0, 4)) + Number(el.dataset.step)}${ui.month.slice(4)}`);
   else if (act === 'year') { ui.year += Number(el.dataset.step); render({ enter: true }); }
   else if (act === 'open-month') { ui.month = el.dataset.key; ui.search = ''; location.hash = '#log'; }
   else if (act === 'filter') { ui.filter = el.dataset.filter; render(); }
@@ -1445,6 +1504,7 @@ document.addEventListener('keydown', (e) => {
   if (e.ctrlKey || e.metaKey || e.altKey || sheetRoot.firstChild) return;
   if (e.target.closest('input, select, textarea')) return;
   if ((e.key === 'l' || e.key === 'L') && Security.hasLock()) { Security.lock(); return; }
+  if (ui.tab === 'log' && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) { e.preventDefault(); goToMonth(addMonths(ui.month, e.key === 'ArrowLeft' ? -1 : 1)); return; }
   const tabs = { 1: 'home', 2: 'log', 3: 'accounts', 4: 'plan', 5: 'clients', 6: 'people', 7: 'reports', 8: 'rates', 9: 'settings' };
   if (e.key === 'n' || e.key === 'N') { e.preventDefault(); openTxSheet(); }
   else if (e.key === '/') {

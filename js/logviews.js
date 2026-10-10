@@ -2,7 +2,7 @@
 // Pure HTML builders; app.js wires up the clicks and edits.
 
 import { formatMoney } from './money.js';
-import { daysInMonth, weekday, todayISO } from './dates.js';
+import { daysInMonth, weekday, todayISO, dowIndex, DOW_LONG, DOW_SHORT, MONTHS, addDays } from './dates.js';
 import { TYPE_LABEL } from './importer.js';
 import { B } from './model.js';
 
@@ -54,7 +54,9 @@ function cells(state, t) {
   const acc = isT
     ? `<label class="cell-pre"><span>to</span><select data-col="to" aria-label="To account">${options(accounts, t.to)}</select></label>`
     : `<select data-col="account" aria-label="Account">${options(accounts, t.account)}</select>`;
-  return `<td><input type="date" data-col="date" value="${esc(t.date)}" aria-label="Date"></td>
+  const di = t.date ? dowIndex(t.date) : 0;
+  const shown = t.date ? `<span class="dow-tag dow-${di}">${DOW_SHORT[di]}</span><span class="dtext">${Number(t.date.slice(8, 10))} ${MONTHS[Number(t.date.slice(5, 7)) - 1].slice(0, 3)}</span>` : '';
+  return `<td><span class="dcell">${shown}<input type="date" class="dpick" data-col="date" value="${esc(t.date)}" aria-label="Date"></span></td>
     <td>${typeSel}</td><td>${cat}</td>
     <td><input type="text" data-col="note" value="${esc(t.note)}" placeholder="What for?" aria-label="Note"></td>
     <td>${isT ? '' : `<input type="text" data-col="person" list="people-list" value="${esc(state.people.find((p) => p.id === t.person)?.name || t.personName || '')}" placeholder="—" aria-label="Who" autocomplete="off">`}</td>
@@ -62,13 +64,36 @@ function cells(state, t) {
     <td><span class="amt-cell"><input type="text" inputmode="decimal" class="amt" data-col="amount" value="${t.amount ? plain(t.amount) : ''}" placeholder="0" aria-label="Amount" autocomplete="off">${t.currency && t.currency !== state.settings.currency ? `<span class="cur-tag">${esc(t.currency)}</span>` : ''}</span></td>`;
 }
 
+// "Saturday 10 October · Today" with the day's totals.
+export function dayLabelHTML(date, today) {
+  const di = dowIndex(date);
+  const rel = date === today ? 'Today' : date === addDays(today, -1) ? 'Yesterday' : date === addDays(today, 1) ? 'Tomorrow' : '';
+  return `<span class="dow-pill dow-${di}">${DOW_LONG[di]}</span><b>${Number(date.slice(8, 10))} ${MONTHS[Number(date.slice(5, 7)) - 1]}</b>${rel ? `<span class="rel-tag${rel === 'Today' ? ' today-tag' : ''}">${rel}</span>` : ''}`;
+}
+
+function dayRow(date, d, today, fmt) {
+  const parts = [d.in ? `<span class="income">+${fmt(d.in)}</span>` : '', d.out ? `<span>−${fmt(d.out)}</span>` : '', `<span class="muted">${d.n} record${d.n === 1 ? '' : 's'}</span>`].filter(Boolean).join(' · ');
+  return `<tr class="day-row dow-${dowIndex(date)}${date === today ? ' is-today' : ''}" aria-hidden="true"><td colspan="8"><span class="dr">${dayLabelHTML(date, today)}<span class="dr-sum">${parts}</span></span></td></tr>`;
+}
+
 export function tableHTML(state, list, { sort, draft, fmt }) {
   const rows = sortRows(state, list, sort);
+  const today = todayISO();
+  // Sorted by date: a header row for each day with its weekday and totals.
+  const byDate = sort.col === 'date';
+  const perDay = {};
+  for (const t of rows) {
+    const d = (perDay[t.date] ||= { in: 0, out: 0, n: 0 });
+    d.n++;
+    if (t.loan || t.type === 'transfer') continue;
+    if (t.type === 'income') d.in += B(t); else d.out += B(t);
+  }
   let prevDate = null;
   const body = rows.map((t) => {
     const newDay = t.date !== prevDate;
     prevDate = t.date;
-    return `<tr data-id="${esc(t.id)}" class="t-${t.type}${newDay ? ' newday' : ''}">${cells(state, t)}
+    const head = byDate && newDay ? dayRow(t.date, perDay[t.date], today, fmt) : '';
+    return `${head}<tr data-id="${esc(t.id)}" class="t-${t.type}${newDay ? ' newday' : ''}${t.date === today ? ' is-today' : ''}">${cells(state, t)}
       <td><button type="button" class="row-del" data-act="row-del" data-id="${esc(t.id)}" aria-label="Delete this record" title="Delete">×</button></td></tr>`;
   }).join('');
   const income = list.filter((t) => t.type === 'income' && !t.loan).reduce((a, t) => a + B(t), 0);
@@ -115,8 +140,8 @@ export function calendarHTML(state, key) {
     const v = per[iso];
     weekOut += v?.out || 0;
     const heat = v?.out ? (0.15 + 0.85 * (v.out / maxOut)).toFixed(2) : 0;
-    cellsHtml.push(`<button type="button" class="cal-day${iso === today ? ' today' : ''}${iso > today ? ' future' : ''}" data-act="day" data-date="${iso}" style="--heat:${heat}" aria-label="${iso}">
-      <span class="d">${d}</span>
+    cellsHtml.push(`<button type="button" class="cal-day dow-${dowIndex(iso)}${iso === today ? ' today' : ''}${iso > today ? ' future' : ''}" data-act="day" data-date="${iso}" style="--heat:${heat}" aria-label="${iso}">
+      <span class="d">${d}${iso === today ? '<span class="today-dot">Today</span>' : ''}</span>
       ${v?.in ? `<span class="in">+${compact(v.in)}</span>` : ''}
       ${v?.out ? `<span class="out">−${compact(v.out)}</span>` : ''}
     </button>`);
@@ -126,7 +151,8 @@ export function calendarHTML(state, key) {
     while (col < 7) { cellsHtml.push('<div class="cal-blank"></div>'); col++; }
     pushWeek();
   }
-  const dows = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d) => `<div class="cal-dow">${d}</div>`).join('');
+  const todayDow = today.startsWith(key) ? dowIndex(today) : -1;
+  const dows = DOW_SHORT.map((d, i) => `<div class="cal-dow dow-${i}${i === todayDow ? ' on' : ''}">${d}</div>`).join('');
   return `<div class="cal">${dows}<div class="cal-dow cal-week-h">Week</div>${cellsHtml.join('')}</div>
     <p class="muted small">Darker days are days you spent more. Click a day to see or add its records.</p>`;
 }
