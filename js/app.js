@@ -10,7 +10,8 @@ import { parseCSV, toCSV } from './csv.js';
 import { importRows, importWorkbook, importCheck, exportRows, toTSV, monthSheet, overviewSheet, detectColumns } from './importer.js';
 import { readWorkbook } from './xlsx-read.js';
 import { workbook } from './xlsx.js';
-import { refreshRates } from './rates.js';
+import { refreshRates, backfillRates, recordRates } from './rates.js';
+import { rateAdvice, heldIn } from './fxsmart.js';
 import { ctx } from './ctx.js';
 import * as RatesScreen from './screens/rates.js';
 import * as AccountsScreen from './screens/accounts.js';
@@ -350,7 +351,10 @@ function viewHome() {
   const fc = forecast(state, today, { days: 45 });
   const fcTip = fc.low.value < 0 && (state.recurring.length || state.tx.length > 20)
     ? [{ level: 'bad', title: `Money may run short around ${dayLabel(fc.low.date)}`, text: `With your bills and usual spending, cards and cash would be at ${money(Math.round(fc.low.value / 100) * 100)}. See the forecast on Plan.` }] : [];
-  const tips = [...fcTip, ...M.insights(state, key, today).filter((t) => t.level !== 'info')].slice(0, 2);
+  const usd = rateAdvice(state, 'USD', today);
+  const usdHeld = usd?.verdict === 'high' ? heldIn(state, 'USD', M.accountBalances(state)) : 0;
+  const fxTip = usdHeld > 0 ? [{ level: 'good', title: 'Good day to convert USD', text: `1 USD = ${usd.rate.toFixed(2)} ${state.settings.currency}, ${usd.pct === 1 ? 'the highest in 90 days' : `higher than on ${Math.round(usd.pct * 100)}% of the last 90 days`}. You hold ${formatMoney(usdHeld, 'USD')}. See Rates.` }] : [];
+  const tips = [...fcTip, ...fxTip, ...M.insights(state, key, today).filter((t) => t.level !== 'info')].slice(0, 2);
   const hour = new Date().getHours();
   const hello = hour < 5 ? 'Good night' : hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
 
@@ -1805,6 +1809,12 @@ async function updateRates({ force = false, announce = false } = {}) {
   ui.ratesBusy = true;
   if (ui.tab === 'rates') render();
   const res = await refreshRates(state, { fetchText: window.desktop?.fetchText, bnm: !!window.desktop });
+  // The first time: the last 90 days from the National Bank, for the
+  // "good day to convert?" advice.
+  if (window.desktop?.fetchText && !ui.backfilled) {
+    ui.backfilled = true;
+    await backfillRates(state, { fetchText: window.desktop.fetchText }).catch(() => 0);
+  }
   ui.ratesBusy = false;
   persist();
   if (['home', 'accounts', 'rates'].includes(ui.tab) && !sheetRoot.firstElementChild) render();
@@ -1913,7 +1923,7 @@ if (!DEMO && 'serviceWorker' in navigator && (location.protocol === 'https:' || 
 // the old sheet format plus this month across several accounts and
 // currencies) so every screen has something to show. Bumping DEMO_VERSION
 // re-seeds previews opened before.
-const DEMO_VERSION = 9;
+const DEMO_VERSION = 10;
 
 async function seedDemo() {
   if (!DEMO || state.meta.demoSeeded === DEMO_VERSION) return;
@@ -1930,6 +1940,12 @@ async function seedDemo() {
     acc('binance', 'Binance', 'Binance', 'crypto', 'USD', 7, { holdings: [{ asset: 'BTC', qty: 0.012 }, { asset: 'ETH', qty: 0.4 }, { asset: 'USDT', qty: 150 }] }),
   ];
   state.rates = { usd: { USD: 1, MDL: 17.6, EUR: 0.86, RON: 4.3, GBP: 0.75, UAH: 41.5, CHF: 0.8, PLN: 3.7, TRY: 41, CAD: 1.38 }, crypto: { BTC: 62000, ETH: 2400, BNB: 580, SOL: 150, XRP: 0.55, ADA: 0.4, DOGE: 0.12, TON: 5.2 }, sources: { fiat: { name: 'example rates' }, crypto: { name: 'example prices' } }, fetchedAt: now };
+  // 90 days of example USD rates for the "convert now?" card.
+  for (let i = 91; i >= 1; i -= 1) {
+    const d = new Date(Date.now() - i * 86400000);
+    const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    recordRates(state.rates, iso, { ...state.rates.usd, MDL: Math.round((17.36 + 0.16 * Math.sin(i / 9) + 0.06 * Math.sin(i / 2.7)) * 1e4) / 1e4 });
+  }
   try {
     const res = importRows(parseCSV(await (await fetch('sample.csv')).text()), state);
     state.tx.push(...res.tx);

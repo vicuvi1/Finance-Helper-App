@@ -715,7 +715,7 @@ kbd {
   .app { margin-left: var(--side); max-width: none; padding: 28px 28px 40px; }
   .view-reports, .view-settings { column-width: 380px; column-gap: 14px; max-width: 1840px; }
   .view-rates { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 14px; align-items: start; }
-  .view-rates > .top, .view-rates > .conv, .view-rates > :not(.card) { grid-column: 1 / -1; }
+  .view-rates > .top, .view-rates > :not(.card) { grid-column: 1 / -1; }
   .view-reports > *, .view-settings > *, .view-rates > * { break-inside: avoid; }
   .view-reports > .top, .view-reports > .rep-bar, .view-reports > .rep-kpis, .view-settings > .top, .view-settings > .banner, .view-rates > .top, .view-rates > .conv { column-span: all; }
   .app { max-width: 1840px; }
@@ -1290,3 +1290,17 @@ table.grid tr.selected td { background: var(--gold-soft); }
 .split-line b { min-width: 92px; text-align: right; }
 .split-sum { margin: 10px 0 0; }
 @media (max-width: 520px) { .split-line { grid-template-columns: minmax(0, 1fr) auto; } .split-line select { grid-column: 1 / -1; grid-row: 2; } }
+
+/* Convert now? (Rates) */
+.fx-text { margin: 0 0 10px; font-size: 14px; line-height: 1.45; }
+.fx-chart { width: 100%; height: 120px; display: block; overflow: visible; }
+.fx-line { fill: none; stroke: var(--gold); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.fx-avg { stroke: var(--faint); stroke-width: 1; stroke-dasharray: 4 4; vector-effect: non-scaling-stroke; }
+.fx-hit { fill: transparent; }
+.fx-hit:hover { fill: color-mix(in srgb, var(--gold) 35%, transparent); }
+.fx-now { fill: var(--gold); stroke: var(--surface); stroke-width: 2; vector-effect: non-scaling-stroke; }
+.fx-axis { display: flex; justify-content: space-between; font-size: 11px; color: var(--faint); margin: 4px 0 8px; }
+.fx-card h2 .pill { font-size: 11px; letter-spacing: 0; text-transform: none; }
+.rates-col { display: grid; gap: 14px; align-content: start; min-width: 0; }
+.rates-col > .card { margin: 0; }
+@media (min-width: 1100px) { .view-rates > .rates-col { grid-column: auto; } .view-rates { row-gap: 14px; } }
