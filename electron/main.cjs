@@ -43,7 +43,12 @@ function createWindow() {
     webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false, preload: path.join(__dirname, 'preload.cjs') },
   });
   // Started with Windows in the background: stay in the tray until opened.
-  if (!process.argv.includes('--hidden')) win.once('ready-to-show', () => win.show());
+  // Otherwise show it when the page is drawn, and in any case after a few
+  // seconds, so a slow or failed load never leaves an invisible window.
+  if (!process.argv.includes('--hidden')) {
+    win.once('ready-to-show', () => win.show());
+    setTimeout(() => { if (!win.isDestroyed() && !win.isVisible()) win.show(); }, 4000);
+  }
   win.on('close', (e) => {
     try {
       fs.writeFileSync(boundsFile(), JSON.stringify(win.getNormalBounds()));
@@ -55,6 +60,13 @@ function createWindow() {
       e.preventDefault();
       win.hide();
       makeTray();
+      // The first time: say where the app went.
+      if (!prefs().trayTold) {
+        savePrefs({ trayTold: true });
+        try {
+          tray?.displayBalloon?.({ iconType: 'info', title: 'Finance Helper is still running', content: 'It keeps your reminders and Telegram bot working. Click the icon here (by the clock) to open it, or right-click → Quit. You can turn this off in Settings.' });
+        } catch { /* balloons are Windows-only */ }
+      }
     }
   });
 
@@ -186,7 +198,9 @@ ipcMain.handle('update-check', async () => {
   return { type: latest && latest !== app.getVersion() ? 'available' : 'none', version: latest, date: r?.updateInfo?.releaseDate };
 });
 ipcMain.handle('update-download', async () => { await getUpdater()?.downloadUpdate(); return true; });
-ipcMain.handle('update-install', () => { getUpdater()?.quitAndInstall(false, true); return true; });
+// Silent install (no Setup wizard to click through or lose behind other
+// windows), then the app starts again by itself.
+ipcMain.handle('update-install', () => { quitting = true; getUpdater()?.quitAndInstall(true, true); return true; });
 
 app.whenReady().then(() => {
   protocol.handle('app', (req) => {
@@ -267,10 +281,14 @@ function makeTray() {
   ]));
   tray.on('click', () => showWindow());
 }
+function savePrefs(next) {
+  const p = { ...prefs(), ...next };
+  try { fs.writeFileSync(prefsFile(), JSON.stringify(p)); } catch { /* not critical */ }
+  return p;
+}
 ipcMain.handle('bg-get', () => prefs());
 ipcMain.handle('bg-set', (_e, next) => {
-  const p = { ...prefs(), ...next };
-  fs.writeFileSync(prefsFile(), JSON.stringify(p));
+  const p = savePrefs(next);
   if (typeof next.atLogin === 'boolean' && app.isPackaged) app.setLoginItemSettings({ openAtLogin: p.atLogin, args: ['--hidden'] });
   if (p.background) makeTray();
   return p;
