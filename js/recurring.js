@@ -6,6 +6,7 @@
 import { addMonths, addDays, daysInMonth, monthKey } from './dates.js';
 
 export const FREQS = [
+  { id: 'once', label: 'Just once (scheduled)', short: 'once' },
   { id: 'week', label: 'Every week', short: 'weekly' },
   { id: '2weeks', label: 'Every 2 weeks', short: 'every 2 weeks' },
   { id: 'month', label: 'Every month', short: 'monthly' },
@@ -18,6 +19,7 @@ const pad = (n) => String(n).padStart(2, '0');
 // The n-th date of a rule (0 = its start). Monthly rules keep the start's
 // day, moved to the month's last day when shorter (31st -> 30 Apr, 28 Feb).
 export function nth(rule, n) {
+  if (rule.every === 'once') return rule.start;
   if (rule.every === 'week') return addDays(rule.start, 7 * n);
   if (rule.every === '2weeks') return addDays(rule.start, 14 * n);
   const key = addMonths(monthKey(rule.start), (MONTHS[rule.every] || 1) * n);
@@ -28,6 +30,7 @@ export function nth(rule, n) {
 export function occurrences(rule, from, to, max = 1000) {
   const out = [];
   for (let n = 0; n < 5000 && out.length < max; n++) {
+    if (rule.every === 'once' && n > 0) break;
     const d = nth(rule, n);
     if (d > to || (rule.end && d > rule.end)) break;
     if (d >= from) out.push(d);
@@ -92,6 +95,7 @@ export function markDone(rule, date, now = Date.now()) {
 
 // Monthly cost of a rule (weekly x 52/12 etc.), for totals.
 export function perMonth(rule) {
+  if (rule.every === 'once') return 0; // a one-off isn't a regular cost
   const f = { week: 52 / 12, '2weeks': 26 / 12, month: 1, '3months': 1 / 3, year: 1 / 12 }[rule.every] || 1;
   return Math.round(rule.amount * f);
 }

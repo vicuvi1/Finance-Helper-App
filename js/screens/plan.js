@@ -38,10 +38,10 @@ function itemRow(it, today, { due = false } = {}) {
 function ruleRow(r, today) {
   const dueNow = R.dueItems({ recurring: [r] }, today)[0]?.date;
   const next = R.nextDate(r, r.lastDone && r.lastDone >= today ? r.lastDone : addDays(today, -1));
-  const nextLabel = r.paused ? 'paused' : dueNow ? `due ${dayLabel(dueNow)}` : next ? `next ${dayLabel(next)}` : 'ended';
+  const nextLabel = r.every === 'once' ? `${dueNow ? 'due' : 'on'} ${dayLabel(r.start)} · ${when(r.start, today)}` : r.paused ? 'paused' : dueNow ? `due ${dayLabel(dueNow)}` : next ? `next ${dayLabel(next)}` : 'ended';
   return `<button class="tx" data-act="rec-edit" data-id="${esc(r.id)}">
     <span class="av" style="--c:${ctx.catColor(r.category)}" aria-hidden="true">${initial(catOf(r.category).name)}</span>
-    <span class="t"><b>${esc(titleOf(r))}${r.auto ? ' <span class="pill pill-gold">auto</span>' : ''}</b><span>${esc(freq(r).label)} · ${esc(nextLabel)}</span></span>
+    <span class="t"><b>${esc(titleOf(r))}${r.auto ? ' <span class="pill pill-gold">auto</span>' : ''}</b><span>${r.every === 'once' ? 'Once' : esc(freq(r).label)} · ${esc(nextLabel)}</span></span>
     <span class="amount ${r.type === 'income' ? 'income' : ''} ${r.paused ? 'muted' : ''}">${ruleMoney(r)}</span>
   </button>`;
 }
@@ -51,7 +51,10 @@ export function view() {
   const today = todayISO();
   const due = R.dueItems(state, today);
   const up = R.upcomingItems(state, today, 30);
-  const rules = [...(state.recurring || [])].sort((a, b) => Number(a.paused) - Number(b.paused) || a.type.localeCompare(b.type) || b.amount - a.amount);
+  const all = [...(state.recurring || [])];
+  // One-time scheduled payments get their own list; done ones disappear.
+  const scheduled = all.filter((r) => r.every === 'once' && !r.lastDone).sort((a, b) => a.start.localeCompare(b.start));
+  const rules = all.filter((r) => r.every !== 'once').sort((a, b) => Number(a.paused) - Number(b.paused) || a.type.localeCompare(b.type) || b.amount - a.amount);
   const act = rules.filter((r) => !r.paused);
   const monthlyOut = act.filter((r) => r.type === 'expense').reduce((a, r) => a + (inBase(r, R.perMonth(r)) || 0), 0);
   const monthlyIn = act.filter((r) => r.type === 'income').reduce((a, r) => a + (inBase(r, R.perMonth(r)) || 0), 0);
@@ -60,7 +63,7 @@ export function view() {
   const sugg = R.suggestions(state, today).slice(0, 5);
 
   return `<header class="top"><div><h1>Plan</h1><div class="sub">Budgets, bills, subscriptions and regular income</div></div>
-    <button class="btn primary" data-act="rec-new">+ Add recurring</button></header>
+    <div class="top-actions"><button class="btn" data-act="rec-once">+ Schedule payment</button><button class="btn primary" data-act="rec-new">+ Add recurring</button></div></header>
   <section class="hero">
     <div class="hero-main">
       <div class="label">To pay in the next 30 days</div>
@@ -85,6 +88,7 @@ export function view() {
     </div>
     <div class="dash-side">
       ${budgetCard()}
+      ${scheduled.length ? `<section class="card"><h2>Scheduled <span class="right muted">${scheduled.length}</span></h2><div class="list">${scheduled.map((r) => ruleRow(r, today)).join('')}</div></section>` : ''}
       <section class="card"><h2>Your recurring <span class="right muted">${rules.length}</span></h2>
         ${rules.length ? `<div class="list">${rules.map((r) => ruleRow(r, today)).join('')}</div>` : '<p class="muted" style="margin-top:0">Add rent, phone, internet, subscriptions, salary or a client who pays every month. You can also tick "Repeat" when you log a record.</p><button class="btn primary block" data-act="rec-new">Add the first one</button>'}
       </section>
@@ -277,7 +281,7 @@ export function editRule(existing = null, preset = {}) {
     if (!cats.some((c) => c.id === r.category)) r.category = cats.find((c) => c.id === (r.type === 'income' ? 'work' : 'home'))?.id || cats[0]?.id;
     const cur = M.account(state, r.account)?.currency || base();
     return `<div class="grab"></div><form id="rec-form" novalidate>
-      <h3>${existing ? 'Edit recurring' : 'New recurring'} <button type="button" class="icon-btn" data-close aria-label="Close">✕</button></h3>
+      <h3>${r.every === 'once' ? (existing ? 'Edit scheduled payment' : 'Schedule a payment') : existing ? 'Edit recurring' : 'New recurring'} <button type="button" class="icon-btn" data-close aria-label="Close">✕</button></h3>
       <div class="seg two" role="group" aria-label="Type"><button type="button" data-type="expense" aria-pressed="${r.type === 'expense'}">I pay</button><button type="button" data-type="income" aria-pressed="${r.type === 'income'}">I get paid</button></div>
       <div class="amount-input"><input id="rec-amount" type="text" inputmode="decimal" autocomplete="off" placeholder="0" value="${esc(amountText)}" aria-label="Amount"><span class="cur">${esc(cur)}</span></div>
       <label class="field"><span>Name</span><input id="rec-note" type="text" value="${esc(r.note)}" placeholder="${r.type === 'income' ? 'e.g. salary, US client retainer' : 'e.g. rent, internet, Netflix'}"></label>
@@ -287,9 +291,9 @@ export function editRule(existing = null, preset = {}) {
       </div>
       <div class="row2">
         <label class="field"><span>How often</span><select id="rec-every">${R.FREQS.map((f) => `<option value="${f.id}" ${f.id === r.every ? 'selected' : ''}>${f.label}</option>`).join('')}</select></label>
-        <label class="field"><span>${existing ? 'Counting from' : 'Next (or first) date'}</span><input id="rec-start" type="date" value="${esc(r.start)}"></label>
+        <label class="field"><span>${r.every === 'once' ? 'On' : existing ? 'Counting from' : 'Next (or first) date'}</span><input id="rec-start" type="date" value="${esc(r.start)}"></label>
       </div>
-      <label class="field"><span>Ends (optional)</span><input id="rec-end" type="date" value="${esc(r.end || '')}"></label>
+      ${r.every === 'once' ? '' : `<label class="field"><span>Ends (optional)</span><input id="rec-end" type="date" value="${esc(r.end || '')}"></label>`}
       <label class="field check"><input type="checkbox" id="rec-auto" ${r.auto ? 'checked' : ''}><span>Log it by itself on the day (for fixed amounts)</span></label>
       ${existing ? `<label class="field check"><input type="checkbox" id="rec-paused" ${r.paused ? 'checked' : ''}><span>Paused</span></label>` : ''}
       <p class="lock-msg" id="rec-msg" role="alert"></p>
@@ -305,7 +309,7 @@ export function editRule(existing = null, preset = {}) {
     r.account = v('#rec-acc').value;
     r.every = v('#rec-every').value;
     r.start = v('#rec-start').value || r.start;
-    r.end = v('#rec-end').value || null;
+    r.end = v('#rec-end')?.value || null;
     r.auto = v('#rec-auto').checked;
     if (v('#rec-paused')) r.paused = v('#rec-paused').checked;
   };
@@ -314,7 +318,7 @@ export function editRule(existing = null, preset = {}) {
     const paint = () => { sheet.innerHTML = html(); };
     paint();
     if (!existing) sheet.querySelector('#rec-amount').focus();
-    sheet.addEventListener('change', (e) => { if (e.target.id === 'rec-acc') { read(sheet); paint(); } });
+    sheet.addEventListener('change', (e) => { if (e.target.id === 'rec-acc' || e.target.id === 'rec-every') { read(sheet); paint(); } });
     sheet.addEventListener('click', (e) => {
       const seg = e.target.closest('.seg button');
       if (seg && seg.dataset.type !== r.type) { read(sheet); r.type = seg.dataset.type; paint(); return; }
@@ -347,7 +351,7 @@ export function editRule(existing = null, preset = {}) {
       }
       ctx.commit();
       ctx.closeSheet();
-      ctx.toast(existing ? 'Saved' : `${titleOf(rule)} added: ${freq(rule).short}`);
+      ctx.toast(existing ? 'Saved' : rule.every === 'once' ? `${titleOf(rule)} scheduled for ${dayLabel(rule.start)}${rule.auto ? '; it logs itself that day' : ''}` : `${titleOf(rule)} added: ${freq(rule).short}`);
       runAuto();
     });
   });
@@ -359,6 +363,7 @@ export function onClick(act, el) {
   if (act === 'budget-set') { budgetSheet(); return true; }
   if (act === 'fc-days') { ctx.ui.fcDays = Number(el.dataset.n); ctx.render(); return true; }
   if (act === 'rec-new') { editRule(); return true; }
+  if (act === 'rec-once') { editRule(null, { every: 'once', auto: true }); return true; }
   if (act === 'rec-edit') { const r = findRule(el.dataset.id); if (r) editRule(r); return true; }
   if (act === 'rec-log') { const r = findRule(el.dataset.id); if (r) logNow(r, el.dataset.date); return true; }
   if (act === 'rec-log-edit') { const r = findRule(el.dataset.id); if (r) logWithSheet(r, el.dataset.date); return true; }

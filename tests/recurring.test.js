@@ -67,3 +67,17 @@ test('rules survive normalize and sync', () => {
   const again = mergeStates(b, toCloud(state, 'pc'));
   assert.deepEqual(again.state.recurring.map((r) => r.id), ['r9']);
 });
+
+test('a one-time scheduled payment happens once', () => {
+  const s = defaultState();
+  const once = rule({ id: 'o1', every: 'once', start: '2026-10-20', note: 'car service', amount: 250000 });
+  s.recurring = [once];
+  assert.deepEqual(occurrences(once, '2026-01-01', '2027-12-31'), ['2026-10-20']);
+  assert.equal(upcomingItems(s, '2026-10-10', 30).length, 1);
+  assert.equal(dueItems(s, '2026-10-10').length, 0);
+  assert.equal(dueItems(s, '2026-10-21').length, 1);
+  markDone(once, '2026-10-20');
+  assert.equal(dueItems(s, '2026-11-30').length, 0);
+  assert.equal(nextDate(once, '2026-10-20'), null);
+  assert.equal(perMonth(once), 0);
+});
