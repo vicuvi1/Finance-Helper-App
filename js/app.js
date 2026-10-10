@@ -31,7 +31,8 @@ import { openBankImport, rowsFromFile, decodeText } from './screens/bankimport.j
 import { guessMapping } from './bank.js';
 import { forecast } from './forecast.js';
 import { bindTilt } from './cards.js';
-import { FREQS, markDone } from './recurring.js';
+import { FREQS, markDone, dueItems } from './recurring.js';
+import { invoiceStatus } from './invoices.js';
 import { tableHTML, calendarHTML, dayLabelHTML } from './logviews.js';
 import { dailyChart } from './charts.js';
 
@@ -145,6 +146,62 @@ function monthNav() {
       <button class="btn today-btn" data-act="goto-month" data-month="${now}" ${ui.month === now ? 'disabled' : ''}>Today</button>
     </div>
   </section>`;
+}
+
+// ---------- Sidebar (desktop) ----------
+// A live balance card with a net-worth sparkline, badges on the sections
+// that need you, and the main goal plus today at the bottom.
+
+function sparkline(values, w = 172, h = 36) {
+  if (values.length < 2) return '';
+  const max = Math.max(...values);
+  const min = Math.min(...values);
+  const span = max - min || 1;
+  const pts = values.map((v, i) => [(i / (values.length - 1)) * w, h - 3 - ((v - min) / span) * (h - 8)]);
+  const line = pts.map(([x, y], i) => `${i ? 'L' : 'M'}${x.toFixed(1)} ${y.toFixed(1)}`).join(' ');
+  return `<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true">
+    <defs><linearGradient id="spark-g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--gold);stop-opacity:.35"/><stop offset="1" style="stop-color:var(--gold);stop-opacity:0"/></linearGradient></defs>
+    <path d="${line} L${w} ${h} L0 ${h} Z" fill="url(#spark-g)"/><path d="${line}" class="spark-line" pathLength="1"/>
+    <circle cx="${pts.at(-1)[0].toFixed(1)}" cy="${pts.at(-1)[1].toFixed(1)}" r="3" class="spark-dot"/></svg>`;
+}
+
+function renderSidebar() {
+  const top = document.getElementById('side-top');
+  const bottom = document.getElementById('side-bottom');
+  if (!top || state._sealed) return;
+  const today = todayISO();
+  const { total } = M.totalBalance(state);
+  const series = M.netWorthSeries(state, today, 6).map((p) => p.value);
+  const s = M.monthSummary(state, monthKey(today));
+  top.innerHTML = `<button type="button" class="sc-body" data-go="accounts" title="Open Accounts">
+    <span class="sc-label">All my money</span>
+    <span class="sc-total">${formatMoney(Math.round(total / 100) * 100, '')}<small>${esc(state.settings.currency)}</small></span>
+    ${sparkline(series)}
+    <span class="sc-row"><span>This month</span><b class="${s.net >= 0 ? 'income' : 'expense'}">${money(Math.round(s.net / 100) * 100, { sign: true, compact: true })}</b></span>
+  </button>`;
+  const badge = (tab, text, kind = '') => {
+    const el = document.querySelector(`.tabbar [data-badge="${tab}"]`);
+    if (!el) return;
+    el.textContent = text || '';
+    el.className = `nb${text ? ` on ${kind}` : ''}`;
+  };
+  const due = dueItems(state, today).length;
+  const overdue = (state.invoices || []).filter((i) => invoiceStatus(i, today) === 'overdue').length;
+  const open = (state.invoices || []).filter((i) => invoiceStatus(i, today) === 'sent').length;
+  const todayCount = state.tx.filter((t) => t.date === today).length;
+  const g = M.mainGoal(state);
+  const gs = M.goalStatus(state, today, g);
+  badge('plan', due ? String(due) : '', 'alert');
+  badge('clients', overdue ? String(overdue) : open ? String(open) : '', overdue ? 'alert' : '');
+  badge('log', todayCount ? `${todayCount} today` : '', 'soft');
+  badge('goals', gs.target ? `${Math.round(gs.ratio * 100)}%` : '', 'gold');
+  const r = 15;
+  const c = 2 * Math.PI * r;
+  bottom.innerHTML = `${gs.target ? `<button type="button" class="sf-goal" data-go="goals" title="${esc(g.name)}">
+      <svg viewBox="0 0 38 38" width="38" height="38" aria-hidden="true"><circle cx="19" cy="19" r="${r}" class="sf-track"/><circle cx="19" cy="19" r="${r}" class="sf-prog" style="stroke-dasharray:${c.toFixed(1)};stroke-dashoffset:${(c * (1 - gs.ratio)).toFixed(1)}" transform="rotate(-90 19 19)"/></svg>
+      <span><b>${esc(g.emoji || '🎯')} ${esc(g.name)}</b><small>${Math.round(gs.ratio * 100)}% · ${money(Math.round(gs.remaining / 100) * 100, { compact: true })} to go</small></span>
+    </button>` : ''}
+    <span class="sf-today dow-${dowIndex(today)}"><i aria-hidden="true"></i>${DOW_LONG[dowIndex(today)]}, ${Number(today.slice(8, 10))} ${MONTHS[Number(today.slice(5, 7)) - 1]}</span>`;
 }
 
 // "Today · Saturday, 10 October" in today's weekday color.
@@ -559,6 +616,7 @@ function render({ enter = false } = {}) {
     else a.removeAttribute('aria-current');
   }
   if (ui.tab === 'settings') updateJarSum();
+  renderSidebar();
   clearTimeout(render.ms);
   render.ms = setTimeout(() => Goals.checkMilestones(), 700);
 }
