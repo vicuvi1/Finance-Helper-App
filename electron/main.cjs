@@ -21,6 +21,9 @@ protocol.registerSchemesAsPrivileged([
 
 // Tests run the unpackaged app with their own throwaway data folder.
 if (!app.isPackaged && process.env.FH_USER_DATA) app.setPath('userData', process.env.FH_USER_DATA);
+// Day-first dates (10/10/2026 reads as 10 October) in date pickers, as in Moldova.
+if (!process.env.FH_LANG) app.commandLine.appendSwitch('lang', 'en-GB');
+else app.commandLine.appendSwitch('lang', process.env.FH_LANG);
 
 if (!app.requestSingleInstanceLock()) app.quit();
 

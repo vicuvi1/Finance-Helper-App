@@ -5,7 +5,7 @@ import { parseCSV, toCSV } from '../js/csv.js';
 import { importRows, exportRows, toTSV } from '../js/importer.js';
 import {
   defaultState, normalizeState, monthSummary, accountBalances, splitIncome, jarStatus,
-  goalStatus, yearOverview, insights, suggestCategory, categoryComparison, trend,
+  goalStatus, yearOverview, insights, suggestCategory, categoryComparison, trend, NO_JAR,
 } from '../js/model.js';
 import { load, save, restoreJSON, backupJSON } from '../js/store.js';
 
@@ -127,6 +127,7 @@ test('jars: spending jars use income × pct, savings jar measures what you kept'
 test('goal: pace from recent months and an ETA', () => {
   const state = defaultState();
   state.goals[0].target = 10000000; // 100 000
+  state.goals[0].account = 'all';
   for (const m of ['07', '08', '09']) {
     state.tx.push(tx('income', 15000, `2026-${m}-05`), tx('expense', 5000, `2026-${m}-10`));
   }
@@ -138,6 +139,7 @@ test('goal: pace from recent months and an ETA', () => {
 
   // A gap of months with no records doesn't count as zero saving.
   const gap = defaultState();
+  gap.goals[0].account = 'all';
   gap.tx.push(tx('income', 24465, '2026-03-05'), tx('expense', 6605, '2026-03-10'));
   const gg = goalStatus(gap, '2026-10-09');
   assert.equal(gg.pace, 1786000);
@@ -263,4 +265,28 @@ test('our own .xlsx export reads back', async () => {
   const sheets = await readWorkbook(workbook([{ name: 'March 2026', ...monthSheet(state, '2026-03') }]));
   assert.equal(sheets[0].rows[1][0], '2026-03-01');
   assert.equal(sheets[0].rows[1][1], 'Earned');
+});
+
+test('jars: business categories stay outside the jar budgets', () => {
+  const state = defaultState();
+  state.settings.categories.push({ id: 'fees', type: 'expense', name: 'Work fees', jar: 'growth' });
+  state.tx.push(tx('income', 2000, '2026-10-04'), tx('expense', 6246, '2026-10-10', { category: 'fees' }));
+  const growth = () => jarStatus(state, '2026-10').find((j) => j.jar.id === 'growth');
+  assert.equal(growth().used, 624600);
+  assert.match(insights(state, '2026-10', '2026-10-10').map((t) => t.text).join(' '), /Work fees is a work cost/);
+  // Food over its jar gets no such hint.
+  state.tx.push(tx('expense', 900, '2026-10-09'));
+  assert.doesNotMatch(insights(state, '2026-10', '2026-10-10').map((t) => t.text).join(' '), /Food is a work cost/);
+  state.settings.categories.find((c) => c.id === 'fees').jar = NO_JAR;
+  assert.equal(growth().used, 0);
+  // Still spending: the month is honest about it.
+  assert.equal(monthSummary(state, '2026-10').expense, 624600 + 90000);
+});
+
+test('starter Safe goal counts the savings accounts, an edited one keeps its choice', () => {
+  const old = defaultState();
+  old.goals[0].account = 'all';
+  assert.equal(normalizeState(JSON.parse(JSON.stringify(old))).goals[0].account, 'savings');
+  old.goals[0].updatedAt = 5;
+  assert.equal(normalizeState(JSON.parse(JSON.stringify(old))).goals[0].account, 'all');
 });

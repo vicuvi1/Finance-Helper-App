@@ -62,7 +62,7 @@ export function defaultState() {
         { id: 'clothes', type: 'expense', name: 'Clothes', emoji: '👕', jar: 'care' },
         { id: 'other', type: 'expense', name: 'Other', emoji: '📦', jar: 'living' },
       ],
-      goal: { name: 'Safe goal', target: 10000000, account: 'all' },
+      goal: { name: 'Safe goal', target: 10000000, account: 'savings' },
       savingsAccount: 'safe', // where the "move to safe" button sends your deposit
       theme: 'system',
       smallPurchase: 10000, // under 100 MDL counts as a "small" purchase
@@ -74,7 +74,7 @@ export function defaultState() {
     // Invoices to clients (js/invoices.js).
     invoices: [],
     // Money goals (see goalStatus). The old single settings.goal becomes the first one.
-    goals: [{ id: 'g-main', name: 'Safe goal', emoji: '🏦', target: 10000000, account: 'all', saved: 0, history: [], deadline: null, doneAt: null, theme: 'gold', updatedAt: 0 }],
+    goals: [{ id: 'g-main', name: 'Safe goal', emoji: '🏦', target: 10000000, account: 'savings', saved: 0, history: [], deadline: null, doneAt: null, theme: 'gold', updatedAt: 0 }],
     // One net-worth snapshot per day (id nw-YYYY-MM-DD), so crypto and
     // exchange rates of the day are kept; older history is rebuilt from records.
     netWorth: [],
@@ -127,6 +127,8 @@ export function normalizeState(raw) {
   const netWorth = (Array.isArray(raw.netWorth) ? raw.netWorth : []).filter((x) => x && /^\d{4}-\d{2}-\d{2}$/.test(x.date || '') && Number.isFinite(x.total));
   const goals = Array.isArray(raw.goals)
     ? raw.goals.filter((g) => g && typeof g.id === 'string' && g.name).map((g) => ({ emoji: '🎯', account: 'all', saved: 0, history: [], deadline: null, doneAt: null, ...g, updatedAt: g.updatedAt || 0 }))
+      // The untouched starter "Safe goal" used to count all money: it is about the safe.
+      .map((g) => (g.id === 'g-main' && !g.updatedAt && g.account === 'all' && g.name === 'Safe goal' ? { ...g, account: 'savings' } : g))
     : [{ id: 'g-main', name: settings.goal.name || 'Safe goal', emoji: '🏦', target: settings.goal.target || 0, account: settings.goal.account || 'all', saved: 0, history: [], deadline: null, doneAt: null, theme: 'gold', updatedAt: 0 }];
   return { version: SCHEMA_VERSION, settings, tx, people, recurring, invoices, netWorth, goals, deleted, rates: raw.rates || null, meta: { ...base.meta, ...(raw.meta || {}) } };
 }
@@ -304,7 +306,8 @@ export function jarStatus(state, key) {
   const sum = monthSummary(state, key);
   const spentByJar = {};
   for (const t of sum.expenses) {
-    const j = category(state, t.category)?.jar || jarFallback(state);
+    const j = jarOf(state, t.category);
+    if (j === NO_JAR) continue;
     spentByJar[j] = (spentByJar[j] || 0) + B(t);
   }
   return state.settings.jars.map((j) => {
@@ -318,6 +321,12 @@ export function jarStatus(state, key) {
     return { jar: j, budget, used, left: budget - used, ratio: budget ? used / budget : used ? Infinity : 0 };
   });
 }
+
+// A spending category can sit outside the jars (business costs like work
+// fees or taxes): it still counts as spending, but no jar budget pays for it.
+export const NO_JAR = 'none';
+const WORKISH = /work|business|job|fee|tax|client|office|lucru|munc|afacer|tax[aă]|impozit|комис|налог|работ/i;
+export const jarOf = (state, catId) => category(state, catId)?.jar || jarFallback(state);
 
 function jarFallback(state) {
   const nonSavings = state.settings.jars.find((j) => !j.savings);
@@ -587,9 +596,12 @@ export function insights(state, key, today) {
   for (const j of jarStatus(state, key)) {
     if (j.savings || !j.used) continue;
     if (j.used > j.budget) {
-      const inside = s.byCategory.filter((c) => (category(state, c.id)?.jar || jarFallback(state)) === j.jar.id)
-        .slice(0, 3).map((c) => `${cat(c.id).name} ${fmt(c.amount)}`).join(', ');
-      out.push({ level: 'bad', icon: j.jar.emoji, title: `${j.jar.name}: over by ${fmt(j.used - j.budget)}`, text: `Plan was ${j.jar.pct}% of income (${fmt(j.budget)}), you spent ${fmt(j.used)}: ${inside}. The difference comes out of your deposit.` });
+      const rows = s.byCategory.filter((c) => jarOf(state, c.id) === j.jar.id);
+      const inside = rows.slice(0, 3).map((c) => `${cat(c.id).name} ${fmt(c.amount)}`).join(', ');
+      // Most of it is a category that sounds like work: maybe it is a work cost, not a personal one.
+      const big = rows[0] && rows[0].amount >= j.used / 2 && WORKISH.test(cat(rows[0].id).name) ? cat(rows[0].id).name : '';
+      const hint = big ? ` If ${big} is a work cost, set it to "Business, outside the jars" in Settings → Categories.` : '';
+      out.push({ level: 'bad', icon: j.jar.emoji, title: `${j.jar.name}: over by ${fmt(j.used - j.budget)}`, text: `Plan was ${j.jar.pct}% of income (${fmt(j.budget)}), you spent ${fmt(j.used)}: ${inside}. The difference comes out of your deposit.${hint}` });
     }
   }
 

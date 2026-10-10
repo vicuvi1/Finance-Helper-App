@@ -713,6 +713,8 @@ kbd {
   .nav-more { display: none; }
 
   .app { margin-left: var(--side); max-width: none; padding: 28px 28px 40px; }
+  /* Room under the last card so Bit (bottom right) never sits on top of it. */
+  body:has(.buddy:not([hidden])) .app { padding-bottom: 140px; }
   .view-reports { column-width: 380px; column-gap: 14px; max-width: 1840px; }
   .view-rates { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 14px; align-items: start; }
   .view-rates > .top, .view-rates > :not(.card) { grid-column: 1 / -1; }

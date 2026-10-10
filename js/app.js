@@ -297,7 +297,9 @@ function rateBar(summary) {
   const r = Math.max(0, Math.min(1, summary.savingsRate));
   const good = summary.savingsRate * 100 >= target;
   return `<div class="rate">
-    <div class="row"><span>Kept <b class="${good ? 'income' : 'expense'}">${pct(summary.savingsRate)}</b> of income</span><span class="muted">target ${target}%</span></div>
+    <div class="row">${summary.net < 0
+    ? `<span>Spent <b class="expense">${money(-summary.net)}</b> more than you earned</span>`
+    : `<span>Kept <b class="${good ? 'income' : 'expense'}">${pct(summary.savingsRate)}</b> of income</span>`}<span class="muted">target ${target}%</span></div>
     <div class="bar ${good ? '' : 'over'}"><i style="width:${(r * 100).toFixed(1)}%"></i><span class="mark" style="left:${target}%"></span></div>
   </div>`;
 }
@@ -362,8 +364,9 @@ function viewHome() {
   const hour = new Date().getHours();
   const hello = hour < 5 ? 'Good night' : hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
 
-  const needsBackup = state.tx.length >= 20
-    && (!state.meta.lastBackup || Date.now() - state.meta.lastBackup > 14 * 864e5);
+  // Automatic backups and sync count too: no nagging when they already run.
+  const lastSafe = Math.max(state.meta.lastBackup || 0, state.meta.lastAutoBackup || 0, state.meta.lastSync || 0);
+  const needsBackup = state.tx.length >= 20 && Date.now() - lastSafe > 14 * 864e5;
 
   const welcome = state.tx.length ? '' : `<section class="card">
     <h2>Start here</h2>
@@ -702,7 +705,8 @@ function viewSettings() {
   const st = state.settings;
   const accOptions = (sel, withAll) => (withAll ? `<option value="all" ${sel === 'all' ? 'selected' : ''}>All my money</option>` : '')
     + st.accounts.map((a) => `<option value="${esc(a.id)}" ${sel === a.id ? 'selected' : ''}>${esc(a.name)}</option>`).join('');
-  const jarOptions = (sel) => st.jars.filter((j) => !j.savings).map((j) => `<option value="${esc(j.id)}" ${sel === j.id ? 'selected' : ''}>${esc(j.name)}</option>`).join('');
+  const jarOptions = (sel) => st.jars.filter((j) => !j.savings).map((j) => `<option value="${esc(j.id)}" ${sel === j.id ? 'selected' : ''}>${esc(j.name)}</option>`).join('')
+    + `<option value="${M.NO_JAR}" ${sel === M.NO_JAR ? 'selected' : ''}>Business, outside the jars</option>`;
   const used = new Set(state.tx.map((t) => t.category));
   const catRow = (c) => `<div class="cat-row">
     ${dot(catColor(c.id))}
@@ -732,7 +736,7 @@ function viewSettings() {
     <label class="field" style="margin:12px 0 0"><span>The "move to savings" button sends money to</span><select data-set="savingsAccount">${accOptions(st.savingsAccount, false)}</select></label>
   </section>`,
     categories: `<section class="card"><h2>Categories</h2>
-    <p class="muted small" style="margin-top:0">Spending: pick which jar it comes from.</p>
+    <p class="muted small" style="margin-top:0">Spending: pick which jar it comes from. Work costs (fees, taxes) can stay outside the jars.</p>
     ${st.categories.filter((c) => c.type === 'expense').map(catRow).join('')}
     <p class="muted small">Income sources</p>
     ${st.categories.filter((c) => c.type === 'income').map(catRow).join('')}
@@ -962,7 +966,7 @@ function openTxSheet(existing = null, preset = {}) {
     const people = state.people.map((p) => `<option value="${esc(p.name)}">`).join('');
     return `<form id="tx-form" novalidate>
       <h3>${existing ? 'Edit record' : 'New record'} <button type="button" class="icon-btn" data-close aria-label="Close">✕</button></h3>
-      ${picks.length ? `<div class="picks" role="group" aria-label="Quick picks">${picks.map((p, i) => `<button type="button" class="pick" data-pick="${i}" title="${p.fav ? 'Favorite' : `Logged ${p.count} times lately`}">${p.fav ? '<span class="gold">★</span> ' : ''}${esc(p.note || catOf(p.category).name)} <b class="${p.type === 'income' ? 'income' : ''}">${formatMoney(p.type === 'income' ? p.amount : p.amount, p.currency, { compact: true })}</b></button>`).join('')}</div>` : ''}
+      ${picks.some((p) => p.type === draft.type) ? `<div class="picks" role="group" aria-label="Quick picks">${picks.map((p, i) => p.type !== draft.type ? '' : `<button type="button" class="pick" data-pick="${i}" title="${p.fav ? 'Favorite' : `Logged ${p.count} times lately`}">${p.fav ? '<span class="gold">★</span> ' : ''}${esc(p.note || catOf(p.category).name)} <b class="${p.type === 'income' ? 'income' : ''}">${formatMoney(p.type === 'income' ? p.amount : p.amount, p.currency, { compact: true })}</b></button>`).join('')}</div>` : ''}
       <div class="seg" role="group" aria-label="Type">${segBtn('expense', 'Spent')}${segBtn('income', 'Earned')}${segBtn('transfer', 'Move')}</div>
       <div class="amount-input"><input id="tx-amount" type="text" inputmode="decimal" autocomplete="off" placeholder="0" value="${esc(amountText)}" aria-label="Amount in ${cur}"><span class="cur">${esc(cur)}</span></div>
       <div class="calc-hint" id="calc-hint">${isT ? 'Move money between your accounts' : 'Tip: type 120+45 and it adds up'}</div>
