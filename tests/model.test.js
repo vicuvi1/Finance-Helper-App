@@ -290,3 +290,21 @@ test('starter Safe goal counts the savings accounts, an edited one keeps its cho
   old.goals[0].updatedAt = 5;
   assert.equal(normalizeState(JSON.parse(JSON.stringify(old))).goals[0].account, 'all');
 });
+
+test('set an account balance: quietly via the start, or as a record today', async () => {
+  const { setBalance, accountBalances } = await import('../js/model.js');
+  const state = defaultState();
+  state.tx.push(tx('income', 1000, '2026-10-01'), tx('expense', 200, '2026-10-02'));
+  assert.equal(accountBalances(state).wallet, 80000);
+  const q = setBalance(state, 'wallet', 100000, { mode: 'start', now: 5 });
+  assert.equal(q.diff, 20000);
+  assert.equal(q.tx, null);
+  assert.equal(accountBalances(state).wallet, 100000);
+  assert.equal(state.settings.accounts.find((a) => a.id === 'wallet').start, 20000);
+  assert.equal(monthSummary(state, '2026-10').expense, 20000); // reports unchanged
+  const r = setBalance(state, 'wallet', 90000, { mode: 'record', date: '2026-10-10', id: 'adj', now: 6 });
+  assert.equal(r.tx.type, 'expense');
+  assert.equal(r.tx.amount, 10000);
+  assert.equal(accountBalances(state).wallet, 90000);
+  assert.equal(setBalance(state, 'wallet', 90000).diff, 0); // already right: nothing
+});

@@ -1594,3 +1594,12 @@ body { background-image: radial-gradient(1200px 520px at 70% -180px, var(--ambie
   .seg.has-thumb::before { transition: none; }
   ::view-transition-old(root), ::view-transition-new(root) { animation: none; }
 }
+
+/* Account sheet: the amount on the card is tappable to set the balance. */
+.acc-card-edit .bcard { cursor: pointer; }
+.acc-card-edit .bc-bal b::after { content: "✎"; margin-left: 10px; font-size: 0.55em; vertical-align: middle; opacity: 0.45; transition: opacity 0.2s; }
+.acc-card-edit .bcard:hover .bc-bal b::after, .acc-card-edit .bcard:focus-visible .bc-bal b::after { opacity: 0.95; }
+.bal-modes { display: grid; gap: 4px; margin: 4px 0 14px; }
+.bal-modes .field.check { align-items: flex-start; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; margin: 0; cursor: pointer; }
+.bal-modes .field.check:has(input:checked) { border-color: var(--gold); background: var(--gold-soft); }
+.bal-modes input { margin-top: 3px; }

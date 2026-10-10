@@ -8,7 +8,6 @@ import { formatMoney, evalAmount, centsToPlain } from '../money.js';
 import { monthKey, addMonths, daysInMonth, monthLabel, todayISO } from '../dates.js';
 import { lineChart } from '../charts.js';
 import { cardHTML, CARD_THEMES, themeOf, readLogo } from '../cards.js';
-import { cashCheck } from '../review.js';
 
 export const BANKS = ['Cash', 'maib', 'Victoriabank', 'Moldindconbank', 'OTP Bank', 'MICB', 'FinComBank', 'Eximbank', 'Energbank', 'ProCredit Bank', 'Paynet', 'Revolut', 'Wise', 'Paysera', 'PayPal', 'Binance'];
 
@@ -114,7 +113,7 @@ function openAccount(id) {
   const outM = mine.reduce((x, t) => x + (t.type === 'expense' && t.account === id ? t.amount : t.type === 'transfer' && t.from === id ? t.amount : 0), 0);
   const count = state.tx.filter((t) => t.account === id || t.from === id || t.to === id).length;
   ctx.openSheet(`<h3>${esc(a.name)} <button type="button" class="icon-btn" data-close aria-label="Close">✕</button></h3>
-    ${card(v, { act: null, big: true })}
+    <div class="acc-card-edit" title="Tap the amount to change it">${card(v, { act: 'acc-setbal', big: true })}</div>
     <div class="acc-stats">
       <div><span>In this month</span><b class="income">${formatMoney(inM, a.currency)}</b></div>
       <div><span>Out this month</span><b>${formatMoney(outM, a.currency)}</b></div>
@@ -125,46 +124,64 @@ function openAccount(id) {
     <div class="btns" style="margin-bottom:14px">
       <button class="btn primary" id="acc-add-rec">Add record</button>
       <button class="btn" id="acc-move">Move money</button>
-      ${a.kind === 'cash' ? '<button class="btn" id="acc-count">Count cash</button>' : ''}
+      <button class="btn" id="acc-count">${a.kind === 'cash' ? 'Count cash' : 'Set balance'}</button>
       <button class="btn" id="acc-edit">Edit</button>
     </div>
     ${recent.length ? `<div class="list">${recent.map((t) => ctx.txRow(t, { showDate: true })).join('')}</div>` : '<p class="muted">No records in this account yet.</p>'}`, (sheet) => {
     sheet.querySelector('#acc-add-rec').addEventListener('click', () => { ctx.closeSheet(); ctx.openTxSheet(null, { account: id, from: id }); });
     sheet.querySelector('#acc-move').addEventListener('click', () => { ctx.closeSheet(); ctx.openTransferSheet(id); });
-    sheet.querySelector('#acc-count')?.addEventListener('click', () => countCash(id));
+    sheet.querySelector('#acc-count')?.addEventListener('click', () => setBalanceSheet(id));
     sheet.querySelector('#acc-edit').addEventListener('click', () => editAccount(id));
     sheet.addEventListener('click', (e) => {
+      if (e.target.closest('[data-act="acc-setbal"]')) { e.stopPropagation(); setBalanceSheet(id); return; }
       const row = e.target.closest('[data-act="edit"]');
       if (row) { ctx.closeSheet(); ctx.openTxSheet(ctx.state.tx.find((t) => t.id === row.dataset.id)); }
     });
   });
 }
 
-// Count the real cash; the difference becomes one "untracked cash" record.
-function countCash(id) {
+// Type what the account really has. Cash: the difference is usually money
+// spent and not logged, so it becomes a record. Other accounts: by default
+// the starting balance is corrected quietly (reports stay as they are).
+function setBalanceSheet(id) {
   const { state } = ctx;
   const a = M.account(state, id);
   const expected = M.accountBalances(state)[id] || 0;
-  ctx.openSheet(`<h3>Count ${esc(a.name)} <button type="button" class="icon-btn" data-close aria-label="Close">✕</button></h3>
+  const cash = a.kind === 'cash';
+  let mode = cash ? 'record' : 'start';
+  ctx.openSheet(`<h3>${cash ? 'Count' : 'Balance of'} ${esc(a.name)} <button type="button" class="icon-btn" data-close aria-label="Close">✕</button></h3>
     <form id="cash-form" novalidate>
-      <p class="muted" style="margin-top:0">The app thinks there's <b>${formatMoney(expected, a.currency)}</b>. Count what's really there:</p>
-      <div class="amount-input"><input id="cash-amt" type="text" inputmode="decimal" placeholder="0" aria-label="Cash counted"><span class="cur">${esc(a.currency)}</span></div>
-      <p class="muted small">Any difference is logged as "untracked cash" (or "found cash"), so your numbers stay true.</p>
-      <div class="btns"><button type="button" class="btn" data-close>Cancel</button><button type="submit" class="btn primary">Done</button></div>
+      <p class="muted" style="margin-top:0">The app has <b>${formatMoney(expected, a.currency)}</b>. ${cash ? 'Count what\'s really there:' : 'What is really in it now?'}</p>
+      <div class="amount-input"><input id="cash-amt" type="text" inputmode="decimal" value="${centsToPlain(expected)}" aria-label="Balance now"><span class="cur">${esc(a.currency)}</span></div>
+      <p class="calc-hint" id="bal-diff">&nbsp;</p>
+      <div class="bal-modes" role="radiogroup" aria-label="How to fix it">
+        <label class="field check"><input type="radio" name="bal-mode" value="start" ${mode === 'start' ? 'checked' : ''}><span><b>Just correct the amount</b><br><span class="muted small">Fixes the starting balance. Your records and reports stay as they are.</span></span></label>
+        <label class="field check"><input type="radio" name="bal-mode" value="record" ${mode === 'record' ? 'checked' : ''}><span><b>Log the difference today</b><br><span class="muted small">As spending (money that went untracked) or income (found money).</span></span></label>
+      </div>
+      <div class="btns"><button type="button" class="btn" data-close>Cancel</button><button type="submit" class="btn primary">Save</button></div>
     </form>`, (sheet) => {
-    sheet.querySelector('#cash-amt').focus();
+    const input = sheet.querySelector('#cash-amt');
+    input.focus();
+    input.select();
+    const showDiff = () => {
+      const v = evalAmount(input.value);
+      const d = v == null ? 0 : v - expected;
+      const el = sheet.querySelector('#bal-diff');
+      el.innerHTML = !d ? '&nbsp;' : `<b class="${d > 0 ? 'income' : 'expense'}">${d > 0 ? '+' : '−'}${esc(formatMoney(Math.abs(d), a.currency))}</b> compared with now`;
+    };
+    input.addEventListener('input', showDiff);
+    sheet.addEventListener('change', (e) => { if (e.target.name === 'bal-mode') mode = e.target.value; });
     sheet.querySelector('#cash-form').addEventListener('submit', (e) => {
       e.preventDefault();
-      const counted = evalAmount(sheet.querySelector('#cash-amt').value);
-      if (counted == null) return;
-      const r = cashCheck(state, id, counted, { date: todayISO(), id: M.uid(), rate: a.currency === state.settings.currency ? 1 : ctx.suggestedRate(a.currency) || 1 });
-      if (r.tx) state.tx.push(r.tx);
-      state.meta.lastCashCheck = todayISO();
+      const target = evalAmount(input.value);
+      if (target == null) { input.focus(); return; }
+      const r = M.setBalance(state, id, target, { mode, date: todayISO(), rate: a.currency === state.settings.currency ? 1 : ctx.suggestedRate(a.currency) || 1 });
+      if (cash) state.meta.lastCashCheck = todayISO();
       ctx.commit();
       ctx.closeSheet();
-      if (!r.diff) ctx.buddy?.({ mood: 'proud', text: `${a.name} matches to the last ban. Perfect tracking! 🏆` });
-      else ctx.buddy?.({ mood: r.diff < 0 ? 'thinking' : 'happy', text: r.diff < 0 ? `${formatMoney(-r.diff, a.currency)} went untracked. Logged it. Let's log cash right away this week 😉` : `Found ${formatMoney(r.diff, a.currency)}! Added it.` });
-      ctx.toast(r.diff ? `Difference of ${formatMoney(Math.abs(r.diff), a.currency)} logged` : 'Matches exactly ✓');
+      if (cash && !r.diff) ctx.buddy?.({ mood: 'proud', text: `${a.name} matches to the last ban. Perfect tracking! 🏆` });
+      else if (cash && mode === 'record') ctx.buddy?.({ mood: r.diff < 0 ? 'thinking' : 'happy', text: r.diff < 0 ? `${formatMoney(-r.diff, a.currency)} went untracked. Logged it. Let's log cash right away this week 😉` : `Found ${formatMoney(r.diff, a.currency)}! Added it.` });
+      ctx.toast(!r.diff ? 'Already right ✓' : mode === 'record' ? `Difference of ${formatMoney(Math.abs(r.diff), a.currency)} logged` : `${a.name}: ${formatMoney(target, a.currency)}`, r.diff ? 'Undo' : undefined, () => ctx.undo?.());
     });
   });
 }
@@ -178,7 +195,12 @@ function editAccount(id) {
   const used = existing && state.tx.some((t) => t.account === id || t.from === id || t.to === id);
 
   const balance = existing ? M.accountBalances(state)[id] || 0 : 0;
-  const preview = () => card({ account: a, own: existing ? balance - (existing.start || 0) + (a.start || 0) : a.start || 0, inBase: null }, { act: null, big: true });
+  // What the records add up to, without the starting balance.
+  const moved = balance - (existing?.start || 0);
+  let target = balance;
+  let balRecord = false;
+  const nowBal = () => target;
+  const preview = () => card({ account: a, own: target, inBase: null }, { act: null, big: true });
   const html = () => `<h3>${existing ? 'Edit account' : 'New account'} <button type="button" class="icon-btn" data-close aria-label="Close">✕</button></h3>
     <div id="acc-preview">${preview()}</div>
     <form id="acc-form" novalidate>
@@ -193,8 +215,9 @@ function editAccount(id) {
       </div>
       <div class="row2">
         <label class="field"><span>Card's last 4 digits (optional)</span><input id="a-last4" type="text" inputmode="numeric" maxlength="4" value="${esc(a.last4)}" placeholder="1234"></label>
-        <label class="field"><span>Balance before you started logging</span><input id="a-start" type="text" inputmode="decimal" value="${centsToPlain(a.start || 0)}"></label>
+        <label class="field"><span>Balance now</span><input id="a-now" type="text" inputmode="decimal" value="${centsToPlain(nowBal())}"></label>
       </div>
+      ${existing && used ? `<label class="field check"><input id="a-bal-record" type="checkbox" ${balRecord ? 'checked' : ''}><span>If I change the balance, log the difference as a record today <span class="muted small">(otherwise the starting balance is corrected and reports stay as they are)</span></span></label>` : ''}
       <div class="field"><span class="lbl">Card color</span><div class="theme-picks">${CARD_THEMES.map((t) => `<button type="button" class="theme-pick theme-${t.id}" data-theme="${t.id}" title="${t.name}" aria-label="${t.name}" aria-pressed="${(a.cardTheme || themeOf(a).id) === t.id}"></button>`).join('')}<label class="theme-pick custom-pick" title="Your own color" aria-pressed="${a.cardTheme === 'custom'}" ${a.cardTheme === 'custom' ? `style="background:${esc(a.cardColor)}"` : ''}>+<input type="color" id="a-color" value="${esc(a.cardColor || '#2a6fd1')}" aria-label="Your own color"></label></div></div>
       <div class="field"><span class="lbl">Bank logo (optional)</span><div class="logo-row">${a.logo ? `<img src="${esc(a.logo)}" alt="Logo">` : ''}<label class="btn">${a.logo ? 'Change logo' : 'Upload logo'}<input type="file" id="a-logo" accept="image/*" hidden></label>${a.logo ? '<button type="button" class="btn" id="a-logo-del">Remove</button>' : ''}</div>
         <p class="muted small" style="margin:6px 0 0">Any image, e.g. your bank's logo saved from its website. It stays in your own data.</p></div>
@@ -221,7 +244,9 @@ function editAccount(id) {
     a.kind = v('#a-kind').value;
     if (!v('#a-currency').disabled) a.currency = v('#a-currency').value;
     a.last4 = v('#a-last4').value.replace(/\D/g, '').slice(0, 4);
-    a.start = evalAmount(v('#a-start').value) || 0;
+    const t = evalAmount(v('#a-now').value);
+    if (t != null) target = t;
+    if (v('#a-bal-record')) balRecord = v('#a-bal-record').checked;
     a.savings = v('#a-savings').checked;
     if (v('#a-archived')) a.archived = v('#a-archived').checked;
     for (const el of sheet.querySelectorAll('[data-coin]')) {
@@ -261,9 +286,13 @@ function editAccount(id) {
       read(sheet);
       if (!a.name) { sheet.querySelector('#acc-error').textContent = 'Give the account a name.'; sheet.querySelector('#a-name').focus(); return; }
       a.holdings = a.holdings.filter((h) => h.asset && Number(h.qty) > 0).map((h) => ({ asset: h.asset, qty: Number(h.qty) }));
+      // Balance now: the starting balance that gives it, or (if asked) the
+      // old start plus a record today for the difference.
+      if (!existing || !balRecord) a.start = target - moved;
       M.touch(a);
       if (existing) Object.assign(existing, a);
       else ctx.state.settings.accounts.push(a);
+      if (existing && balRecord && target !== balance) M.setBalance(ctx.state, id, target, { mode: 'record', date: todayISO(), rate: a.currency === ctx.state.settings.currency ? 1 : ctx.suggestedRate(a.currency) || 1 });
       ctx.commit();
       ctx.closeSheet();
       ctx.toast(existing ? 'Account saved' : `${a.name} added`);

@@ -163,6 +163,29 @@ export const activeAccounts = (state) => state.settings.accounts.filter((a) => !
 export const jar = (state, id) => state.settings.jars.find((j) => j.id === id);
 export const savingsJar = (state) => state.settings.jars.find((j) => j.savings) || state.settings.jars[0];
 
+// Set an account to the amount it really has. "start" corrects the opening
+// balance quietly (history and reports stay as they are); "record" logs the
+// difference today as income or spending (e.g. cash that went untracked).
+export function setBalance(state, accountId, target, { mode = 'start', date, id = uid(), rate = 1, now = Date.now() } = {}) {
+  const acc = state.settings.accounts.find((a) => a.id === accountId);
+  const current = accountBalances(state)[accountId] || 0;
+  const diff = target - current;
+  if (!acc || !diff) return { diff: 0, tx: null };
+  if (mode === 'start') {
+    acc.start = (acc.start || 0) + diff;
+    acc.updatedAt = now;
+    return { diff, tx: null };
+  }
+  const out = diff < 0;
+  const amount = Math.abs(diff);
+  const tx = {
+    id, createdAt: now, updatedAt: now, type: out ? 'expense' : 'income', amount, currency: acc.currency, rate, base: Math.round(amount * rate), date,
+    category: out ? 'other' : 'other-in', account: accountId, note: out ? 'Balance correction (missing money)' : 'Balance correction (extra money)', adjustment: true,
+  };
+  state.tx.push(tx);
+  return { diff, tx };
+}
+
 export function accountBalances(state, upTo = null) {
   const bal = Object.fromEntries(state.settings.accounts.map((a) => [a.id, a.start || 0]));
   for (const t of state.tx) {
