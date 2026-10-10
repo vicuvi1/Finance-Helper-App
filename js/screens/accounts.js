@@ -7,18 +7,16 @@ import { FIAT, CRYPTO, formatQty, coinValue } from '../fx.js';
 import { formatMoney, evalAmount, centsToPlain } from '../money.js';
 import { monthKey, addMonths, daysInMonth, monthLabel, todayISO } from '../dates.js';
 import { lineChart } from '../charts.js';
+import { cardHTML, CARD_THEMES, themeOf, readLogo } from '../cards.js';
 
 export const BANKS = ['Cash', 'maib', 'Victoriabank', 'Moldindconbank', 'OTP Bank', 'MICB', 'FinComBank', 'Eximbank', 'Energbank', 'ProCredit Bank', 'Paynet', 'Revolut', 'Wise', 'Paysera', 'PayPal', 'Binance'];
 
+// Dot color (used in lists and charts) that goes with each card theme.
+const THEME_DOT = { ocean: 1, midnight: 1, sunset: 2, emerald: 3, teal: 3, gold: 4, rose: 5, forest: 6, plum: 7, crimson: 8 };
+
 const KIND = Object.fromEntries(M.ACCOUNT_KINDS.map((k) => [k.id, k.name]));
-const swatch = (a) => `var(--c${a.color || 1})`;
 const isSaving = (a) => a.savings || a.kind === 'savings';
 
-function bankMark(a) {
-  const src = a.bank && a.bank !== 'Cash' ? a.bank : a.name;
-  const letter = esc((src || '?').trim()[0]?.toUpperCase() || '?');
-  return `<span class="av" style="--c:${swatch(a)}" aria-hidden="true">${letter}</span>`;
-}
 
 // Savings in MDL at the end of each of the last 12 months.
 function savingsHistory(state) {
@@ -53,20 +51,8 @@ function netWorthCard(state) {
   </section>`;
 }
 
-function accountRow(v) {
-  const { state } = ctx;
-  const a = v.account;
-  const base = state.settings.currency;
-  const own = a.kind === 'crypto' && (a.holdings || []).length
-    ? `${(a.holdings || []).length} coin${a.holdings.length === 1 ? '' : 's'}`
-    : formatMoney(v.own, a.currency);
-  const sub = [a.bank, KIND[a.kind], a.last4 ? `•• ${esc(a.last4)}` : null, a.currency !== base ? a.currency : null].filter(Boolean).join(' · ');
-  return `<button class="tx acc-row" data-act="acc-open" data-id="${esc(a.id)}">
-    ${bankMark(a)}
-    <span class="t"><b>${esc(a.name)}${isSaving(a) ? ' <span class="pill pill-gold">savings</span>' : ''}</b><span>${sub}</span></span>
-    <span class="amount ${v.own < 0 ? 'expense' : ''}">${own}${(a.currency !== base || a.holdings?.length) && v.inBase != null ? `<span class="sub-amt">≈ ${ctx.money(Math.round(v.inBase / 100) * 100)}</span>` : v.inBase == null ? '<span class="sub-amt">no rate yet</span>' : ''}</span>
-  </button>`;
-}
+const card = (v, opts = {}) => cardHTML(v, { money: ctx.money, base: ctx.state.settings.currency, ...opts });
+
 
 export function view() {
   const { state } = ctx;
@@ -99,17 +85,14 @@ export function view() {
       <p class="muted small" style="margin:12px 0 0">${saving.length ? `Counted: ${saving.map((v) => esc(v.account.name)).join(', ')}.` : 'Mark an account as savings to track it here.'}</p>
     </div>
   </section>
-  <div class="dash">
-    <div class="dash-main">
-      ${groups.map((g) => `<section class="card"><h2>${esc(g.kind.name)} <span class="right muted">${ctx.money(Math.round(g.items.reduce((a, v) => a + (v.inBase || 0), 0) / 100) * 100)}</span></h2>
-        <div class="list">${g.items.map(accountRow).join('')}</div></section>`).join('')}
-      ${archived.length ? `<details class="card"><summary>Archived (${archived.length})</summary><div class="list">${archived.map(accountRow).join('')}</div></details>` : ''}
-    </div>
-    <div class="dash-side">
-      ${netWorthCard(state)}
-      <section class="card"><h2>Savings over 12 months</h2>${lineChart(hist, (c) => ctx.money(c))}</section>
-    </div>
-  </div>`;
+  <div class="bcards">
+    ${groups.flatMap((g) => g.items).map((v) => card(v)).join('')}
+    <button type="button" class="bcard-add" data-act="acc-new"><span>+</span>Add a card or account</button>
+  </div>
+  ${archived.length ? `<details class="card"><summary>Archived (${archived.length})</summary><div class="bcards" style="margin:14px 0 0">${archived.map((v) => card(v)).join('')}</div></details>` : ''}
+  <div class="acc-charts">
+    ${netWorthCard(state) || ''}
+    <section class="card"><h2>Savings over 12 months</h2>${lineChart(hist, (c) => ctx.money(c))}</section>  </div>`;
 }
 
 // ---------- Account detail and editor ----------
@@ -124,9 +107,19 @@ function openAccount(id) {
     const val = coinValue(Number(h.qty), h.asset, state.settings.currency, state.rates);
     return `<div class="split-row"><span><b>${esc(h.asset)}</b> <span class="muted">${formatQty(Number(h.qty))}</span></span><b class="money">${val == null ? 'no price' : ctx.money(val)}</b></div>`;
   }).join('');
+  const month = monthKey(todayISO());
+  const mine = state.tx.filter((t) => t.date.startsWith(month));
+  const inM = mine.reduce((x, t) => x + (t.type === 'income' && t.account === id ? t.amount : t.type === 'transfer' && t.to === id ? (Number.isInteger(t.toAmount) ? t.toAmount : t.amount) : 0), 0);
+  const outM = mine.reduce((x, t) => x + (t.type === 'expense' && t.account === id ? t.amount : t.type === 'transfer' && t.from === id ? t.amount : 0), 0);
+  const count = state.tx.filter((t) => t.account === id || t.from === id || t.to === id).length;
   ctx.openSheet(`<h3>${esc(a.name)} <button type="button" class="icon-btn" data-close aria-label="Close">✕</button></h3>
-    <p class="muted" style="margin-top:-8px">${[a.bank, KIND[a.kind], a.last4 ? `•• ${esc(a.last4)}` : null, a.currency].filter(Boolean).join(' · ')}</p>
-    <div class="big" style="display:flex;align-items:baseline;gap:8px;margin:6px 0 14px"><span class="fig" style="font-size:36px">${formatMoney(v.own, '')}</span><span class="cur-sm">${esc(a.currency)}</span></div>
+    ${card(v, { act: null, big: true })}
+    <div class="acc-stats">
+      <div><span>In this month</span><b class="income">${formatMoney(inM, a.currency)}</b></div>
+      <div><span>Out this month</span><b>${formatMoney(outM, a.currency)}</b></div>
+      <div><span>Records</span><b>${count}</b></div>
+    </div>
+    <p class="muted small" style="margin:-4px 0 12px">${[a.bank, KIND[a.kind], a.last4 ? `•••• ${esc(a.last4)}` : null, a.currency, a.start ? `started with ${formatMoney(a.start, a.currency)}` : null].filter(Boolean).map(esc).join(' · ')}</p>
     ${coins ? `<div class="card" style="padding:6px 14px;margin-bottom:12px">${coins}</div>` : ''}
     <div class="btns" style="margin-bottom:14px">
       <button class="btn primary" id="acc-add-rec">Add record</button>
@@ -152,7 +145,10 @@ function editAccount(id) {
   };
   const used = existing && state.tx.some((t) => t.account === id || t.from === id || t.to === id);
 
+  const balance = existing ? M.accountBalances(state)[id] || 0 : 0;
+  const preview = () => card({ account: a, own: existing ? balance - (existing.start || 0) + (a.start || 0) : a.start || 0, inBase: null }, { act: null, big: true });
   const html = () => `<h3>${existing ? 'Edit account' : 'New account'} <button type="button" class="icon-btn" data-close aria-label="Close">✕</button></h3>
+    <div id="acc-preview">${preview()}</div>
     <form id="acc-form" novalidate>
       <div class="row2">
         <label class="field"><span>Name</span><input id="a-name" type="text" value="${esc(a.name)}" placeholder="e.g. maib Visa, Victoriabank USD" required></label>
@@ -167,7 +163,9 @@ function editAccount(id) {
         <label class="field"><span>Card's last 4 digits (optional)</span><input id="a-last4" type="text" inputmode="numeric" maxlength="4" value="${esc(a.last4)}" placeholder="1234"></label>
         <label class="field"><span>Balance before you started logging</span><input id="a-start" type="text" inputmode="decimal" value="${centsToPlain(a.start || 0)}"></label>
       </div>
-      <div class="field"><span class="lbl">Color</span><div class="swatches">${[1, 2, 3, 4, 5, 6, 7, 8].map((n) => `<button type="button" class="sw" data-color="${n}" style="--c:var(--c${n})" aria-label="Color ${n}" aria-pressed="${a.color === n}"></button>`).join('')}</div></div>
+      <div class="field"><span class="lbl">Card color</span><div class="theme-picks">${CARD_THEMES.map((t) => `<button type="button" class="theme-pick theme-${t.id}" data-theme="${t.id}" title="${t.name}" aria-label="${t.name}" aria-pressed="${(a.cardTheme || themeOf(a).id) === t.id}"></button>`).join('')}<label class="theme-pick custom-pick" title="Your own color" aria-pressed="${a.cardTheme === 'custom'}" ${a.cardTheme === 'custom' ? `style="background:${esc(a.cardColor)}"` : ''}>+<input type="color" id="a-color" value="${esc(a.cardColor || '#2a6fd1')}" aria-label="Your own color"></label></div></div>
+      <div class="field"><span class="lbl">Bank logo (optional)</span><div class="logo-row">${a.logo ? `<img src="${esc(a.logo)}" alt="Logo">` : ''}<label class="btn">${a.logo ? 'Change logo' : 'Upload logo'}<input type="file" id="a-logo" accept="image/*" hidden></label>${a.logo ? '<button type="button" class="btn" id="a-logo-del">Remove</button>' : ''}</div>
+        <p class="muted small" style="margin:6px 0 0">Any image, e.g. your bank's logo saved from its website. It stays in your own data.</p></div>
       <label class="field check"><input id="a-savings" type="checkbox" ${a.savings || a.kind === 'savings' ? 'checked' : ''}><span>Counts as savings (shown in Savings and the goal)</span></label>
       ${existing ? `<label class="field check"><input id="a-archived" type="checkbox" ${a.archived ? 'checked' : ''}><span>Archived (closed card or account: hidden, history kept)</span></label>` : ''}
       <div id="coins" ${a.kind === 'crypto' ? '' : 'hidden'}>
@@ -200,8 +198,27 @@ function editAccount(id) {
     }
   };
 
+  const refreshPreview = (sheet) => { sheet.querySelector('#acc-preview').innerHTML = preview(); };
   const paint = (sheet) => {
     sheet.innerHTML = `<div class="grab"></div>${html()}`;
+    sheet.querySelector('#acc-form').addEventListener('input', (e) => {
+      if (e.target.id === 'a-color') {
+        a.cardTheme = 'custom';
+        a.cardColor = e.target.value;
+        const lbl = e.target.closest('.custom-pick');
+        lbl.style.background = a.cardColor;
+        for (const b of sheet.querySelectorAll('.theme-pick')) b.setAttribute('aria-pressed', String(b === lbl));
+      }
+      read(sheet);
+      refreshPreview(sheet);
+    });
+    sheet.querySelector('#a-logo').addEventListener('change', async (e) => {
+      const f = e.target.files?.[0];
+      if (!f) return;
+      read(sheet);
+      try { a.logo = await readLogo(f); } catch (err) { ctx.toast(err.message); return; }
+      paint(sheet);
+    });
     sheet.querySelector('#a-kind').addEventListener('change', (e) => {
       read(sheet);
       if (e.target.value === 'savings') a.savings = true;
@@ -223,12 +240,16 @@ function editAccount(id) {
 
   ctx.openSheet('', (sheet) => {
     sheet.addEventListener('click', (e) => {
-      const sw = e.target.closest('.sw');
-      if (sw) {
-        a.color = Number(sw.dataset.color);
-        for (const b of sheet.querySelectorAll('.sw')) b.setAttribute('aria-pressed', String(b === sw));
+      const pick = e.target.closest('.theme-pick[data-theme]');
+      if (pick) {
+        read(sheet);
+        a.cardTheme = pick.dataset.theme;
+        a.color = THEME_DOT[a.cardTheme] || a.color;
+        for (const b of sheet.querySelectorAll('.theme-pick')) b.setAttribute('aria-pressed', String(b === pick));
+        refreshPreview(sheet);
         return;
       }
+      if (e.target.closest('#a-logo-del')) { read(sheet); a.logo = null; paint(sheet); return; }
       if (e.target.closest('#coin-add')) { read(sheet); a.holdings.push({ asset: 'BTC', qty: '' }); paint(sheet); return; }
       const del = e.target.closest('[data-coin-del]');
       if (del) { read(sheet); a.holdings.splice(Number(del.dataset.coinDel), 1); paint(sheet); return; }

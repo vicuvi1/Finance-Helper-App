@@ -29,6 +29,7 @@ import * as Rules from './screens/rules.js';
 import { openBankImport, rowsFromFile, decodeText } from './screens/bankimport.js';
 import { guessMapping } from './bank.js';
 import { forecast } from './forecast.js';
+import { bindTilt } from './cards.js';
 import { FREQS, markDone } from './recurring.js';
 import { tableHTML, calendarHTML } from './logviews.js';
 import { dailyChart } from './charts.js';
@@ -1596,7 +1597,7 @@ if (!DEMO && 'serviceWorker' in navigator && (location.protocol === 'https:' || 
 // the old sheet format plus this month across several accounts and
 // currencies) so every screen has something to show. Bumping DEMO_VERSION
 // re-seeds previews opened before.
-const DEMO_VERSION = 7;
+const DEMO_VERSION = 8;
 
 async function seedDemo() {
   if (!DEMO || state.meta.demoSeeded === DEMO_VERSION) return;
@@ -1670,12 +1671,14 @@ async function seedDemo() {
   M.addRule(state, { match: 'orange', type: 'expense', category: 'home' }, now);
   // Budgets for a few categories.
   for (const [id, lei] of [['food', 400], ['clothes', 300], ['hygiene', 250], ['transport', 300], ['fun', 800]]) M.category(state, id).budget = lei * 100;
+  for (const [id, theme] of [['maib-visa', 'ocean'], ['maib-virt', 'plum'], ['maib-biz', 'graphite'], ['vb-usd', 'crimson'], ['wallet', 'emerald'], ['safe', 'gold'], ['binance', 'midnight']]) M.account(state, id).cardTheme = theme;
   state.settings.savingsAccount = 'safe';
   state.meta.demoSeeded = DEMO_VERSION;
   commit();
 }
 
 Spending.bindHover(app);
+bindTilt(document);
 requestPersistence();
 if (!DEMO) Security.initLock();
 route();
