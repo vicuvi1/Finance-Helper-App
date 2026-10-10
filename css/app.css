@@ -824,3 +824,8 @@ body.printing > *:not(#print-root) { display: none !important; }
 .pick b.income { color: var(--income); }
 .home-picks { align-items: center; margin-bottom: 16px; }
 .home-picks .label { flex: none; font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 600; margin-right: 4px; }
+
+/* Category rules */
+.rule-row { align-items: center; }
+.rule-row > span { color: var(--text); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rule-row .icon-btn { width: 30px; height: 30px; flex: none; }

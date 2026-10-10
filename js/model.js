@@ -573,12 +573,103 @@ const KEYWORDS = {
   ],
 };
 
+// ---------- Category rules ----------
+// Your own rules ("contains linella -> Food") win; then what you chose for
+// the same note before; then words your records always file the same way
+// (so "Plata la LINELLA SRL #4411" is learned from a few bank lines); then
+// built-in keywords.
+
+const fold = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+// Words that say nothing about the category (bank and shop boilerplate).
+const STOP = new Set('plata platii pentru from with the and for card pos srl sa ii md mda chisinau chisinaului moldova str nr via transfer payment purchase achitare cumparare comision operatiune tranzactie оплата покупка перевод платеж для www com shop store magazin'.split(' '));
+const words = (note) => [...new Set(fold(note).match(/[\p{L}]{3,}/gu) || [])].filter((w) => !STOP.has(w));
+
+export function matchRule(state, note, type) {
+  const n = fold(note);
+  if (!n) return null;
+  return (state.settings.rules || [])
+    .filter((r) => r.match && (r.type === type || r.type === 'any') && n.includes(fold(r.match)))
+    .sort((a, b) => b.match.length - a.match.length)[0] || null;
+}
+
+// word -> category counts from your records, per type (cached per tx list).
+const statsCache = new WeakMap();
+function wordStats(state, type) {
+  let last = 0;
+  for (const t of state.tx) if (t.updatedAt > last) last = t.updatedAt;
+  const key = `${type}|${state.tx.length}|${last}`;
+  const hit = statsCache.get(state.tx);
+  if (hit?.[key]) return hit[key];
+  const out = new Map();
+  for (const t of state.tx) {
+    if (t.type !== type || !t.note || t.category === 'other' || t.category === 'other-in') continue;
+    for (const w of words(t.note)) {
+      const m = out.get(w) || new Map();
+      m.set(t.category, (m.get(t.category) || 0) + 1);
+      out.set(w, m);
+    }
+  }
+  statsCache.set(state.tx, { ...(Object.keys(hit || {}).length < 4 ? hit : {}), [key]: out });
+  return out;
+}
+
+// A word seen at least twice, always (or 85%+) in one category.
+export function learnedCategory(state, note, type) {
+  const stats = wordStats(state, type);
+  let best = null;
+  for (const w of words(note)) {
+    const m = stats.get(w);
+    if (!m) continue;
+    const total = [...m.values()].reduce((a, b) => a + b, 0);
+    const [cat, n] = [...m.entries()].sort((a, b) => b[1] - a[1])[0];
+    if (n >= 2 && n / total >= 0.85 && (!best || n > best.n)) best = { cat, n };
+  }
+  return best?.cat || null;
+}
+
+// The word to build a rule from: the longest meaningful one.
+export function ruleWord(note) {
+  return words(note).filter((w) => !/^\d+$/.test(w)).sort((a, b) => b.length - a.length)[0] || fold(note).trim().slice(0, 30);
+}
+
+export function addRule(state, { match, type, category }, now = Date.now()) {
+  const m = fold(match).trim();
+  if (!m || !category) return null;
+  const rules = (state.settings.rules || []).filter((r) => !(fold(r.match) === m && r.type === type));
+  const rule = { id: uid(), match: m, type, category, createdAt: now };
+  state.settings.rules = [...rules, rule];
+  state.settings.updatedAt = now;
+  return rule;
+}
+
+export function removeRule(state, id, now = Date.now()) {
+  state.settings.rules = (state.settings.rules || []).filter((r) => r.id !== id);
+  state.settings.updatedAt = now;
+}
+
+// Records a rule would file differently. `onlyOther` limits it to records
+// still in Other (safe default: never undo choices you made yourself).
+export function ruleTargets(state, rule, { onlyOther = true } = {}) {
+  return state.tx.filter((t) => (t.type === rule.type || rule.type === 'any') && t.type !== 'transfer'
+    && t.category !== rule.category && fold(t.note).includes(fold(rule.match))
+    && (!onlyOther || t.category === 'other' || t.category === 'other-in'));
+}
+
+export function applyRule(state, rule, list = ruleTargets(state, rule), now = Date.now()) {
+  for (const t of list) { t.category = rule.category; t.updatedAt = now; }
+  return list.length;
+}
+
 export function suggestCategory(state, note, type) {
   const n = (note || '').trim().toLowerCase();
   if (!n || type === 'transfer') return null;
   const valid = (id) => state.settings.categories.some((c) => c.id === id && c.type === type);
+  const rule = matchRule(state, note, type);
+  if (rule && valid(rule.category)) return rule.category;
   const past = sortTx(state.tx).find((t) => t.type === type && (t.note || '').trim().toLowerCase() === n);
   if (past && valid(past.category)) return past.category;
+  const learned = learnedCategory(state, note, type);
+  if (learned && valid(learned)) return learned;
   for (const [id, re] of KEYWORDS[type] || []) {
     if (re.test(n) && valid(id)) return id;
   }

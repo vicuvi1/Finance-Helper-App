@@ -16,6 +16,7 @@ A personal finance app that replaces the "finance 2026" Google Sheet: the same d
 |---|---|
 | ➕ **5-second logging** | Big amount field that works as a calculator (`120+45`). Type a note and the category is picked for you, learning from what you chose before. |
 | ⚡ **Quick picks** | Things you log again and again (the bus, your coffee) and your ★ favorites appear as one-tap chips on Home and in the new-record sheet: tap, Enter, done. On the desktop **Ctrl+Alt+N** opens a new record from any app; on the phone, long-press the app icon for **Spent** / **Earned**. |
+| 🏷️ **Category rules** | "Description contains *linella* → Food": your rules file new records and bank imports. The app also learns words your records always file the same way, and when you change a record's category it offers to make a rule and move the similar ones. |
 | 🧮 **Smart split** | Every income is split 70% deposit / 10% food & transport / 10% investing & self-development / 10% hygiene & cosmetics (editable). One tap moves the 70% into the Safe. |
 | 🫙 **Jars** | Each spending category belongs to a jar. You see live how much is left in each one this month, and what overspent it. |
 | 👛 **Wallet, Safe, Card** | Real balances per account, plus moves between them. "All my money" shows on the home screen. |

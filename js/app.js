@@ -25,6 +25,7 @@ import * as SelfCheck from './screens/selfcheck.js';
 import * as Backups from './screens/backups.js';
 import * as Plan from './screens/plan.js';
 import * as Clients from './screens/clients.js';
+import * as Rules from './screens/rules.js';
 import { openBankImport, rowsFromFile, decodeText } from './screens/bankimport.js';
 import { guessMapping } from './bank.js';
 import { FREQS, markDone } from './recurring.js';
@@ -425,6 +426,8 @@ function viewSettings() {
     <p class="muted small" style="margin-bottom:0">From Google Sheets: File → Download → <b>Microsoft Excel (.xlsx)</b> and import the whole file: every month tab at once, you pick which. A single tab as .csv works too. Bank statements: export CSV or Excel from maib / Victoriabank online banking. Importing the same thing twice is safe.</p>
   </section>
 
+  ${Rules.settingsCard()}
+
   <section class="card"><h2>Look</h2>
     <div class="row2">
       <label class="field"><span>Theme</span><select data-set="theme">
@@ -758,6 +761,8 @@ function openTxSheet(existing = null, preset = {}) {
     ui.flashId = tx.id;
     commit();
     closeSheet();
+    // Changed the category: offer to always file records like this there.
+    if (existing && Rules.afterCorrection(existing, tx)) return;
     if (!existing && draft.repeat && tx.type !== 'transfer') { toast(`Added, and it repeats ${FREQS.find((f) => f.id === draft.repeat).short}. See Plan.`); return; }
     const alert = !existing && M.budgetAlert(state, tx);
     if (alert) { toast(alert.text); return; }
@@ -1455,7 +1460,7 @@ const SCREENS = {
   people: PeopleScreen,
   reports: ReportsScreen,
   rates: RatesScreen,
-  settings: { view: viewSettings, onClick: (a, el) => Security.onClick(a, el) || Binance.onClick(a) || Sync.onClick(a) || SelfCheck.onClick(a) || Backups.onClick(a, el) || (a.startsWith('update-') && (Updates.onClick(a), true)), onChange: Security.onChange },
+  settings: { view: viewSettings, onClick: (a, el) => Security.onClick(a, el) || Rules.onClick(a, el) || Binance.onClick(a) || Sync.onClick(a) || SelfCheck.onClick(a) || Backups.onClick(a, el) || (a.startsWith('update-') && (Updates.onClick(a), true)), onChange: Security.onChange },
 };
 
 function openMoreSheet() {
@@ -1586,7 +1591,7 @@ if (!DEMO && 'serviceWorker' in navigator && (location.protocol === 'https:' || 
 // the old sheet format plus this month across several accounts and
 // currencies) so every screen has something to show. Bumping DEMO_VERSION
 // re-seeds previews opened before.
-const DEMO_VERSION = 6;
+const DEMO_VERSION = 7;
 
 async function seedDemo() {
   if (!DEMO || state.meta.demoSeeded === DEMO_VERSION) return;
@@ -1656,6 +1661,8 @@ async function seedDemo() {
   inv('INV-2026-002', day(5), `${addMonths(monthKey(today), 1)}-05`, [{ desc: 'Landing page', hours: 12, rate: 2500 }, { desc: 'Hosting (year)', amount: 9000 }]);
   inv('INV-2026-003', today, null, [{ desc: 'Maintenance', hours: 6, rate: 2500 }], { sent: false });
   state.settings.invoiceFrom = 'Your Name\nChișinău, Moldova\nyou@example.com';
+  M.addRule(state, { match: 'linella', type: 'expense', category: 'food' }, now);
+  M.addRule(state, { match: 'orange', type: 'expense', category: 'home' }, now);
   // Budgets for a few categories.
   for (const [id, lei] of [['food', 400], ['clothes', 300], ['hygiene', 250], ['transport', 300], ['fun', 800]]) M.category(state, id).budget = lei * 100;
   state.settings.savingsAccount = 'safe';
