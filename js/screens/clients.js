@@ -294,6 +294,7 @@ function paySheet(inv) {
       ctx.commit();
       ctx.closeSheet();
       ctx.toast(`${inv.number} paid: +${formatMoney(amount, acc.currency)} logged in ${acc.name}`);
+      setTimeout(() => ctx.openSplit(t), 250);
     });
   });
 }

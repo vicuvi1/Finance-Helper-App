@@ -32,6 +32,7 @@ import * as Buddy from './screens/buddy.js';
 import * as ImportCheck from './screens/importcheck.js';
 import * as WorkHour from './screens/workhour.js';
 import { workText } from './workhours.js';
+import { planSplit, splitTransfers, splitPrefs, isSplit } from './split.js';
 import { openBankImport, rowsFromFile, decodeText } from './screens/bankimport.js';
 import { guessMapping } from './bank.js';
 import { forecast } from './forecast.js';
@@ -891,6 +892,7 @@ function openTxSheet(existing = null, preset = {}) {
     : `<label class="field"><span>Date</span><input id="tx-date" type="date" value="${esc(draft.date)}"></label>`}
       <div class="btns">
         ${existing ? '<button type="button" class="btn danger" data-act="tx-delete">Delete</button>' : ''}
+        ${existing && draft.type === 'income' && !existing.loan ? '<button type="button" class="btn" data-act="tx-split">Split</button>' : ''}
         ${existing && !isT ? `<button type="button" class="btn" data-act="tx-fav" aria-pressed="${M.isFavorite(state, existing)}">${M.isFavorite(state, existing) ? '★ Favorite' : '☆ Make favorite'}</button>` : ''}
         <button type="submit" class="btn primary">${existing ? 'Save' : 'Add'}</button>
       </div>
@@ -1103,38 +1105,62 @@ function openTxSheet(existing = null, preset = {}) {
         return;
       }
       if (e.target.closest('[data-act="tx-delete"]')) deleteTx(existing.id);
+      if (e.target.closest('[data-act="tx-split"]')) { closeSheet(); setTimeout(() => openSplitSheet(existing), 200); }
     });
     paint(sheet);
   });
 }
 
+// Money came in: one tap divides it. Taxes first (your %), then the rest by
+// your jars, each part moved to the account it belongs in (js/split.js).
 function openSplitSheet(tx) {
-  const parts = M.splitIncome(state, tx.amount);
-  const sj = M.savingsJar(state);
-  const target = state.settings.savingsAccount;
-  const save = parts.find((p) => p.jar.id === sj?.id)?.amount || 0;
   const from = M.account(state, tx.account);
-  const to = M.account(state, target);
-  const arrives = to && from ? convert(save, from.currency, to.currency, state.rates) : null;
-  const canMove = to && target !== tx.account && save > 0 && arrives != null;
+  if (!from) return;
+  const prefs = splitPrefs(state);
+  let taxPct = prefs.taxPct;
+  const accounts = {};
   const fm = (c) => formatMoney(c, tx.currency);
+  const accs = state.settings.accounts.filter((a) => !a.archived);
+  const already = isSplit(state, tx.id);
+  const paint = (sheet) => {
+    const rows = planSplit(state, tx, { taxPct, accounts });
+    const plan = splitTransfers(state, tx, rows, { uid: () => '' });
+    const moving = plan.transfers.reduce((a, t) => a + t.amount, 0);
+    const opt = (r) => accs.map((a) => `<option value="${esc(a.id)}" ${a.id === r.to ? 'selected' : ''}>${a.id === tx.account ? `Stays in ${esc(a.name)}` : `→ ${esc(a.name)}`}</option>`).join('');
+    sheet.querySelector('#split-body').innerHTML = `
+      <div class="split-tax"><label>🧾 Taxes <input type="number" id="split-tax" min="0" max="100" step="0.5" value="${taxPct || ''}" placeholder="0" aria-label="Tax percent">%</label>
+        <span class="muted small">${taxPct ? 'set aside first' : 'set a % if you pay tax on this income'}</span></div>
+      ${rows.map((r) => `<div class="split-line${r.to !== tx.account ? ' moves' : ''}${plan.skipped.includes(r.id) ? ' warn' : ''}">
+        <span class="sl-name">${esc(r.emoji)} ${esc(r.name)} <span class="muted">${r.pct}%</span></span>
+        <select data-split="${esc(r.id)}" aria-label="Where ${esc(r.name)} goes">${opt(r)}</select>
+        <b class="money ${r.savings ? 'income' : ''}">${fm(r.amount)}</b>
+      </div>`).join('')}
+      <p class="muted small split-sum">${plan.transfers.length ? `Moves <b>${fm(moving)}</b> in ${plan.transfers.length} transfer${plan.transfers.length === 1 ? '' : 's'}; ${fm(tx.amount - moving)} stays in ${esc(from.name)}.` : 'Everything stays where it is. Pick where a part goes to move it.'}${plan.skipped.length ? ' Some parts need an exchange rate first (Rates screen).' : ''}${already ? ' <b>This income was split before.</b>' : ''}</p>`;
+    sheet.querySelector('#split-go').disabled = !plan.transfers.length;
+  };
   openSheet(`<h3>Split ${fm(tx.amount)} <button type="button" class="icon-btn" data-close aria-label="Close">✕</button></h3>
-    <div>${parts.map((p) => `<div class="split-row"><span>${dot(jarColor(p.jar))}${esc(p.jar.name)} <span class="muted">${p.jar.pct}%</span></span><b class="money ${p.jar.savings ? 'income' : ''}">${fm(p.amount)}</b></div>`).join('')}</div>
-    <div class="btns" style="margin-top:14px">
-      ${canMove ? `<button class="btn primary" data-act="move-savings">Move ${fm(save)} to ${esc(to.name)}</button>` : ''}
-      <button class="btn" data-close>Done</button>
-    </div>`, (sheet) => {
-    sheet.querySelector('[data-act="move-savings"]')?.addEventListener('click', () => {
-      const now = Date.now();
-      state.tx.push({
-        id: M.uid(), createdAt: now, updatedAt: now, type: 'transfer', amount: save, currency: from.currency,
-        ...(from.currency !== to.currency ? { toAmount: arrives } : {}),
-        rate: tx.rate || 1, base: Math.round(save * (tx.rate || 1)),
-        date: tx.date, from: tx.account, to: target, note: `Deposit ${sj.pct}%${tx.note ? ` · ${tx.note}` : ''}`,
-      });
+    <p class="muted small" style="margin-top:0">${esc(tx.note || catOf(tx.category).name)} · ${esc(from.name)} · ${dayLabel(tx.date)}</p>
+    <div id="split-body"></div>
+    <div class="btns" style="margin-top:14px"><button class="btn" data-close>Not now</button><button class="btn primary" id="split-go">Split it</button></div>`, (sheet) => {
+    paint(sheet);
+    sheet.addEventListener('change', (e) => {
+      if (e.target.id === 'split-tax') taxPct = Math.max(0, Math.min(100, Number(e.target.value) || 0));
+      else if (e.target.dataset.split) accounts[e.target.dataset.split] = e.target.value;
+      paint(sheet);
+    });
+    sheet.querySelector('#split-go').addEventListener('click', () => {
+      const rows = planSplit(state, tx, { taxPct, accounts });
+      const { transfers } = splitTransfers(state, tx, rows, { uid: M.uid });
+      if (!transfers.length) return;
+      state.tx.push(...transfers);
+      // Remember the choices for next time.
+      const tax = rows.find((r) => r.id === 'tax');
+      state.settings.split = { taxPct, taxAccount: tax && tax.to !== tx.account ? tax.to : prefs.taxAccount };
+      for (const j of state.settings.jars) if (accounts[j.id]) j.account = accounts[j.id] === tx.account ? null : accounts[j.id];
+      state.settings.updatedAt = Date.now();
       commit();
       closeSheet();
-      toast(`${fm(save)} is in ${to.name}. Don't touch it.`);
+      toast(`Split: ${transfers.length} move${transfers.length === 1 ? '' : 's'}, ${fm(transfers.reduce((a, t) => a + t.amount, 0))}`, 'Undo', () => undoRedo(-1));
     });
   });
 }
@@ -1811,6 +1837,7 @@ Object.assign(ctx, {
   suggestedRate: (cur) => suggestedRate(cur),
   restoreFromText: (text) => onJSONFile(text),
   buddy: (msg) => Buddy.say(msg),
+  openSplit: (tx) => openSplitSheet(tx),
   // Sync brings in a merged copy of the data.
   replaceState: (next) => { state = next; persist({ quiet: true }); },
   // Swap the data in memory without saving (lock / unlock with encryption).

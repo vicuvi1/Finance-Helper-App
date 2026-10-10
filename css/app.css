@@ -1277,3 +1277,16 @@ table.grid tr.selected td { background: var(--gold-soft); }
 .wh-rate { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
 .wh-rate b { font-size: 22px; font-weight: 650; font-feature-settings: "tnum"; color: var(--gold); }
 .wh-rate span { color: var(--muted); font-size: 13px; }
+
+/* Income split */
+.split-tax { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 8px 0 12px; border-bottom: 1px solid var(--line); }
+.split-tax label { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; }
+.split-tax input { width: 76px; min-height: 36px; padding: 6px 10px; text-align: right; }
+.split-line { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 170px) auto; gap: 10px; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--line); }
+.split-line .sl-name { font-size: 14px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.split-line select { min-height: 36px; padding: 6px 10px; font-size: 13px; }
+.split-line.moves select { border-color: color-mix(in srgb, var(--gold) 55%, transparent); color: var(--text); }
+.split-line.warn select { border-color: var(--expense); }
+.split-line b { min-width: 92px; text-align: right; }
+.split-sum { margin: 10px 0 0; }
+@media (max-width: 520px) { .split-line { grid-template-columns: minmax(0, 1fr) auto; } .split-line select { grid-column: 1 / -1; grid-row: 2; } }
