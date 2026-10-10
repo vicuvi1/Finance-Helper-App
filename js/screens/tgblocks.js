@@ -41,14 +41,27 @@ function openBlock(id) {
   const b = existing ? { ...existing } : { id: `b-${Date.now().toString(36)}`, emoji: '☕', name: '', amount: 0, type: 'expense', category: 'food', account: null };
   const cats = (type) => state.settings.categories.filter((c) => c.type === type);
   const accs = M.activeAccounts(state);
+  let q = '';
+  // A sticker chosen by hand stays; until then the name suggests one.
+  let picked = !!existing;
+  let catPicked = !!existing;
+  const palette = () => {
+    const groups = B.searchEmojis(q);
+    return groups.length ? groups.map((g) => `<div class="tgb-g"><small class="muted">${esc(g.name)}</small><div class="tgb-gi">${g.items.map((x) => `<button type="button" class="tgb-e" data-emoji="${x.e}" title="${esc(x.k)}" aria-label="${esc(x.k.split(' ')[0])}" aria-pressed="${b.emoji === x.e}">${x.e}</button>`).join('')}</div></div>`).join('')
+      : '<p class="muted small" style="margin:6px 0">No sticker for that word. Paste any emoji in the box on the right.</p>';
+  };
   const html = () => `<h3>${existing ? 'Edit button' : 'New button'} <button type="button" class="icon-btn" data-close aria-label="Close">✕</button></h3>
     <div class="tgb-preview"><span>${esc(B.blockLabel({ ...b, name: b.name || 'Name', amount: b.amount || 0 }))}</span><small class="muted">how it looks in Telegram</small></div>
     <div class="seg" role="group" aria-label="Type"><button type="button" data-type="expense" aria-pressed="${b.type === 'expense'}">Spent</button><button type="button" data-type="income" aria-pressed="${b.type === 'income'}">Earned</button></div>
-    <div class="field"><span>Emoji</span><div class="tgb-emojis" role="group" aria-label="Emoji">${B.EMOJIS.map((e) => `<button type="button" class="tgb-e" data-emoji="${e}" aria-pressed="${b.emoji === e}">${e}</button>`).join('')}
-      <input id="tgb-emoji" type="text" value="${esc(b.emoji)}" maxlength="8" aria-label="Or type any emoji" placeholder="any"></div></div>
     <div class="row2">
-      <label class="field"><span>Name</span><input id="tgb-name" type="text" value="${esc(b.name)}" placeholder="e.g. Coffee" autocomplete="off"></label>
+      <label class="field"><span>Name</span><input id="tgb-name" type="text" value="${esc(b.name)}" placeholder="e.g. Internet" autocomplete="off"></label>
       <label class="field"><span>Amount (${esc(state.settings.currency)})</span><input id="tgb-amount" type="text" inputmode="decimal" value="${b.amount ? plain(b.amount) : ''}" placeholder="20"></label>
+    </div>
+    <div class="field tgb-pick"><span>Sticker</span>
+      <div class="tgb-pick-top"><span class="tgb-cur" id="tgb-cur" aria-hidden="true">${esc(b.emoji || '•')}</span>
+        <input id="tgb-esearch" type="search" value="${esc(q)}" placeholder="Find: internet, taxi, cafea, gym…" aria-label="Find a sticker" autocomplete="off">
+        <input id="tgb-emoji" type="text" value="${esc(b.emoji)}" maxlength="8" aria-label="Or paste any emoji" placeholder="paste"></div>
+      <div class="tgb-emojis" id="tgb-emojis" role="group" aria-label="Stickers">${palette()}</div>
     </div>
     <div class="row2">
       <label class="field"><span>Category</span><select id="tgb-cat">${cats(b.type).map((c) => `<option value="${esc(c.id)}" ${c.id === b.category ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></label>
@@ -68,15 +81,29 @@ function openBlock(id) {
       b.emoji = sheet.querySelector('#tgb-emoji').value.trim();
     };
     const redraw = () => { sheet.innerHTML = `<div class="grab"></div>${html()}`; };
+    const showEmoji = () => {
+      sheet.querySelector('#tgb-emoji').value = b.emoji;
+      sheet.querySelector('#tgb-cur').textContent = b.emoji || '•';
+      for (const x of sheet.querySelectorAll('[data-emoji]')) x.setAttribute('aria-pressed', String(x.dataset.emoji === b.emoji));
+      sheet.querySelector('.tgb-preview span').textContent = B.blockLabel({ ...b, name: b.name || 'Name' });
+    };
     sheet.addEventListener('input', (e) => {
+      if (e.target.id === 'tgb-esearch') { q = e.target.value; sheet.querySelector('#tgb-emojis').innerHTML = palette(); return; }
       if (['tgb-name', 'tgb-amount', 'tgb-emoji'].includes(e.target.id)) {
+        if (e.target.id === 'tgb-emoji') picked = true;
         read();
-        sheet.querySelector('.tgb-preview span').textContent = B.blockLabel({ ...b, name: b.name || 'Name' });
+        if (e.target.id === 'tgb-name' && !picked) b.emoji = B.emojiFor(b.name) || b.emoji;
+        if (e.target.id === 'tgb-name' && !catPicked) {
+          const c = B.categoryFor(state, b.name, b.type);
+          if (c) { b.category = c; sheet.querySelector('#tgb-cat').value = c; }
+        }
+        showEmoji();
       }
     });
+    sheet.addEventListener('change', (e) => { if (e.target.id === 'tgb-cat') catPicked = true; });
     sheet.addEventListener('click', (e) => {
       const em = e.target.closest('[data-emoji]');
-      if (em) { read(); b.emoji = em.dataset.emoji; redraw(); return; }
+      if (em) { read(); b.emoji = em.dataset.emoji; picked = true; showEmoji(); return; }
       const ty = e.target.closest('[data-type]');
       if (ty) {
         read();

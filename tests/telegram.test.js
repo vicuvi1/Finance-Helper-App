@@ -105,3 +105,24 @@ test('yesterday, month, balance, last and the catch-up summary', () => {
   assert.match(catchUpText(s, [t], '2026-10-10'), /Synced 1 record.*Fri 9 · −20\sMDL · coffee/s);
   assert.match(loggedText(s, t), /Spent that day: <b>20\sMDL<\/b>.*Food this month: 90\sMDL/s);
 });
+
+test('stickers: a big palette, found by words, suggested from the name', async () => {
+  const { EMOJIS, EMOJI_GROUPS, searchEmojis, emojiFor } = await import('../js/blocks.js');
+  assert.ok(EMOJIS.length >= 250);
+  assert.ok(EMOJI_GROUPS.some((g) => g.name === 'Internet & tech'));
+  const net = searchEmojis('wifi').flatMap((g) => g.items.map((x) => x.e));
+  assert.ok(net.includes('🛜'));
+  assert.ok(searchEmojis('cafea').flatMap((g) => g.items.map((x) => x.e)).includes('☕'));
+  assert.equal(searchEmojis('zzzz').length, 0);
+  assert.equal(searchEmojis('').length, EMOJI_GROUPS.length);
+  assert.equal(emojiFor('Internet'), '🌐');
+  assert.equal(emojiFor('Kebab'), '🥙');
+  assert.equal(emojiFor('Netflix'), '📺');
+  assert.equal(emojiFor('qwerty'), null);
+  const { categoryFor } = await import('../js/blocks.js');
+  const st = state();
+  assert.equal(categoryFor(st, 'Internet'), 'home');
+  assert.equal(categoryFor(st, 'Netflix'), 'subscriptions');
+  assert.equal(categoryFor(st, 'Taxi'), 'transport');
+  assert.equal(categoryFor(st, 'coffee'), 'food'); // learned from your records
+});
