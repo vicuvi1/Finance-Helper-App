@@ -713,10 +713,12 @@ kbd {
   .nav-more { display: none; }
 
   .app { margin-left: var(--side); max-width: none; padding: 28px 28px 40px; }
-  .view-reports, .view-settings, .view-rates { column-width: 400px; column-count: 3; column-gap: 14px; max-width: 1280px; }
+  .view-reports, .view-settings { column-width: 380px; column-gap: 14px; max-width: 1840px; }
+  .view-rates { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 14px; align-items: start; }
+  .view-rates > .top, .view-rates > .conv, .view-rates > :not(.card) { grid-column: 1 / -1; }
   .view-reports > *, .view-settings > *, .view-rates > * { break-inside: avoid; }
   .view-reports > .top, .view-reports > .rep-bar, .view-reports > .rep-kpis, .view-settings > .top, .view-settings > .banner, .view-rates > .top, .view-rates > .conv { column-span: all; }
-  .view-home, .view-log, .view-accounts { max-width: 1280px; }
+  .app { max-width: 1840px; }
   .card { margin-bottom: 14px; }
   .top h1 { font-size: 28px; }
   .toast { bottom: 28px; left: calc(50% + var(--side) / 2); }

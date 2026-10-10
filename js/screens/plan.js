@@ -78,13 +78,13 @@ export function view() {
   <div class="dash">
     <div class="dash-main">
       ${forecastCard()}
-      ${budgetCard()}
       ${due.length ? `<section class="card"><h2>Due now <span class="right muted">${due.length}</span></h2><div class="list">${due.map((x) => itemRow(x, today, { due: true })).join('')}</div>
         <p class="muted small" style="margin-bottom:0">"Paid" logs the planned amount on its date. Tap the name to change the amount first.</p></section>` : ''}
       <section class="card"><h2>Coming up · 30 days</h2>
         ${up.length ? `<div class="list">${up.map((x) => itemRow(x, today)).join('')}</div>` : '<p class="muted" style="margin:0">Nothing planned in the next 30 days.</p>'}</section>
     </div>
     <div class="dash-side">
+      ${budgetCard()}
       <section class="card"><h2>Your recurring <span class="right muted">${rules.length}</span></h2>
         ${rules.length ? `<div class="list">${rules.map((r) => ruleRow(r, today)).join('')}</div>` : '<p class="muted" style="margin-top:0">Add rent, phone, internet, subscriptions, salary or a client who pays every month. You can also tick "Repeat" when you log a record.</p><button class="btn primary block" data-act="rec-new">Add the first one</button>'}
       </section>
