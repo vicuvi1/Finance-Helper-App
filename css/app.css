@@ -1140,3 +1140,72 @@ table.grid tr.is-today:not(.day-row) td { background: color-mix(in srgb, var(--t
 /* Telegram */
 .tg-code { font: 700 34px/1 var(--mono); letter-spacing: 0.18em; text-align: center; margin: 6px 0 10px; padding: 14px; border-radius: 14px;
   background: var(--gold-soft); color: var(--gold); }
+
+/* ---------- Buddy (js/screens/buddy.js). Robot art keeps its own colors. ---------- */
+.buddy { --bd-a: #f3d27a; --bd-b: #c9962f; position: fixed; right: 26px; bottom: 22px; z-index: 15; width: 88px; pointer-events: none; }
+.buddy[hidden] { display: none; }
+body.locked .buddy, body.printing .buddy { display: none; }
+.bd-body { pointer-events: auto; display: block; width: 88px; height: 110px; padding: 0; border: 0; background: none; cursor: pointer;
+  animation: bd-float 3.2s ease-in-out infinite; filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.35)); }
+.bd-body:focus-visible { outline: 2px solid var(--gold); outline-offset: 4px; border-radius: 20px; }
+.bd-svg { width: 100%; height: 100%; overflow: visible; }
+.bd-visor { fill: #0d1420; }
+.bd-eye { fill: #6ef3ff; filter: drop-shadow(0 0 3px #6ef3ff); }
+.bd-eye-l, .bd-mouth { fill: none; stroke: #6ef3ff; stroke-width: 3.2; stroke-linecap: round; stroke-linejoin: round; filter: drop-shadow(0 0 2px #6ef3ff); }
+.bd-limb { fill: none; stroke: var(--bd-b); stroke-width: 4; stroke-linecap: round; }
+.bd-nozzle { fill: #3a4253; }
+.bd-coin { fill: #fff6d6; stroke: #c9962f; stroke-width: 1.5; }
+.bd-coin-t { font: 800 10px/1 var(--font); fill: #a07414; }
+.bd-tip { fill: #ff7a59; filter: drop-shadow(0 0 4px #ff7a59); animation: bd-tip 1.6s ease-in-out infinite; }
+.bd-shadow { fill: rgba(0, 0, 0, 0.35); animation: bd-shadow 3.2s ease-in-out infinite; transform-origin: 60px 146px; }
+.bd-flame { transform-origin: 60px 116px; animation: bd-flame 0.18s ease-in-out infinite alternate; }
+.bd-blink { transform-origin: 60px 50px; animation: bd-blink 4.6s infinite; }
+.bd-cheeks ellipse { fill: #ff8fb1; opacity: 0; transition: opacity 0.3s; }
+.bd-face { display: none; }
+.buddy[data-mood="idle"] .bd-f-idle, .buddy[data-mood="thinking"] .bd-f-thinking, .buddy[data-mood="happy"] .bd-f-happy,
+.buddy[data-mood="proud"] .bd-f-proud, .buddy[data-mood="excited"] .bd-f-excited, .buddy[data-mood="worried"] .bd-f-worried,
+.buddy[data-mood="surprised"] .bd-f-surprised, .buddy[data-mood="sleepy"] .bd-f-sleepy { display: inline; }
+.buddy:is([data-mood="happy"], [data-mood="proud"], [data-mood="excited"]) .bd-cheeks ellipse { opacity: 0.85; }
+.buddy[data-mood="worried"] .bd-eye, .buddy[data-mood="worried"] .bd-mouth { fill: #ffb86e; stroke: #ffb86e; filter: drop-shadow(0 0 2px #ffb86e); }
+.buddy[data-mood="worried"] .bd-mouth[d^="M53"] { fill: none; }
+.bd-arm { transform-box: fill-box; }
+.bd-arm-l { transform-origin: right top; } .bd-arm-r { transform-origin: left top; }
+.buddy.talking .bd-arm-r { animation: bd-wave 0.6s ease-in-out 3; }
+/* Reactions */
+.buddy.react[data-mood="happy"] .bd-body { animation: bd-hop 0.7s ease, bd-float 3.2s ease-in-out 0.7s infinite; }
+.buddy.react[data-mood="proud"] .bd-body { animation: bd-hop 0.5s ease 2, bd-float 3.2s ease-in-out 1s infinite; }
+.buddy.react[data-mood="excited"] .bd-body { animation: bd-spin 0.9s cubic-bezier(.3,.7,.4,1), bd-float 3.2s ease-in-out 0.9s infinite; }
+.buddy.react[data-mood="worried"] .bd-body { animation: bd-shake 0.6s ease, bd-float 3.2s ease-in-out 0.6s infinite; }
+.buddy.react[data-mood="surprised"] .bd-body { animation: bd-jump 0.6s cubic-bezier(.2,.8,.3,1), bd-float 3.2s ease-in-out 0.6s infinite; }
+.buddy.react[data-mood="excited"] .bd-arm, .buddy.react[data-mood="proud"] .bd-arm { animation: bd-wave 0.45s ease-in-out 4; }
+.buddy.flying { animation: bd-fly 6s cubic-bezier(.45,.05,.55,.95); }
+.buddy.flying .bd-flame { transform: scaleY(1.6); }
+/* Speech bubble */
+.bd-bubble { position: absolute; right: 80px; bottom: 84px; width: max-content; max-width: 260px; padding: 10px 13px; border-radius: 14px 14px 4px 14px;
+  background: var(--surface-2); border: 1px solid var(--line-strong); color: var(--text); font-size: 13.5px; line-height: 1.45;
+  box-shadow: 0 14px 34px -14px rgba(0, 0, 0, 0.55); opacity: 0; transform: translateY(8px) scale(0.92); transform-origin: bottom right;
+  transition: opacity 0.22s ease, transform 0.25s cubic-bezier(.2,.8,.3,1.2); pointer-events: none; }
+.bd-bubble b { display: block; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--gold); margin-bottom: 2px; }
+.buddy.talking .bd-bubble { opacity: 1; transform: none; pointer-events: auto; }
+.buddy[data-mood="worried"] .bd-bubble { border-color: color-mix(in srgb, var(--expense) 55%, var(--line)); }
+.buddy[data-mood="worried"] .bd-bubble b { color: var(--expense); }
+.buddy:is([data-mood="excited"], [data-mood="proud"]) .bd-bubble b { color: var(--income); }
+@keyframes bd-float { 0%, 100% { transform: translateY(0) rotate(-2deg); } 50% { transform: translateY(-9px) rotate(2deg); } }
+@keyframes bd-shadow { 0%, 100% { transform: scaleX(1); opacity: 0.35; } 50% { transform: scaleX(0.75); opacity: 0.2; } }
+@keyframes bd-flame { from { transform: scaleY(0.85) scaleX(0.95); } to { transform: scaleY(1.15) scaleX(1.05); } }
+@keyframes bd-tip { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+@keyframes bd-blink { 0%, 92%, 100% { transform: scaleY(1); } 95% { transform: scaleY(0.1); } }
+@keyframes bd-wave { 0%, 100% { transform: rotate(0); } 50% { transform: rotate(-28deg); } }
+@keyframes bd-hop { 0%, 100% { transform: translateY(0); } 40% { transform: translateY(-22px); } 70% { transform: translateY(2px); } }
+@keyframes bd-jump { 0% { transform: translateY(0) scale(1); } 35% { transform: translateY(-30px) scale(1.08); } 100% { transform: translateY(0) scale(1); } }
+@keyframes bd-spin { 0% { transform: rotate(0) scale(1); } 50% { transform: rotate(200deg) scale(1.12) translateY(-12px); } 100% { transform: rotate(360deg) scale(1); } }
+@keyframes bd-shake { 0%, 100% { transform: translateX(0); } 20%, 60% { transform: translateX(-7px) rotate(-6deg); } 40%, 80% { transform: translateX(7px) rotate(6deg); } }
+@keyframes bd-fly {
+  0% { transform: translate(0, 0) rotate(0); }
+  20% { transform: translate(-18vw, -26vh) rotate(-12deg); }
+  45% { transform: translate(-46vw, -12vh) rotate(-6deg) scaleX(-1); }
+  70% { transform: translate(-24vw, -34vh) rotate(10deg); }
+  100% { transform: translate(0, 0) rotate(0); }
+}
+@media (max-width: 719px) { .buddy { right: 12px; bottom: calc(env(safe-area-inset-bottom, 0px) + 84px); width: 58px; } .bd-body { width: 58px; height: 74px; } .bd-bubble { right: 52px; bottom: 56px; max-width: 220px; } }
+@media (prefers-reduced-motion: reduce) { .bd-body, .bd-shadow, .bd-flame, .bd-blink, .bd-tip, .buddy.react .bd-body, .buddy.flying, .bd-arm { animation: none !important; } }

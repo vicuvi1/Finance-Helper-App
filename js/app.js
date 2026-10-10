@@ -28,6 +28,7 @@ import * as Clients from './screens/clients.js';
 import * as Rules from './screens/rules.js';
 import * as Goals from './screens/goals.js';
 import * as Telegram from './screens/telegram.js';
+import * as Buddy from './screens/buddy.js';
 import { openBankImport, rowsFromFile, decodeText } from './screens/bankimport.js';
 import { guessMapping } from './bank.js';
 import { forecast } from './forecast.js';
@@ -522,6 +523,7 @@ function viewSettings() {
 
   ${Rules.settingsCard()}
   ${Telegram.settingsCard()}
+  ${Buddy.settingsCard()}
 
   <section class="card"><h2>Look</h2>
     <div class="row2">
@@ -610,6 +612,8 @@ function render({ enter = false } = {}) {
   const on = strip?.querySelector('.mpill.on');
   if (on && strip.scrollWidth > strip.clientWidth) strip.scrollLeft = on.offsetLeft - strip.clientWidth / 2 + on.offsetWidth / 2;
   if (ui.flashId) {
+    // A record created just now: the buddy reacts to it.
+    Buddy.onTx(state.tx.find((t) => t.id === ui.flashId));
     app.querySelector(`[data-id="${CSS.escape(ui.flashId)}"]`)?.classList.add('flash');
     ui.flashId = null;
   }
@@ -1570,7 +1574,7 @@ const SCREENS = {
   people: PeopleScreen,
   reports: ReportsScreen,
   rates: RatesScreen,
-  settings: { view: viewSettings, onClick: (a, el) => Security.onClick(a, el) || Rules.onClick(a, el) || Telegram.onClick(a) || Binance.onClick(a) || Sync.onClick(a) || SelfCheck.onClick(a) || Backups.onClick(a, el) || (a.startsWith('update-') && (Updates.onClick(a), true)), onChange: (el) => Security.onChange(el) || Telegram.onChange(el) },
+  settings: { view: viewSettings, onClick: (a, el) => Security.onClick(a, el) || Rules.onClick(a, el) || Telegram.onClick(a) || Buddy.onClick(a, el) || Binance.onClick(a) || Sync.onClick(a) || SelfCheck.onClick(a) || Backups.onClick(a, el) || (a.startsWith('update-') && (Updates.onClick(a), true)), onChange: (el) => Security.onChange(el) || Telegram.onChange(el) || Buddy.onChange(el) },
 };
 
 function openMoreSheet() {
@@ -1630,6 +1634,7 @@ Object.assign(ctx, {
   updateRates,
   suggestedRate: (cur) => suggestedRate(cur),
   restoreFromText: (text) => onJSONFile(text),
+  buddy: (msg) => Buddy.say(msg),
   // Sync brings in a merged copy of the data.
   replaceState: (next) => { state = next; persist(); },
   // Swap the data in memory without saving (lock / unlock with encryption).
@@ -1800,6 +1805,7 @@ Sync.initSync();
 Backups.initBackups();
 Plan.initPlan();
 Telegram.initTelegram();
+Buddy.initBuddy();
 
 // One net-worth snapshot a day (crypto and rates of that day included).
 function snapshotToday() {

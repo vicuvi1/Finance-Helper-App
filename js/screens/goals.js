@@ -124,6 +124,7 @@ export function checkMilestones() {
       changed = true;
       confetti();
       ctx.toast(milestone === 100 ? `🎉 ${g.name}: goal reached!` : `🎉 ${g.name}: ${milestone}% there!`);
+      ctx.buddy?.({ mood: 'proud', text: milestone === 100 ? `You reached ${g.name}! I'm so proud 🏆` : `${g.name} is ${milestone}% there! Keep going 🚀` });
     } else if (milestone < g.lastMilestone) { g.lastMilestone = milestone; changed = true; }
   }
   if (changed) ctx.persist();
