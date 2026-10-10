@@ -1,0 +1,81 @@
+// The web app from a clean start: every screen opens, logging, undo/redo,
+// search, importing a sheet with the import check, and data surviving a
+// reload. Run: npm run e2e
+import { test, before, after } from 'node:test';
+import assert from 'node:assert/strict';
+import { join } from 'node:path';
+import { serve, launch, openPage, ROOT } from './helpers.mjs';
+
+let server;
+let browser;
+before(async () => { server = await serve(); browser = await launch(); });
+after(async () => { await browser?.close(); server?.close(); });
+
+const SCREENS = ['home', 'log', 'accounts', 'rates', 'goals', 'plan', 'clients', 'people', 'reports', 'review', 'settings'];
+
+test('every screen opens without errors, at desktop and phone width', async () => {
+  for (const size of [{ width: 1440, height: 900 }, { width: 390, height: 844 }]) {
+    const { page, errors, context } = await openPage(browser, server.url, size);
+    await page.goto(server.url);
+    await page.waitForSelector('#app header.top');
+    for (const s of SCREENS) {
+      await page.evaluate((h) => { location.hash = h; }, s);
+      await page.waitForFunction((h) => document.getElementById('app').className.includes(`view-${h}`), s);
+      assert.ok((await page.textContent('#app')).trim().length > 20, `${s} rendered something`);
+    }
+    assert.deepEqual(errors, [], `no page errors at ${size.width}px`);
+    await context.close();
+  }
+});
+
+test('log a record, undo, redo, search, and it survives a reload', async () => {
+  const { page, errors, context } = await openPage(browser, server.url);
+  await page.goto(`${server.url}#log`);
+  await page.waitForSelector('#app header.top');
+  await page.keyboard.press('n');
+  await page.waitForSelector('#tx-amount');
+  await page.fill('#tx-amount', '120+45');
+  await page.fill('#tx-note', 'e2e coffee');
+  await page.click('.sheet button[type=submit]');
+  await page.waitForFunction(() => !document.querySelector('.sheet:not(.closing)') || !document.querySelector('#tx-amount'));
+  const count = () => page.evaluate(() => JSON.parse(localStorage.getItem('finance-helper.state')).tx.filter((t) => t.note === 'e2e coffee').length);
+  assert.equal(await count(), 1);
+  const amount = await page.evaluate(() => JSON.parse(localStorage.getItem('finance-helper.state')).tx.find((t) => t.note === 'e2e coffee').amount);
+  assert.equal(amount, 16500, 'the calculator adds 120+45');
+
+  await page.click('body', { position: { x: 900, y: 20 } });
+  await page.keyboard.press('Control+z');
+  await page.waitForFunction(() => !JSON.parse(localStorage.getItem('finance-helper.state')).tx.some((t) => t.note === 'e2e coffee'));
+  await page.keyboard.press('Control+y');
+  await page.waitForFunction(() => JSON.parse(localStorage.getItem('finance-helper.state')).tx.some((t) => t.note === 'e2e coffee'));
+
+  await page.fill('#search', 'e2e >100');
+  await page.waitForSelector('.search-card');
+  assert.match(await page.textContent('.search-card'), /1 record/);
+
+  await page.reload();
+  await page.waitForSelector('#app header.top');
+  assert.equal(await count(), 1, 'still there after a reload');
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
+test('import the sample sheet: records in, import check flags the stray row', async () => {
+  const { page, errors, context } = await openPage(browser, server.url);
+  await page.goto(`${server.url}#settings`);
+  await page.waitForSelector('#app header.top');
+  await page.setInputFiles('#file-csv', join(ROOT, 'tests/fixtures/sample-month.csv'));
+  await page.waitForSelector('#imp-go');
+  await page.click('#imp-go');
+  await page.waitForSelector('.ic-sum');
+  assert.match(await page.textContent('.ic-sum'), /doesn't match/);
+  assert.match(await page.textContent('.ic-why'), /Row 34 "Decembrie"/);
+  const totals = await page.evaluate(() => {
+    const s = JSON.parse(localStorage.getItem('finance-helper.state'));
+    const m = s.tx.filter((t) => t.date.startsWith('2026-03'));
+    return [m.filter((t) => t.type === 'income').reduce((a, t) => a + t.amount, 0), m.filter((t) => t.type === 'expense').reduce((a, t) => a + t.amount, 0)];
+  });
+  assert.deepEqual(totals, [2446500, 660500], 'same totals as the sheet');
+  assert.deepEqual(errors, []);
+  await context.close();
+});

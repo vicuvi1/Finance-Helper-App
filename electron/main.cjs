@@ -18,6 +18,9 @@ protocol.registerSchemesAsPrivileged([
   { scheme: 'app', privileges: { standard: true, secure: true, supportFetchAPI: true } },
 ]);
 
+// Tests run the unpackaged app with their own throwaway data folder.
+if (!app.isPackaged && process.env.FH_USER_DATA) app.setPath('userData', process.env.FH_USER_DATA);
+
 if (!app.requestSingleInstanceLock()) app.quit();
 
 const boundsFile = () => path.join(app.getPath('userData'), 'window.json');

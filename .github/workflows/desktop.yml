@@ -41,8 +41,22 @@ jobs:
             echo "release=false" >> "$GITHUB_OUTPUT"
           fi
 
+  # The whole app, end to end (web screens, logging, undo, import, and the
+  # desktop window really opening). A release is only built when this passes.
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: xvfb-run -a npm run e2e
+
   build:
-    needs: version
+    needs: [version, e2e]
     strategy:
       fail-fast: false
       # One at a time, so the first build creates the release and the next
