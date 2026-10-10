@@ -15,6 +15,18 @@ const crypto = require('node:crypto');
 
 const API = process.env.FH_TG_API || 'https://api.telegram.org';
 
+// The "/" menu in Telegram and the text shown before you press Start.
+const COMMANDS = [
+  ['today', 'Today: what you spent'],
+  ['month', 'This month so far'],
+  ['balance', 'All accounts'],
+  ['last', 'Last records'],
+  ['undo', 'Remove the last record'],
+  ['blocks', 'Your quick buttons'],
+  ['help', 'How to log'],
+];
+const ABOUT = 'Your Finance Helper. Tap a block or type "coffee 35". Sent while your PC is off? It is saved for 24 hours and logged when the app opens.';
+
 function createTelegram({ app, net, safeStorage, onUpdates = () => {}, onEvent = () => {}, storage }) {
   const file = () => path.join(app.getPath('userData'), 'telegram.bin');
   // Tests pass their own storage; the app uses the OS key store.
@@ -37,12 +49,17 @@ function createTelegram({ app, net, safeStorage, onUpdates = () => {}, onEvent =
   let wake = null;
   let lastError = '';
   let gen = 0; // a new start() ends any older loop
+  let poll = null; // the running getUpdates request, to cut it short
+  let waiters = []; // "load now" calls waiting for the next check
+  let lastCheck = 0;
+  let menuSet = false;
 
-  async function call(method, params = {}, token = cfg?.token) {
+  async function call(method, params = {}, token = cfg?.token, signal) {
     const r = await net.fetch(`${API}/bot${token}/${method}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(params),
+      ...(signal ? { signal } : {}),
     });
     let json = null;
     try { json = await r.json(); } catch { /* not JSON */ }
@@ -55,6 +72,16 @@ function createTelegram({ app, net, safeStorage, onUpdates = () => {}, onEvent =
   }
 
   const sleep = (ms) => new Promise((res) => { wake = res; setTimeout(res, ms); });
+  const settle = (n) => { const w = waiters; waiters = []; for (const res of w) res(n); };
+
+  // Once per run: the command menu and the bot's description (best effort).
+  async function setMenu() {
+    if (menuSet) return;
+    menuSet = true;
+    await call('setMyCommands', { commands: COMMANDS.map(([command, description]) => ({ command, description })) }).catch(() => {});
+    await call('setMyShortDescription', { short_description: ABOUT.slice(0, 120) }).catch(() => {});
+    await call('setMyDescription', { description: ABOUT }).catch(() => {});
+  }
 
   async function handle(updates) {
     const forward = [];
@@ -96,19 +123,33 @@ function createTelegram({ app, net, safeStorage, onUpdates = () => {}, onEvent =
         if (inbox.size) {
           // Waiting for the app to handle what it has; hand it over again
           // now and then (e.g. after the app is unlocked).
+          settle(inbox.size);
           await sleep(15000);
           if (inbox.size) onUpdates([...inbox.values()]);
           continue;
         }
-        const updates = await call('getUpdates', { offset, timeout: 25, allowed_updates: ['message', 'callback_query'] });
+        if (cfg?.chatId) setMenu();
+        // A "load now" while waiting cuts the long wait short.
+        const ac = typeof AbortController === 'function' ? new AbortController() : null;
+        poll = ac;
+        let updates;
+        try {
+          updates = await call('getUpdates', { offset, timeout: waiters.length ? 0 : 25, allowed_updates: ['message', 'callback_query'] }, undefined, ac?.signal);
+        } catch (e) {
+          if (ac?.signal.aborted) continue;
+          throw e;
+        } finally { poll = null; }
         if (my !== gen) break;
         lastError = '';
+        lastCheck = Date.now();
         backoff = 2000;
         if (updates.length) await handle(updates);
+        settle(updates.length);
       } catch (e) {
         if (!running || my !== gen) break;
         lastError = e.code === 409 ? 'Another program is reading this bot. Close it, or use a new bot just for Finance Helper.' : e.code === 401 ? 'The bot token is no longer valid.' : e.message;
         onEvent({ type: 'error', message: lastError });
+        settle(-1);
         await sleep(backoff);
         backoff = Math.min(backoff * 2, 5 * 60000);
       }
@@ -129,7 +170,20 @@ function createTelegram({ app, net, safeStorage, onUpdates = () => {}, onEvent =
   return {
     start,
     stop,
-    status: () => ({ connected: !!cfg?.token, botName: cfg?.botName || '', linked: !!cfg?.chatId, userName: cfg?.userName || '', error: lastError, pairing: pairCode }),
+    status: () => ({ connected: !!cfg?.token, botName: cfg?.botName || '', linked: !!cfg?.chatId, userName: cfg?.userName || '', error: lastError, pairing: pairCode, lastCheck }),
+    // "Load from Telegram": check right now. Resolves with how many messages
+    // came (or are waiting for the app), -1 on an error.
+    loadNow() {
+      if (!cfg?.token) return Promise.resolve(-1);
+      return new Promise((res) => {
+        waiters.push(res);
+        setTimeout(() => res(-1), 20000);
+        if (!running) start();
+        if (inbox.size) onUpdates([...inbox.values()]);
+        poll?.abort();
+        wake?.();
+      });
+    },
     async connect(token) {
       const t = String(token || '').trim();
       if (!/^\d{5,}:[\w-]{30,}$/.test(t)) throw new Error('That doesn\'t look like a bot token. It looks like 123456789:AA… (from @BotFather).');
@@ -141,6 +195,7 @@ function createTelegram({ app, net, safeStorage, onUpdates = () => {}, onEvent =
       cfg = next;
       inbox.clear();
       offset = 0;
+      menuSet = false;
       start();
       return { botName: me.username };
     },

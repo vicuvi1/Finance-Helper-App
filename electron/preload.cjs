@@ -58,6 +58,7 @@ contextBridge.exposeInMainWorld('desktop', {
     edit: (id, text, extra) => ipcRenderer.invoke('tg-edit', id, text, extra),
     answer: (id, text) => ipcRenderer.invoke('tg-answer', id, text),
     disconnect: () => ipcRenderer.invoke('tg-disconnect'),
+    loadNow: () => ipcRenderer.invoke('tg-load-now'),
     openLink: (url) => ipcRenderer.invoke('open-external', url),
     onUpdates: (cb) => ipcRenderer.on('tg-updates', (_e, u) => cb(u)),
     onEvent: (cb) => ipcRenderer.on('tg-event', (_e, ev) => cb(ev)),

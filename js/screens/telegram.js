@@ -9,6 +9,7 @@ import * as T from '../telegram.js';
 import { todayISO, weekday, DOW_LONG } from '../dates.js';
 import { weeklyReview, cashAccounts, cashCheck } from '../review.js';
 import { evalAmount } from '../money.js';
+import * as Blocks from '../blocks.js';
 
 const bot = () => window.desktop?.telegram;
 const bg = () => window.desktop?.background;
@@ -57,13 +58,18 @@ function refresh() {
 }
 
 async function loadStatus() {
+  const was = !!st.status?.linked;
   st.status = await bot()?.status().catch(() => null);
   st.bg = await bg()?.get().catch(() => null);
   refresh();
+  // The Log screen shows "From Telegram" once we know the bot is linked.
+  if (was !== !!st.status?.linked && /^#log/.test(location.hash)) ctx.render();
 }
 
 const send = (text, extra) => bot()?.send(text, extra).catch((e) => console.warn('Telegram send failed', e));
-const keyboard = () => ({ reply_markup: T.quickKeyboard(ctx.state, todayISO()) });
+const keyboard = () => ({ reply_markup: T.quickKeyboard(ctx.state) });
+// Sent more than 2 minutes before the app saw it: the PC was off or asleep.
+const isLate = (u) => u.message?.date && Date.now() / 1000 - u.message.date > 120;
 const localDay = (unix) => todayISO(new Date(unix * 1000));
 
 function undo(id) {
@@ -78,6 +84,8 @@ async function handle(updates) {
   const { state } = ctx;
   if (ctx.DEMO || state._sealed) return; // locked: they wait (Telegram keeps them)
   const done = [];
+  const logged = [];
+  const caughtUp = [];
   let changed = false;
   for (const u of updates) {
     try {
@@ -106,31 +114,50 @@ async function handle(updates) {
         continue;
       }
       const text = (u.message?.text || '').trim();
-      const cmd = text.toLowerCase();
+      const cmd = text.toLowerCase().replace(/@\w+$/, '');
       if (!text) { done.push(u.update_id); continue; }
       if (cashReply(text, u)) { changed = true; done.push(u.update_id); continue; }
-      if (cmd.startsWith('/start') || cmd === '/help') send(`👋 Ready.\n\n${T.HELP}\n/review: your week · /cash: count your wallet`, keyboard());
-      else if (cmd === '/review') sendWeekly();
-      else if (cmd === '/cash') askCash();
-      else if (cmd === '/today' || text === '📊 Today') send(T.todayText(state, todayISO()), keyboard());
-      else if (cmd === '/balance' || text === '💰 Balance') send(T.balanceText(state));
-      else if (cmd === '/undo' || text === '↩️ Undo') {
-        const t = undo();
+      const late = isLate(u);
+      if (cmd.startsWith('/start') || cmd === '/help' || text === '❓ Help') { if (!late) send(`👋 Ready.\n\n${T.HELP}\n/review: your week · /cash: count your wallet`, keyboard()); }
+      else if (cmd === '/review') { if (!late) sendWeekly(); }
+      else if (cmd === '/cash') { if (!late) askCash(); }
+      else if (cmd === '/today' || text === '📊 Today') { if (!late) send(T.todayText(state, todayISO()), keyboard()); }
+      else if (cmd === '/month' || text === '📅 Month') { if (!late) send(T.monthText(state, todayISO()), keyboard()); }
+      else if (cmd === '/balance' || text === '💰 Balance') { if (!late) send(T.balanceText(state)); }
+      else if (cmd === '/last' || text === '🧾 Last') { if (!late) send(T.lastText(state)); }
+      else if (cmd === '/blocks') send(`🧱 <b>Your buttons</b>\n${Blocks.blocks(state).map((b) => esc(Blocks.blockLabel(b))).join('\n')}\n\nAdd: <code>/addblock 🍕 Pizza 120</code> · remove: <code>/delblock pizza</code>. Or edit them in the app: Settings → Telegram & Binance.`, keyboard());
+      else if (/^\/(addblock|block)\b/.test(cmd)) {
+        const b = Blocks.blockFromText(state, text);
+        if (b) { Blocks.upsertBlock(state, b); changed = true; send(`🧱 Added <b>${esc(Blocks.blockLabel(b))}</b>`, keyboard()); }
+        else send('Write it like <code>/addblock 🍕 Pizza 120</code>.');
+      } else if (/^\/delblock\b/.test(cmd)) {
+        const b = Blocks.matchBlock(state, text.replace(/^\/delblock(@\w+)?/i, ''));
+        if (b) { Blocks.removeBlock(state, b.id); changed = true; send(`🧱 Removed ${esc(Blocks.blockLabel(b))}`, keyboard()); }
+        else send('No button with that name. /blocks shows them.');
+      } else if (cmd === '/undo' || text === '↩️ Undo') {
+        // Works while the PC was off too: it fixes the tap just before it.
+        // In a batch, "last" is the record logged just before in this batch.
+        const t = logged.length ? undo(logged.pop().id) : undo();
         changed ||= !!t;
-        send(t ? `↩️ Removed ${esc(t.note || '')} ${esc((t.amount / 100).toString())}` : 'Nothing from Telegram to undo.');
+        if (t && caughtUp.at(-1) === t) caughtUp.pop();
+        if (!late) send(t ? `↩️ Removed ${esc(t.note || '')} ${esc((t.amount / 100).toString())}` : 'Nothing from Telegram to undo.');
       } else {
         const id = `tg-${u.update_id}`;
         if (state.tx.some((t) => t.id === id) || state.deleted[id]) { done.push(u.update_id); continue; } // seen before
-        const f = T.parseQuick(text, state);
-        if (!f) send('I didn\'t catch an amount. Try <code>coffee 35</code> or <code>+500 salary</code>.');
+        const block = Blocks.matchBlock(state, text);
+        const f = block ? Blocks.blockFields(state, block) : T.parseQuick(text, state);
+        if (!f) send('I didn\'t catch an amount. Tap a block, or try <code>coffee 35</code> or <code>+500 salary</code>.');
         else {
           const cur = M.account(state, f.account)?.currency || state.settings.currency;
           const rate = cur === state.settings.currency ? 1 : ctx.suggestedRate(cur) || 1;
-          const t = T.recordFromMessage(f, { updateId: u.update_id, date: localDay(u.message.date), rate, currency: cur });
+          const t = T.recordFromMessage(f, { updateId: u.update_id, date: T.recordDay(localDay(u.message.date), f), rate, currency: cur });
           state.tx.push(t);
           changed = true;
+          logged.push(t);
           ctx.ui.flashId = t.id;
-          send(T.loggedText(state, t), { reply_markup: { inline_keyboard: [[{ text: '↩️ Undo', callback_data: `undo:${t.id}` }]] } });
+          // Sent while the app was closed: one summary at the end instead.
+          if (late) caughtUp.push(t);
+          else send(T.loggedText(state, t), { reply_markup: { inline_keyboard: [[{ text: '↩️ Undo', callback_data: `undo:${t.id}` }]] } });
         }
       }
       done.push(u.update_id);
@@ -139,11 +166,36 @@ async function handle(updates) {
       done.push(u.update_id); // don't get stuck on one bad message
     }
   }
+  if (caughtUp.length) send(T.catchUpText(state, caughtUp, todayISO()), keyboard());
   if (changed) {
     ctx.commit();
-    ctx.toast('Logged from Telegram');
+    ctx.toast(logged.length ? `${logged.length} record${logged.length === 1 ? '' : 's'} from Telegram` : 'Updated from Telegram');
   }
+  lastLoaded = logged.length;
   if (done.length) bot().ack(done);
+}
+
+let lastLoaded = 0;
+export const isLinked = () => !!st.status?.linked;
+
+// "Load from Telegram": ask the bot right now and say what came in.
+export async function loadNow() {
+  if (!bot()) return;
+  if (!st.status?.linked) { ctx.toast('Link your Telegram bot first: Settings → Telegram & Binance'); return; }
+  ctx.toast('Checking Telegram…');
+  lastLoaded = 0;
+  const n = await bot().loadNow().catch(() => -1);
+  if (n < 0) { ctx.toast(st.error || 'Telegram did not answer. Check the internet connection.'); return; }
+  // The messages are handled by now (or a moment later).
+  setTimeout(() => { if (!lastLoaded) ctx.toast('Telegram: nothing new. You\'re up to date.'); }, 1200);
+}
+
+// After editing blocks: show the new buttons in Telegram (once, after a pause).
+let kbTimer = null;
+export function pushKeyboard() {
+  if (!st.status?.linked) return;
+  clearTimeout(kbTimer);
+  kbTimer = setTimeout(() => send('🧱 Your buttons are updated.', keyboard()), 4000);
 }
 
 // Once a minute: the evening reminder and the morning bills note.
@@ -225,7 +277,10 @@ export function settingsCard() {
     <div class="kv"><span>Bot</span><b>@${esc(s.botName)}</b></div>
     ${s.userName ? `<div class="kv"><span>Listens to</span><b>${esc(s.userName)}</b></div>` : ''}
     ${s.error || st.error ? `<p class="lock-msg">${esc(s.error || st.error)}</p>` : ''}
-    <p class="muted small">Send <code>coffee 35</code>, <code>taxi 45 cash</code>, <code>+500 salary</code>, or tap a button. /today, /balance, /undo.</p>
+    ${s.lastCheck ? `<div class="kv"><span>Last checked</span><b>${esc(new Date(s.lastCheck).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))}</b></div>` : ''}
+    <p class="muted small">Send <code>coffee 35</code>, <code>taxi 45 cash</code>, <code>coffee 35 yesterday</code>, <code>+500 salary</code>, or tap a button below the chat. /today, /month, /balance, /last, /undo.</p>
+    <p class="muted small"><b>PC off?</b> Keep logging on your phone: Telegram keeps the messages for 24 hours and the app logs them, on the day you sent them, as soon as it opens. You get one summary message.</p>
+    <button class="btn primary block" data-act="tg-load">📥 Load from Telegram now</button>
     <label class="field check"><input type="checkbox" data-tg="daily" ${p.daily ? 'checked' : ''}><span>Evening reminder to log</span></label>
     ${p.daily ? `<label class="field"><span>Remind me at</span><input type="time" data-tg="at" value="${esc(p.at)}"></label>` : ''}
     <label class="field check"><input type="checkbox" data-tg="bills" ${p.bills ? 'checked' : ''}><span>Morning note when a bill is due today or tomorrow</span></label>
@@ -257,6 +312,7 @@ export async function onSubmit(form) {
 }
 
 export function onClick(act) {
+  if (act === 'tg-load') { loadNow().then(loadStatus); return true; }
   if (act === 'tg-pair') { bot().pair().then((p) => { st.pair = p; refresh(); }); return true; }
   if (act === 'tg-open') { if (st.pair?.link) bot().openLink(st.pair.link); return true; }
   if (act === 'tg-review') { sendWeekly().then(() => ctx.toast('Sent. Check Telegram.')); return true; }

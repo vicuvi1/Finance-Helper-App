@@ -339,4 +339,5 @@ ipcMain.handle('tg-send', (_e, text, extra) => telegram.send(String(text).slice(
 ipcMain.handle('tg-edit', (_e, id, text, extra) => telegram.edit(id, String(text).slice(0, 4000), extra || {}));
 ipcMain.handle('tg-answer', (_e, id, text) => telegram.answer(id, text));
 ipcMain.handle('tg-disconnect', () => telegram.disconnect());
+ipcMain.handle('tg-load-now', () => telegram.loadNow());
 ipcMain.handle('open-external', (_e, url) => { if (/^https:\/\/t\.me\//.test(url)) shell.openExternal(url); return true; });

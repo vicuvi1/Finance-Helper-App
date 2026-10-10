@@ -1486,3 +1486,23 @@ table.grid tr.selected td { background: var(--gold-soft); }
 .loan-kinds { grid-template-columns: repeat(4, 1fr); }
 @media (max-width: 520px) { .loan-kinds { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 520px) { .pp-sum { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; } .pp-tile { padding: 12px; } .pp-big { font-size: 17px; } }
+
+/* Telegram buttons (Settings → Telegram & Binance) */
+.tgb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 8px; }
+.tgb { position: relative; }
+.tgb-main { width: 100%; display: grid; justify-items: start; gap: 2px; padding: 12px 12px 10px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface-2); color: var(--text); font: inherit; text-align: left; cursor: pointer; transition: border-color .15s, transform .15s; }
+.tgb-main:hover { border-color: var(--gold); transform: translateY(-1px); }
+.tgb-emoji { font-size: 26px; line-height: 1.1; }
+.tgb-name { font-weight: 600; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tgb-main small { font-size: 11px; }
+.tgb-move { position: absolute; top: 6px; right: 6px; display: flex; gap: 2px; opacity: 0; transition: opacity .15s; }
+.tgb:hover .tgb-move, .tgb:focus-within .tgb-move { opacity: 1; }
+.tgb-move .icon-btn { width: 24px; height: 24px; min-width: 0; padding: 0; font-size: 16px; }
+.tgb-move .icon-btn[disabled] { opacity: .3; }
+.tgb-preview { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 14px; margin-bottom: 14px; border-radius: 12px; background: var(--surface-3); }
+.tgb-preview span { font-weight: 600; }
+.tgb-emojis { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.tgb-e { width: 38px; height: 38px; border: 1px solid transparent; border-radius: 10px; background: var(--surface-2); font-size: 20px; cursor: pointer; }
+.tgb-e[aria-pressed="true"] { border-color: var(--gold); background: var(--surface-3); }
+.tgb-emojis input { width: 64px; height: 38px; text-align: center; font-size: 18px; }
+@media (hover: none) { .tgb-move { opacity: 1; } }

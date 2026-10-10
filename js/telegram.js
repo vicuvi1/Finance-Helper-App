@@ -4,8 +4,9 @@
 // The desktop main process (electron/telegram.cjs) only moves messages.
 
 import { evalAmount, formatMoney } from './money.js';
-import { suggestCategory, sortTx, monthSummary, totalBalance, quickPicks, budgetAlert, category, account, B } from './model.js';
-import { monthKey } from './dates.js';
+import { suggestCategory, sortTx, monthSummary, totalBalance, accountValues, jarStatus, budgetAlert, category, account, B } from './model.js';
+import { monthKey, addMonths, addDays, MONTHS, DOW_SHORT, dowIndex } from './dates.js';
+import { blockKeyboard } from './blocks.js';
 import { dueItems, upcomingItems } from './recurring.js';
 import { workText } from './workhours.js';
 
@@ -34,6 +35,9 @@ export function parseQuick(text, state) {
   let t = stripIcons(String(text || '')).replace(/\s+/g, ' ').trim();
   if (!t || t.startsWith('/')) return null;
   let type = 'expense';
+  // "coffee 35 yesterday": a day back.
+  let daysAgo = 0;
+  t = t.replace(/(^|\s)(yesterday|ieri|вчера)(?=\s|$)/i, () => { daysAgo = 1; return ' '; }).replace(/\s+/g, ' ').trim();
   if (/^\+/.test(t)) { type = 'income'; t = t.slice(1).trim(); }
   // The amount: the first run of digits and + - * / ( ) with , or .
   const m = t.match(/(^|\s)(\(?\d[\d\s.,]*(?:[+\-*/x×]\s*\(?\d[\d.,]*\)?)*\)?)(?=\s|$|[a-zа-яăâîșț$€]|lei|mdl)/i);
@@ -56,8 +60,11 @@ export function parseQuick(text, state) {
   const same = recent.find((x) => fold(x.note) === fold(note) && account(state, x.account) && !account(state, x.account).archived);
   const accountId = acc?.id || same?.account || recent[0]?.account || state.settings.accounts[0]?.id;
   const cat = suggestCategory(state, note, type) || (type === 'income' ? 'other-in' : 'other');
-  return { type, amount, note, account: accountId, category: cat };
+  return { type, amount, note, account: accountId, category: cat, ...(daysAgo ? { daysAgo } : {}) };
 }
+
+// The day a record belongs to: the day the message was sent, minus "yesterday".
+export const recordDay = (sentDay, f) => (f?.daysAgo ? addDays(sentDay, -f.daysAgo) : sentDay);
 
 // A full record from a Telegram message (its own id, so the same message
 // is never logged twice) at the rate of the account's currency.
@@ -67,14 +74,31 @@ export function recordFromMessage(fields, { updateId, date, rate = 1, currency, 
 
 const esc = (s) => String(s ?? '').replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
 
+const fm = (state, c) => esc(formatMoney(Math.round(c / 100) * 100, state.settings.currency));
+const spentOn = (state, from, to) => state.tx.filter((t) => t.type === 'expense' && !t.loan && t.date >= from && t.date <= to).reduce((a, t) => a + B(t), 0);
+const catName = (state, id) => { const c = category(state, id); return c ? `${c.emoji ? `${c.emoji} ` : ''}${c.name}` : 'Other'; };
+
+// The reply to a logged record: what it was, then where you stand today and
+// this month, and how its category is doing.
 export function loggedText(state, t) {
   const c = category(state, t.category)?.name || '';
   const a = account(state, t.account)?.name || '';
   const sign = t.type === 'income' ? '+' : '−';
   const alert = budgetAlert(state, t);
   const work = t.type === 'expense' ? workText(state, B(t), t.date) : '';
-  return `✅ <b>${sign}${esc(formatMoney(t.amount, t.currency))}</b> · ${esc(t.note || c)}\n${esc(c)} · ${esc(a)}${work ? `\n⏱ ${esc(work)} of your work` : ''}${alert ? `\n⚠️ ${esc(alert.text)}` : ''}`;
+  const lines = [`✅ <b>${sign}${esc(formatMoney(t.amount, t.currency))}</b> · ${esc(t.note || c)}`, `${esc(c)} · ${esc(a)}${t.date ? ` · ${dayShort(t.date)}` : ''}`];
+  if (work) lines.push(`⏱ ${esc(work)} of your work`);
+  if (t.type === 'expense' && t.date) {
+    const key = monthKey(t.date);
+    const catMonth = state.tx.filter((x) => x.type === 'expense' && !x.loan && x.category === t.category && monthKey(x.date) === key).reduce((s, x) => s + B(x), 0);
+    lines.push(`\n📊 Spent that day: <b>${fm(state, spentOn(state, t.date, t.date))}</b> · month: ${fm(state, monthSummary(state, key).expense)}`);
+    lines.push(`${esc(c || 'This category')} this month: ${fm(state, catMonth)}`);
+  }
+  if (alert) lines.push(`⚠️ ${esc(alert.text)}`);
+  return lines.join('\n');
 }
+
+const dayShort = (iso) => `${DOW_SHORT[dowIndex(iso)]} ${Number(iso.slice(8))}`;
 
 export function todayText(state, today) {
   const list = state.tx.filter((t) => t.date === today && t.type !== 'transfer' && !t.loan);
@@ -86,9 +110,52 @@ export function todayText(state, today) {
   return `📊 <b>Today</b>: spent ${esc(formatMoney(out, cur))}${inc ? `, earned ${esc(formatMoney(inc, cur))}` : ''}\n${lines.join('\n') || 'Nothing logged yet.'}\n\nThis month: +${esc(formatMoney(s.income, cur))} / −${esc(formatMoney(s.expense, cur))}`;
 }
 
+// All your money, then each account in its own currency.
 export function balanceText(state) {
   const { total } = totalBalance(state);
-  return `💰 All my money: <b>${esc(formatMoney(Math.round(total / 100) * 100, state.settings.currency))}</b>`;
+  const rows = accountValues(state).filter((v) => !v.account.archived && (v.own || v.coins))
+    .sort((a, b) => (b.inBase ?? 0) - (a.inBase ?? 0))
+    .map((v) => `${v.account.savings || v.account.kind === 'savings' ? '🏦' : v.account.kind === 'cash' ? '💵' : v.account.kind === 'crypto' ? '🪙' : '💳'} ${esc(v.account.name)}: <b>${esc(formatMoney(v.own, v.account.currency || state.settings.currency))}</b>${v.coins && v.inBase != null ? ` (+coins ≈ ${fm(state, v.coins)})` : ''}`);
+  return `💰 All my money: <b>${fm(state, total)}</b>${rows.length ? `\n\n${rows.join('\n')}` : ''}`;
+}
+
+// The month so far: totals, the same days of last month, top categories, jars.
+export function monthText(state, today) {
+  const key = monthKey(today);
+  const s = monthSummary(state, key);
+  const day = Number(today.slice(8));
+  const prevKey = addMonths(key, -1);
+  const prevSame = spentOn(state, `${prevKey}-01`, `${prevKey}-${String(day).padStart(2, '0')}`);
+  const lines = [`📅 <b>${MONTHS[Number(key.slice(5)) - 1]}</b> so far (day ${day})`,
+    `💚 Earned <b>+${fm(state, s.income)}</b>`, `💸 Spent <b>−${fm(state, s.expense)}</b>`,
+    s.net >= 0 ? `🏦 Kept <b>${fm(state, s.net)}</b>${s.savingsRate != null ? ` (${Math.round(s.savingsRate * 100)}% of income)` : ''}` : `🔻 Spent <b>${fm(state, -s.net)}</b> more than you earned`];
+  if (prevSame) {
+    const ch = s.expense / prevSame - 1;
+    lines.push(Math.abs(ch) < 0.05 ? '↔️ About the same as last month by this day' : ch < 0 ? `👍 ${Math.round(-ch * 100)}% less than last month by this day` : `👀 ${Math.round(ch * 100)}% more than last month by this day`);
+  }
+  if (s.expense) {
+    lines.push('', '<b>Where it went</b>');
+    for (const c of s.byCategory.slice(0, 6)) {
+      const share = c.amount / s.expense;
+      lines.push(`${esc(catName(state, c.id))} ${fm(state, c.amount)} · ${Math.round(share * 100)}%`);
+    }
+  }
+  const over = jarStatus(state, key).filter((j) => !j.savings && j.budget && j.used > j.budget);
+  if (over.length) lines.push('', ...over.map((j) => `⚠️ ${esc(j.jar.name)}: over by ${fm(state, j.used - j.budget)}`));
+  return lines.join('\n');
+}
+
+// The last records, newest first.
+export function lastText(state, n = 10) {
+  const list = sortTx(state.tx).filter((t) => t.type !== 'transfer').slice(0, n);
+  if (!list.length) return 'Nothing logged yet.';
+  return `🧾 <b>Last ${list.length}</b>\n${list.map((t) => `${dayShort(t.date)} · ${t.type === 'income' ? '+' : '−'}${esc(formatMoney(t.amount, t.currency))} · ${esc(t.note || category(state, t.category)?.name || '')}`).join('\n')}`;
+}
+
+// What you sent while the app was closed, in one message once it opens.
+export function catchUpText(state, list, today) {
+  const rows = list.slice(0, 25).map((t) => `${dayShort(t.date)} · ${t.type === 'income' ? '+' : '−'}${esc(formatMoney(t.amount, t.currency))} · ${esc(t.note || category(state, t.category)?.name || '')}`);
+  return `📥 <b>Synced ${list.length} record${list.length === 1 ? '' : 's'}</b> you sent while the app was closed:\n${rows.join('\n')}${list.length > 25 ? `\n…and ${list.length - 25} more` : ''}\n\n📊 Today: spent ${fm(state, spentOn(state, today, today))} · this month: ${fm(state, monthSummary(state, monthKey(today)).expense)}`;
 }
 
 // The evening nudge.
@@ -104,17 +171,15 @@ export function billsText(state, today) {
   return `🔔 <b>Coming up</b>\n${due.map(({ rule, date }) => `${date < today ? 'Overdue' : date === today ? 'Today' : 'Tomorrow'} · ${esc(rule.note || 'payment')} ${rule.type === 'income' ? '+' : '−'}${esc(formatMoney(rule.amount, rule.currency))}`).join('\n')}`;
 }
 
-// The buttons under the message box: your quick picks and two helpers.
-export function quickKeyboard(state, today) {
-  const picks = quickPicks(state, today, 8).filter((p) => p.type === 'expense' || p.type === 'income');
-  const btn = (p) => `${p.type === 'income' ? '+' : ''}${p.note || category(state, p.category)?.name || 'record'} ${String(p.amount / 100).replace('.', ',')}`;
-  const rows = [];
-  for (let i = 0; i < picks.length; i += 2) rows.push(picks.slice(i, i + 2).map((p) => ({ text: btn(p) })));
-  rows.push([{ text: '📊 Today' }, { text: '💰 Balance' }, { text: '↩️ Undo' }]);
-  return { keyboard: rows, resize_keyboard: true, is_persistent: true, input_field_placeholder: 'e.g. coffee 35' };
-}
+// The buttons under the message box: your blocks (js/blocks.js) and helpers.
+export const quickKeyboard = (state) => blockKeyboard(state);
 
-export const HELP = 'Send what you spent, like <code>coffee 35</code>, <code>taxi 45 maib</code> or <code>120+45 groceries</code>. Income starts with +: <code>+500 salary</code>. Buttons below log your usual things in one tap.\n\n/today · /balance · /undo';
+export const HELP = `Tap a block below to log it for today, or type: <code>coffee 35</code>, <code>taxi 45 maib</code>, <code>120+45 groceries</code>. Income starts with +: <code>+500 salary</code>. Another day: <code>coffee 35 yesterday</code>.
+
+📊 /today · 📅 /month · 💰 /balance · 🧾 /last · ↩️ /undo
+🧱 /blocks: your buttons · <code>/addblock 🍕 Pizza 120</code> · <code>/delblock pizza</code>
+
+PC off? Keep sending: Telegram holds messages for 24 hours and the app logs them, with the right day, when it opens.`;
 
 // ---------- Weekly ritual ----------
 

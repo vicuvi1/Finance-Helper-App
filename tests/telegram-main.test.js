@@ -68,3 +68,25 @@ test('nothing is kept when the token cannot be stored safely', async () => {
   await assert.rejects(bot.connect(TOKEN), /secure key storage/);
   assert.equal(bot.status().connected, false);
 });
+
+test('load now checks right away and says what came; the command menu is set', async () => {
+  const tg = fakeTelegram();
+  const got = [];
+  const calls = [];
+  const net = { fetch: (url, opts) => { calls.push(url.split('/').pop()); return tg.net.fetch(url, opts); } };
+  const bot = createTelegram({ app: {}, net, storage: memory(), onUpdates: (u) => got.push(...u) });
+  await bot.connect(TOKEN);
+  const { code } = bot.pair();
+  tg.queue.push(msg(1, 222, `/start ${code}`));
+  await until(() => bot.status().linked);
+  tg.queue.push(msg(2, 222, '☕ Coffee 20'));
+  const n = await bot.loadNow();
+  assert.ok(n >= 1);
+  assert.deepEqual(got.map((u) => u.update_id), [2]);
+  bot.ack([2]);
+  await until(() => calls.includes('setMyCommands'));
+  assert.ok(calls.includes('setMyCommands'));
+  assert.equal(await bot.loadNow(), 0); // nothing new
+  assert.ok(bot.status().lastCheck > 0);
+  await bot.disconnect();
+});

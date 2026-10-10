@@ -29,6 +29,7 @@ import * as Clients from './screens/clients.js';
 import * as Rules from './screens/rules.js';
 import * as Goals from './screens/goals.js';
 import * as Telegram from './screens/telegram.js';
+import * as TgBlocks from './screens/tgblocks.js';
 import * as Buddy from './screens/buddy.js';
 import * as ImportCheck from './screens/importcheck.js';
 import * as WorkHour from './screens/workhour.js';
@@ -689,6 +690,7 @@ function viewLog() {
     ${view === 'calendar' ? '' : `<input type="search" id="search" placeholder="Search all months: coffee, maib, >1000, march…" value="${esc(ui.search)}" aria-label="Search all records">`}
     <div class="log-actions">
       ${undoButtons()}
+      ${Telegram.isLinked() ? '<button type="button" class="btn" data-act="tg-load" title="Get what you sent to your Telegram bot">📥 From Telegram</button>' : ''}
       <button type="button" class="btn" data-act="copy-table" title="Copy this month as a table to paste into Excel or Google Sheets">Copy table</button>
       <button type="button" class="btn" data-act="export-month" title="Download this month as a file Excel opens">Export month</button>
     </div>
@@ -779,7 +781,7 @@ function viewSettings() {
     { id: 'general', icon: '⚙️', label: 'General', sub: 'Look, smart split, your hour', html: () => cards.look + cards.split + WorkHour.settingsCard() + cards.accounts + cards.goals },
     { id: 'categories', icon: '🏷️', label: 'Categories & rules', sub: 'Categories, jars, auto-rules', html: () => cards.categories + Rules.settingsCard() },
     { id: 'data', icon: '💾', label: 'Data & backups', sub: 'Import, export, backups, sync', html: () => cards.data + Backups.settingsCard() + Sync.settingsCard() },
-    { id: 'connect', icon: '🔗', label: 'Telegram & Binance', sub: 'Your bot, crypto balances', html: () => Telegram.settingsCard() + Binance.settingsCard() },
+    { id: 'connect', icon: '🔗', label: 'Telegram & Binance', sub: 'Your bot, crypto balances', html: () => Telegram.settingsCard() + TgBlocks.settingsCard() + Binance.settingsCard() },
     { id: 'buddy', icon: '🤖', label: 'Bit, your buddy', sub: 'Show, name, color', html: () => Buddy.settingsCard() },
     { id: 'security', icon: '🔒', label: 'Security', sub: 'PIN and encryption', html: () => Security.settingsCard() },
     { id: 'about', icon: 'ℹ️', label: 'About & updates', sub: 'Version, check, erase', html: () => Updates.settingsCard() + SelfCheck.settingsCard() + cards.danger },
@@ -1791,6 +1793,7 @@ document.addEventListener('click', (e) => {
   else if (act === 'row-add') addDraftRow();
   else if (act === 'day') openDaySheet(el.dataset.date);
   else if (act === 'copy-table') copyTable();
+  else if (act === 'tg-load') Telegram.loadNow();
   else if (act === 'export-month') exportMonthExcel();
   else if (act === 'export-xlsx') exportExcel();
   else if (act === 'export-json') exportJSON();
@@ -1906,7 +1909,7 @@ const SCREENS = {
   reports: ReportsScreen,
   review: YearReview,
   rates: RatesScreen,
-  settings: { view: viewSettings, onClick: (a, el) => Security.onClick(a, el) || Rules.onClick(a, el) || Telegram.onClick(a) || Buddy.onClick(a, el) || Binance.onClick(a) || Sync.onClick(a) || SelfCheck.onClick(a) || Backups.onClick(a, el) || (a.startsWith('update-') && (Updates.onClick(a), true)), onChange: (el) => Security.onChange(el) || Telegram.onChange(el) || Buddy.onChange(el) || WorkHour.onChange(el) },
+  settings: { view: viewSettings, onClick: (a, el) => Security.onClick(a, el) || Rules.onClick(a, el) || Telegram.onClick(a) || TgBlocks.onClick(a, el) || Buddy.onClick(a, el) || Binance.onClick(a) || Sync.onClick(a) || SelfCheck.onClick(a) || Backups.onClick(a, el) || (a.startsWith('update-') && (Updates.onClick(a), true)), onChange: (el) => Security.onChange(el) || Telegram.onChange(el) || Buddy.onChange(el) || WorkHour.onChange(el) },
 };
 
 function openMoreSheet() {

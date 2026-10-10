@@ -63,6 +63,9 @@ tested); `js/app.js` only renders and handles taps.
   in safeStorage, only the chat linked with the one-time code is heard) and
   acks an update only after the page handled it; parsing and replies are in
   `js/telegram.js`, wiring in `js/screens/telegram.js`. Never commit a token.
+  Buttons are blocks (`js/blocks.js`, `settings.tgBlocks`, editor `js/screens/tgblocks.js`).
+  Messages older than 2 minutes when handled (PC was off) get one catch-up summary,
+  not a reply each; `loadNow()` cuts the long poll short ("📥 From Telegram").
 - End-to-end: `npm run e2e` (`e2e/*.e2e.mjs`, Playwright; on Linux `xvfb-run -a npm run e2e`
   for the desktop test). CI runs it before every desktop build, so a broken app never
   ships. The desktop test uses `FH_USER_DATA` (unpackaged only) for a throwaway data folder.
