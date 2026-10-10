@@ -84,7 +84,7 @@ test('sheet view: type an amount in a day row, edit it, clear it', async () => {
   const { page, errors, context } = await openPage(browser, server.url, { width: 1800, height: 1000 });
   await page.goto(`${server.url}#log`);
   await page.waitForSelector('#sheet-grid');
-  const day = await page.evaluate(() => document.querySelector('#sheet-grid tbody tr').dataset.date);
+  const day = await page.evaluate(() => document.querySelector('#sheet-grid tbody tr[data-date]').dataset.date);
   const key = (f) => `[data-sh="${day}|out|0|${f}"]`;
   const find = () => page.evaluate(() => JSON.parse(localStorage.getItem('finance-helper.state')).tx.find((t) => t.note === 'sheet bread'));
   await page.fill(key('note'), 'sheet bread');
@@ -99,7 +99,7 @@ test('sheet view: type an amount in a day row, edit it, clear it', async () => {
   await page.fill(key('amount'), '');
   await page.keyboard.press('Tab');
   await page.waitForFunction(() => !JSON.parse(localStorage.getItem('finance-helper.state')).tx.some((t) => t.note === 'sheet bread'));
-  assert.match(await page.textContent('.money-panel'), /All my money/);
+  assert.match(await page.textContent('#sheet-grid'), /MONEY MANAGEMENT/);
   assert.deepEqual(errors, []);
   await context.close();
 });

@@ -42,7 +42,7 @@ import { bindTilt } from './cards.js';
 import { FREQS, markDone, dueItems } from './recurring.js';
 import { invoiceStatus } from './invoices.js';
 import { tableHTML, calendarHTML, dayLabelHTML } from './logviews.js';
-import { sheetHTML, moneyPanelHTML } from './sheetview.js';
+import { sheetHTML, monthTabs, calcResult } from './sheetview.js';
 import { createHistory } from './history.js';
 import { searchTx, searchSummary, SEARCH_HINT } from './search.js';
 
@@ -66,7 +66,7 @@ const ui = {
   // Sheet view: days with an extra empty row, and the side panel's boxes.
   sheetExtra: new Set(),
   share: '',
-  calc: '',
+  calc: { sum: [], dif: [], mul: [] },
   lastSel: null,
 };
 let installPrompt = null;
@@ -636,19 +636,21 @@ function onSheetEnter(el) {
   }, 20);
 }
 
-// The side panel's smart sharing and calculator update as you type.
+// The sheet's SMART SHARING and My CALCULATOR update as you type.
 function onPanelInput(el) {
   if (el.id === 'mp-share') {
     ui.share = el.value;
     const v = evalAmount(el.value);
     const parts = v ? M.splitIncome(state, v) : [];
-    document.querySelectorAll('.mp-jars [data-jar]').forEach((b, i) => { b.textContent = v ? formatMoney(parts[i].amount, '') : '–'; });
+    document.querySelectorAll('#sheet-grid [data-jar]').forEach((b, i) => { b.textContent = v ? formatMoney(parts[i].amount, '') : ''; });
     return true;
   }
-  if (el.id === 'mp-calc') {
-    ui.calc = el.value;
-    const v = evalAmount(el.value);
-    document.getElementById('mp-calc-out').textContent = el.value ? (v == null ? '…' : `= ${formatMoney(v, '')}`) : '';
+  if (el.dataset.calc) {
+    const [kind, i] = el.dataset.calc.split('|');
+    ui.calc[kind][Number(i)] = el.value;
+    const v = calcResult(kind, ui.calc[kind]);
+    const out = document.querySelector(`#sheet-grid [data-calc-out="${kind}"]`);
+    if (out) out.textContent = v == null ? '' : (Math.round(v * 100) / 100).toLocaleString('ro-RO').replace(/\./g, ' ');
     return true;
   }
   return false;
@@ -670,14 +672,16 @@ function viewLog() {
 
   let content;
   if (view === 'sheet' && !q) {
-    const accs = M.accountValues(state).filter((v) => !v.account.archived);
     const shareVal = evalAmount(ui.share);
-    content = `<div class="sheet-layout">${sheetHTML(state, ui.month, { today: todayISO(), extra: ui.sheetExtra, fmt: (c) => money(c) })}
-      ${moneyPanelHTML(state, ui.month, {
-    summary: s, values: accs, total: M.totalBalance(state).total, jars: state.settings.jars, fmt: (c) => formatMoney(c, ''), money: (c) => money(c),
-    share: { text: ui.share, value: shareVal, parts: shareVal ? M.splitIncome(state, shareVal).map((p) => p.amount) : [] },
-    calc: { text: ui.calc, value: evalAmount(ui.calc) },
-  })}</div>`;
+    const g = M.mainGoal(state);
+    const gs = g?.target ? M.goalStatus(state, todayISO(), g) : null;
+    content = sheetHTML(state, ui.month, {
+      today: todayISO(), extra: ui.sheetExtra, fmt: (c) => formatMoney(c, ''), tabs: monthTabs(state, ui.month, todayISO()),
+      summary: s, values: M.accountValues(state).filter((v) => !v.account.archived), total: M.totalBalance(state).total, jars: state.settings.jars,
+      share: { text: ui.share, value: shareVal, parts: shareVal ? M.splitIncome(state, shareVal).map((p) => p.amount) : [] },
+      calc: ui.calc,
+      goal: gs ? { name: g.name, target: gs.target, ratio: gs.ratio, left: gs.remaining } : null,
+    });
   } else if (view === 'calendar') {
     content = `<section class="card">${calendarHTML(state, ui.month)}</section>`;
   } else if (view === 'table' || view === 'sheet') {
@@ -704,7 +708,7 @@ function viewLog() {
   const dir = ui.monthDir;
   ui.monthDir = 0;
   return `<header class="top"><div><h1>Log</h1><div class="sub">${q ? 'Searching all months' : monthLabel(ui.month)}</div></div>${todayChip()}</header>
-  ${q ? '' : monthNav()}
+  ${q || view === 'sheet' ? '' : monthNav()}
   <div class="log-body${dir ? ` slide-${dir > 0 ? 'l' : 'r'}` : ''}">
   ${q || view === 'sheet' ? '' : `<section class="card">${stats(s)}${rateBar(s)}</section>`}
   <div class="log-tools">
@@ -719,7 +723,7 @@ function viewLog() {
   ${view === 'calendar' || (view === 'sheet' && !q) ? '' : `<div class="chips">${chip('all', 'All')}${chip('expense', 'Spent')}${chip('income', 'Earned')}${chip('transfer', 'Moves')}</div>`}
   ${q && view !== 'calendar' ? searchCard(list) : view === 'calendar' ? '' : `<p class="search-hint muted small">Search all months: <span>${esc(SEARCH_HINT)}</span></p>`}
   ${content}
-  ${view === 'sheet' && !q ? '<p class="muted small">Type in any cell, like your Google Sheet: an amount in <b>Amount earned</b> or <b>Amount spent</b> saves a record for that day; the category is picked from the description. Clear an amount to delete it. <b>+</b> on a date adds another row for that day. <b>Enter</b> moves down. Moves between accounts and the account of each record are in the <b>Table</b> view.</p>' : ''}
+  ${view === 'sheet' && !q ? '<p class="muted small">Just like your Google Sheet: type an amount in <b>Amount earned</b> or <b>Amount invested</b> and it is saved for that day (the category comes from the description; hover an amount to see it). Clear an amount to delete it. <b>+</b> next to a date adds another row for that day, <b>Enter</b> moves down, the tabs at the bottom switch months. Categories, accounts and moves between accounts: <b>Table</b> view.</p>' : ''}
   ${view === 'table' ? '<p class="muted small">Edit any cell; it saves by itself. <b>Enter</b> moves down a row. <b>←</b> / <b>→</b> switch months. Tick rows (Shift+click for a range) to change many at once. <b>Ctrl+Z</b> undoes anything. Paste rows copied from Excel or Google Sheets anywhere on this page to import them.</p>' : ''}
   </div>`;
 }
@@ -1828,7 +1832,7 @@ document.addEventListener('change', (e) => {
   if (SCREENS[ui.tab]?.onChange?.(e.target)) return;
   if (e.target.dataset.bulk) onBulkChange(e.target);
   else if (e.target.dataset.sh) onSheetChange(e.target);
-  else if (e.target.closest('.money-panel')) return;
+  else if (e.target.id === 'mp-share' || e.target.dataset.calc) return;
   else if (e.target.classList.contains('sel')) return;
   else if (e.target.closest('#tx-table')) onCellChange(e.target);
   else if (e.target.id === 'file-csv') {

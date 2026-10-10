@@ -1354,75 +1354,63 @@ table.grid tr.selected td { background: var(--gold-soft); }
   .view-home .hero-month .label { grid-column: 1 / -1; margin: 0; }
 }
 
-/* Log → Sheet: like the Google Sheet, every day a row */
-.sheet-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: start; margin-bottom: 10px; }
-/* Narrower screens: the money corner is a strip above the sheet; wide
-   screens: beside it, staying in view while you scroll. */
-.sheet-layout > .money-panel { order: -1; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
-@media (min-width: 1700px) {
-  .sheet-layout { grid-template-columns: minmax(0, 1fr) 340px; }
-  .sheet-layout > .money-panel { order: 0; grid-template-columns: minmax(0, 1fr); position: sticky; top: 16px; }
-}
-.sheet-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
-.sheet-grid { width: 100%; min-width: 900px; border-collapse: separate; border-spacing: 0; table-layout: fixed; font-size: 14px; }
-.sheet-grid col.c-date { width: 100px; } .sheet-grid col.c-amt { width: 112px; } .sheet-grid col.c-cat { width: 124px; } .sheet-grid col.c-day { width: 100px; }
-.sheet-grid thead th { position: sticky; top: 0; z-index: 2; text-align: left; font-size: 12px; font-weight: 650; padding: 10px; color: var(--text); background: var(--surface-2); border-bottom: 1px solid var(--line-strong); white-space: nowrap; }
-.sheet-grid thead th.in { background: color-mix(in srgb, var(--income) 14%, var(--surface-2)); }
-.sheet-grid thead th.out { background: color-mix(in srgb, var(--expense) 14%, var(--surface-2)); }
-.sheet-grid td, .sheet-grid tbody th { padding: 0; border-bottom: 1px solid var(--line); border-right: 1px solid var(--line); vertical-align: middle; }
-.sheet-grid td:last-child { border-right: 0; }
-.sheet-grid tr.day-first > * { border-top: 1px solid var(--line-strong); }
-.sheet-grid tbody tr:first-child > * { border-top: 0; }
-.sheet-grid input, .sheet-grid select { width: 100%; min-height: 34px; padding: 6px 10px; border: 0; border-radius: 0; background: transparent; font-size: 14px; color: var(--text); text-overflow: ellipsis; }
-.sheet-grid select { appearance: none; -webkit-appearance: none; background-image: none; cursor: pointer; color: var(--muted); font-size: 13px; }
-.sheet-grid tr:hover select, .sheet-grid select:focus { color: var(--text); }
-.sheet-grid input:focus, .sheet-grid select:focus { outline: 2px solid var(--gold); outline-offset: -2px; background: var(--surface-3); }
-.sheet-grid input:hover, .sheet-grid select:hover { border: 0; }
-.sheet-grid tbody tr:hover > td { background: color-mix(in srgb, var(--surface-2) 70%, transparent); }
-.sh-amt-in, .sh-note-in { display: flex; align-items: center; }
-.sh-amt input { text-align: right; font-feature-settings: "tnum"; font-weight: 600; }
-.sh-amt.in input { color: var(--income); }
-.sh-amt.out input { color: var(--text); }
-.sh-cur, .sh-loan { font-size: 10.5px; font-weight: 700; color: var(--muted); padding-right: 8px; }
-.sh-loan { color: var(--gold); text-transform: uppercase; }
-.sh-dash { color: var(--faint); padding: 0 10px; }
-.sheet-grid tbody th.sh-date { position: relative; text-align: left; padding: 6px 8px; font-weight: 600; background: var(--surface); white-space: nowrap; }
-.sh-d { display: inline-block; min-width: 22px; font-size: 15px; font-feature-settings: "tnum"; }
-.sh-date .dow-tag { margin-left: 4px; }
-.sh-today { display: block; margin-top: 3px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--today-c, var(--gold)); }
-.sh-add { position: absolute; right: 5px; top: 50%; margin-top: -10px; width: 20px; height: 20px; border-radius: 6px; border: 1px solid var(--line-strong); background: var(--surface-2); color: var(--muted); font-size: 14px; line-height: 1; opacity: 0; transition: opacity 0.15s; }
-.sheet-grid tr:hover .sh-add, .sh-add:focus { opacity: 1; }
-.sh-add:hover { color: var(--gold); border-color: var(--gold); }
-.sheet-grid tr.weekend > th.sh-date, .sheet-grid tr.weekend > td { background: color-mix(in srgb, var(--surface-2) 55%, var(--surface)); }
-.sheet-grid tr.is-today > th.sh-date { box-shadow: inset 3px 0 0 var(--today-c, var(--gold)); background: color-mix(in srgb, var(--today-c, var(--gold)) 12%, var(--surface)); }
-.sheet-grid tr.is-today > td { background: color-mix(in srgb, var(--today-c, var(--gold)) 6%, var(--surface)); }
-.sheet-grid tr.future > th.sh-date .sh-d { color: var(--faint); }
-.sh-day { padding: 4px 10px !important; text-align: right; font-size: 12px; font-feature-settings: "tnum"; line-height: 1.35; }
-.sh-day span { display: block; }
-.sheet-grid tfoot th, .sheet-grid tfoot td { padding: 10px; border-top: 1px solid var(--line-strong); background: var(--surface-2); text-align: left; font-size: 14px; }
-.sheet-grid tfoot .sh-amt, .sheet-grid tfoot .sh-day { text-align: right; }
-.money-panel { display: grid; gap: 12px; align-content: start; }
-.mp-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; }
-.mp-card h3 { display: flex; justify-content: space-between; align-items: center; margin: 0 0 10px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.09em; color: var(--muted); }
-.mp-card h3 .card-link { text-transform: none; letter-spacing: 0; }
-.mp-tot { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-.mp-tot span, .mp-in span, .mp-jars span, .mp-all span { display: block; font-size: 11.5px; color: var(--muted); }
-.mp-tot b { font-size: 17px; font-weight: 650; font-feature-settings: "tnum"; white-space: nowrap; }
-.mp-kept { margin-top: 12px; font-size: 12.5px; }
-.mp-kept .bar { margin-top: 6px; }
-.mp-accs { display: grid; gap: 2px; }
-.mp-acc { display: flex; justify-content: space-between; gap: 8px; padding: 6px 8px; margin: 0 -8px; border-radius: 8px; font-size: 13.5px; text-align: left; color: var(--text); }
-.mp-acc:hover { background: var(--surface-2); }
-.mp-acc b { font-feature-settings: "tnum"; font-weight: 600; white-space: nowrap; }
-.mp-all { display: flex; justify-content: space-between; align-items: baseline; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); }
-.mp-all b { font-size: 16px; color: var(--gold); font-feature-settings: "tnum"; }
-.mp-in { display: grid; gap: 4px; }
-.mp-in input { min-height: 38px; padding: 7px 10px; font-size: 15px; font-feature-settings: "tnum"; }
-.mp-jars { display: grid; gap: 4px; margin-top: 10px; }
-.mp-jars > div { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; }
-.mp-jars span { font-size: 13px; }
-.mp-jars b { font-feature-settings: "tnum"; }
-.mp-jars b.gold { color: var(--gold); }
-.mp-calc-out { margin-top: 8px; font-size: 20px; font-weight: 650; font-feature-settings: "tnum"; min-height: 26px; }
 .log-tools .seg-views { grid-template-columns: repeat(4, 1fr); width: 340px; }
-.mp-acc { border: 0; background: none; width: auto; min-height: 0; font: inherit; cursor: pointer; }
+
+/* Log → Sheet: a spreadsheet, like the owner's Google Sheet */
+.gs-wrap { --gs-bg: var(--surface); --gs-line: color-mix(in srgb, var(--line-strong) 70%, var(--line)); --gs-head: var(--surface-2);
+  border: 1px solid var(--gs-line); border-radius: 10px; overflow: hidden; background: var(--gs-bg); margin-bottom: 10px; }
+.gs-scroll { overflow: auto; max-height: calc(100vh - 250px); min-height: 420px; }
+.gs-grid { border-collapse: separate; border-spacing: 0; table-layout: fixed; width: 100%; min-width: 1840px; font-size: 13px; font-family: var(--font); }
+.gs-grid col.w-rn { width: 44px; } .gs-grid col.w-date { width: 168px; } .gs-grid col.w-amt { width: 138px; }
+.gs-grid col.w-f { width: 96px; } .gs-grid col.w-x { width: 104px; }
+@media (min-width: 2200px) { .gs-grid col.w-x { width: 120px; } }
+.gs-grid td, .gs-grid th { height: 30px; padding: 0; text-align: left; border-right: 1px solid var(--gs-line); border-bottom: 1px solid var(--gs-line); background: var(--gs-bg); vertical-align: middle; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gs-grid .gs-letters th { position: sticky; top: 0; z-index: 3; height: 24px; text-align: center; background: var(--gs-head); color: var(--muted); font-size: 11px; font-weight: 600; text-align: center; }
+.gs-grid .gs-rn { position: sticky; left: 0; z-index: 2; background: var(--gs-head); color: var(--muted); font-size: 11px; font-weight: 500; text-align: center; }
+.gs-grid td.gs-num, .gs-grid .gs-num input { text-align: right; }
+.gs-grid td.gs-right { text-align: right; }
+.gs-letters .gs-corner { left: 0; z-index: 4; }
+.gs-head-row td { font-weight: 700; padding: 0 8px; position: sticky; top: 24px; z-index: 2; }
+.gs-head-row .gs-h.in { background: color-mix(in srgb, var(--income) 16%, var(--gs-bg)); }
+.gs-head-row .gs-h.out { background: color-mix(in srgb, var(--expense) 16%, var(--gs-bg)); }
+.gs-head-row .gs-h:first-child, .gs-head-row td.gs-h { background-clip: padding-box; }
+.gs-grid input { width: 100%; height: 29px; min-height: 0; padding: 0 8px; border: 0; border-radius: 0; background: transparent; font: inherit; color: var(--text); }
+.gs-grid input:focus { outline: 2px solid var(--c1); outline-offset: -2px; background: var(--gs-bg); position: relative; z-index: 1; }
+.gs-grid input:hover { border: 0; }
+.gs-num input, .gs-num { text-align: right; font-feature-settings: "tnum"; }
+.gs-num.in input { color: var(--income); font-weight: 600; }
+.gs-num.out input { color: var(--text); font-weight: 600; }
+.gs-flex { display: flex; align-items: center; height: 100%; }
+.gs-cur { font-size: 10px; font-weight: 700; color: var(--muted); padding-right: 6px; }
+.gs-grid .gs-date { padding: 0 6px 0 8px !important; position: sticky; left: 44px; z-index: 1; }
+.gs-head-row td:first-of-type { position: sticky; left: 44px; z-index: 3; }
+.gs-dtext { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+.gs-today { font-size: 10px; font-weight: 700; text-transform: uppercase; color: var(--today-c, var(--gold)); margin-left: 6px; }
+.gs-add { position: absolute; right: 4px; top: 50%; margin-top: -9px; width: 18px; height: 18px; border-radius: 5px; border: 1px solid var(--line-strong); background: var(--gs-head); color: var(--muted); font-size: 13px; line-height: 1; opacity: 0; flex: none; }
+.gs-grid tr:hover .gs-add, .gs-add:focus { opacity: 1; }
+.gs-add:hover { color: var(--c1); border-color: var(--c1); }
+.gs-grid tr.day-more > td.gs-date, .gs-grid tr.day-more > td { border-top-style: none; }
+.gs-grid tr.weekend > td.gs-date { color: var(--muted); }
+.gs-grid tr.is-today > td.gs-date { box-shadow: inset 3px 0 0 var(--today-c, var(--gold)); font-weight: 700; }
+.gs-grid tr.is-today > td:nth-child(-n+6) { background: color-mix(in srgb, var(--today-c, var(--gold)) 8%, var(--gs-bg)); }
+.gs-grid tr.future > td.gs-date .gs-dtext { color: var(--faint); }
+.gs-grid tbody tr:hover > td:nth-child(-n+6) { background: color-mix(in srgb, var(--c1) 5%, var(--gs-bg)); }
+.gs-c { padding: 0 8px !important; }
+.gs-c.gs-in { padding: 0 !important; background: color-mix(in srgb, var(--c4) 7%, var(--gs-bg)); }
+.gs-c.gs-share { background: color-mix(in srgb, var(--c4) 14%, var(--gs-bg)); }
+.gs-title { font-weight: 800; letter-spacing: 0.02em; }
+.gs-label { font-weight: 600; color: var(--muted); font-size: 12px; }
+.gs-right { text-align: right; }
+.gs-left { text-align: left !important; }
+.gs-muted { color: var(--muted); font-size: 12px; }
+.gs-big { font-size: 17px; font-weight: 700; font-feature-settings: "tnum"; }
+.gs-result b { font-size: 14px; }
+.gs-acc button { all: unset; cursor: pointer; font-weight: 700; color: var(--text); text-transform: none; }
+.gs-acc button:hover { color: var(--c1); text-decoration: underline; }
+.gs-grid b.gold { color: var(--gold); }
+.gs-total td { background: var(--gs-head); font-size: 14px; }
+.gs-total .gs-num { padding: 0 8px; }
+.gs-tabs { display: flex; gap: 2px; padding: 4px 6px; background: var(--gs-head); border-top: 1px solid var(--gs-line); overflow-x: auto; scrollbar-width: thin; }
+.gs-tab { padding: 6px 14px; border: 0; border-radius: 6px 6px 0 0; background: transparent; color: var(--muted); font-size: 13px; font-weight: 600; white-space: nowrap; }
+.gs-tab:hover { background: var(--gs-bg); color: var(--text); }
+.gs-tab.on { background: var(--gs-bg); color: var(--c6); box-shadow: inset 0 -2px 0 var(--c6); }
