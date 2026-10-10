@@ -57,5 +57,9 @@ tested); `js/app.js` only renders and handles taps.
   (`finance-helper.head`). Before unlock `ctx.state` is a placeholder
   (`state._sealed`): anything that syncs, backs up or fetches must skip it.
   Sync copies and backups go through `sealForExport` / `backupText`.
+- Telegram bot: `electron/telegram.cjs` long-polls the user's own bot (token
+  in safeStorage, only the chat linked with the one-time code is heard) and
+  acks an update only after the page handled it; parsing and replies are in
+  `js/telegram.js`, wiring in `js/screens/telegram.js`. Never commit a token.
 - Tests: `node --test`. `tests/fixtures/sample-month.csv` is a made-up month
   in the owner's old Google Sheet format (24 465 earned / 6 605 spent).

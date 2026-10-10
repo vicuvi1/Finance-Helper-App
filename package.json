@@ -1,6 +1,6 @@
 {
   "name": "finance-helper-app",
-  "version": "1.16.1",
+  "version": "1.17.0",
   "private": true,
   "description": "Personal finance app: log every lei, split income 70/10/10/10, see where money goes, hit your savings goal. Offline, private, no build step.",
   "author": "vicuvi1",

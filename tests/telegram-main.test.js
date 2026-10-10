@@ -1,0 +1,70 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
+
+const require = createRequire(import.meta.url);
+const { createTelegram } = require('../electron/telegram.cjs');
+
+const TOKEN = '123456789:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
+
+// A tiny fake of the Bot API: queued updates, recorded sends.
+function fakeTelegram() {
+  const queue = [];
+  const sent = [];
+  let confirmed = 0;
+  const net = {
+    async fetch(url, opts) {
+      const method = url.split('/').pop();
+      const body = JSON.parse(opts.body || '{}');
+      let result = true;
+      if (method === 'getMe') result = { username: 'my_money_bot' };
+      else if (method === 'getUpdates') {
+        confirmed = Math.max(confirmed, body.offset || 0);
+        await new Promise((r) => setTimeout(r, 5));
+        result = queue.filter((u) => u.update_id >= confirmed);
+      } else if (method === 'sendMessage') sent.push(body);
+      return { status: 200, json: async () => ({ ok: true, result }) };
+    },
+  };
+  return { net, queue, sent, confirmed: () => confirmed };
+}
+
+const memory = () => { let v = null; return { read: () => v, write: (o) => { v = JSON.parse(JSON.stringify(o)); }, remove: () => { v = null; } }; };
+const msg = (id, chat, text) => ({ update_id: id, message: { message_id: id, chat: { id: chat, type: 'private' }, from: { first_name: 'Owner' }, text, date: 1760000000 } });
+const until = async (fn) => { for (let i = 0; i < 200 && !fn(); i++) await new Promise((r) => setTimeout(r, 10)); };
+
+test('links with the code, listens only to that chat, confirms after the app handles', async () => {
+  const tg = fakeTelegram();
+  const got = [];
+  const events = [];
+  const bot = createTelegram({ app: {}, net: tg.net, storage: memory(), onUpdates: (u) => got.push(...u), onEvent: (e) => events.push(e) });
+  await assert.rejects(bot.connect('nope'), /bot token/);
+  assert.equal((await bot.connect(TOKEN)).botName, 'my_money_bot');
+  const { code, link } = bot.pair();
+  assert.equal(link, `https://t.me/my_money_bot?start=${code}`);
+  tg.queue.push(msg(1, 111, '/start 000000'), msg(2, 222, `/start ${code}`));
+  await until(() => bot.status().linked);
+  assert.equal(bot.status().linked, true);
+  assert.ok(events.some((e) => e.type === 'linked'));
+  assert.equal(tg.sent[0].chat_id, 111); // wrong code got a hint, nothing else
+  tg.queue.push(msg(3, 999, 'coffee 35'), msg(4, 222, 'coffee 35'));
+  await until(() => got.length);
+  assert.deepEqual(got.map((u) => u.update_id), [4]); // the stranger is ignored
+  // Not confirmed until the app says so.
+  assert.ok(tg.confirmed() <= 4);
+  bot.ack([4]);
+  await until(() => tg.confirmed() >= 5);
+  assert.equal(tg.confirmed(), 5);
+  await bot.send('hi');
+  assert.equal(tg.sent.at(-1).chat_id, 222);
+  await bot.disconnect();
+  assert.equal(bot.status().connected, false);
+});
+
+test('nothing is kept when the token cannot be stored safely', async () => {
+  const tg = fakeTelegram();
+  const failing = { read: () => null, write: () => { throw new Error('This computer has no secure key storage available.'); }, remove() {} };
+  const bot = createTelegram({ app: {}, net: tg.net, storage: failing });
+  await assert.rejects(bot.connect(TOKEN), /secure key storage/);
+  assert.equal(bot.status().connected, false);
+});

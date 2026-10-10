@@ -32,6 +32,23 @@ contextBridge.exposeInMainWorld('desktop', {
     openFolder: () => ipcRenderer.invoke('backup-folder'),
   },
   hotkey: () => ipcRenderer.invoke('hotkey-status'),
+  background: {
+    get: () => ipcRenderer.invoke('bg-get'),
+    set: (p) => ipcRenderer.invoke('bg-set', p),
+  },
+  telegram: {
+    status: () => ipcRenderer.invoke('tg-status'),
+    connect: (token) => ipcRenderer.invoke('tg-connect', token),
+    pair: () => ipcRenderer.invoke('tg-pair'),
+    ack: (ids) => ipcRenderer.invoke('tg-ack', ids),
+    send: (text, extra) => ipcRenderer.invoke('tg-send', text, extra),
+    edit: (id, text, extra) => ipcRenderer.invoke('tg-edit', id, text, extra),
+    answer: (id, text) => ipcRenderer.invoke('tg-answer', id, text),
+    disconnect: () => ipcRenderer.invoke('tg-disconnect'),
+    openLink: (url) => ipcRenderer.invoke('open-external', url),
+    onUpdates: (cb) => ipcRenderer.on('tg-updates', (_e, u) => cb(u)),
+    onEvent: (cb) => ipcRenderer.on('tg-event', (_e, ev) => cb(ev)),
+  },
   onQuickAdd: (cb) => ipcRenderer.on('quick-add', () => cb()),
   update: {
     check: () => ipcRenderer.invoke('update-check'),

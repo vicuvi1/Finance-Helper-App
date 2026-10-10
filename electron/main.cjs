@@ -2,7 +2,8 @@
 // private app:// origin so ES modules and saved data work like on the web,
 // and nothing is loaded from the internet.
 
-const { app, BrowserWindow, protocol, net, shell, Menu, ipcMain, safeStorage, globalShortcut } = require('electron');
+const { app, BrowserWindow, protocol, net, shell, Menu, ipcMain, safeStorage, globalShortcut, Tray, nativeImage } = require('electron');
+const { createTelegram } = require('./telegram.cjs');
 const { createBinance } = require('./binance.cjs');
 const { createDrive } = require('./gdrive.cjs');
 const path = require('node:path');
@@ -41,12 +42,19 @@ function createWindow() {
     icon: path.join(ROOT, 'icons', 'icon-512.png'),
     webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false, preload: path.join(__dirname, 'preload.cjs') },
   });
-  win.once('ready-to-show', () => win.show());
-  win.on('close', () => {
+  // Started with Windows in the background: stay in the tray until opened.
+  if (!process.argv.includes('--hidden')) win.once('ready-to-show', () => win.show());
+  win.on('close', (e) => {
     try {
       fs.writeFileSync(boundsFile(), JSON.stringify(win.getNormalBounds()));
     } catch {
       // Not critical: the window just opens at the default size next time.
+    }
+    // Keep running in the tray (reminders, Telegram) unless really quitting.
+    if (prefs().background && !quitting) {
+      e.preventDefault();
+      win.hide();
+      makeTray();
     }
   });
 
@@ -222,14 +230,73 @@ app.whenReady().then(() => {
 app.on('will-quit', () => globalShortcut.unregisterAll());
 ipcMain.handle('hotkey-status', () => ({ key: process.platform === 'darwin' ? 'Cmd+Alt+N' : 'Ctrl+Alt+N', ok: hotkeyOk }));
 
-app.on('second-instance', () => {
-  const [win] = BrowserWindow.getAllWindows();
-  if (win) {
-    if (win.isMinimized()) win.restore();
-    win.focus();
-  }
-});
+function showWindow() {
+  let [win] = BrowserWindow.getAllWindows();
+  if (!win) win = createWindow();
+  if (win.isMinimized()) win.restore();
+  win.show();
+  win.focus();
+  return win;
+}
+
+app.on('second-instance', () => showWindow());
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
+
+// ---------- Running in the background ----------
+// prefs.json: { background: keep running in the tray when the window is
+// closed, atLogin: start with the computer (hidden) }.
+let quitting = false;
+let tray = null;
+app.on('before-quit', () => { quitting = true; });
+const prefsFile = () => path.join(app.getPath('userData'), 'prefs.json');
+function prefs() {
+  try { return { background: true, atLogin: false, ...JSON.parse(fs.readFileSync(prefsFile(), 'utf8')) }; } catch { return { background: true, atLogin: false }; }
+}
+function makeTray() {
+  if (tray) return;
+  tray = new Tray(nativeImage.createFromPath(path.join(ROOT, 'icons', 'icon-192.png')).resize({ width: 16, height: 16 }));
+  tray.setToolTip('Finance Helper');
+  tray.setContextMenu(Menu.buildFromTemplate([
+    { label: 'Open Finance Helper', click: () => showWindow() },
+    { label: 'New record', click: () => quickAdd() },
+    { type: 'separator' },
+    { label: 'Quit', click: () => { quitting = true; app.quit(); } },
+  ]));
+  tray.on('click', () => showWindow());
+}
+ipcMain.handle('bg-get', () => prefs());
+ipcMain.handle('bg-set', (_e, next) => {
+  const p = { ...prefs(), ...next };
+  fs.writeFileSync(prefsFile(), JSON.stringify(p));
+  if (typeof next.atLogin === 'boolean' && app.isPackaged) app.setLoginItemSettings({ openAtLogin: p.atLogin, args: ['--hidden'] });
+  if (p.background) makeTray();
+  return p;
+});
+app.whenReady().then(() => { if (prefs().background || process.argv.includes('--hidden')) makeTray(); });
+
+// ---------- Telegram bot ----------
+const toPage = (channel, data) => BrowserWindow.getAllWindows()[0]?.webContents.send(channel, data);
+// Tests on machines without a key store (never in the installed app).
+const testMemory = !app.isPackaged && process.env.FH_TG_TEST_MEMORY === '1'
+  ? (() => { let v = null; return { read: () => v, write: (o) => { v = o; }, remove: () => { v = null; } }; })() : undefined;
+const telegram = createTelegram({
+  app, net, safeStorage, storage: testMemory,
+  onUpdates: (updates) => toPage('tg-updates', updates),
+  onEvent: (ev) => toPage('tg-event', ev),
+});
+app.whenReady().then(() => {
+  // Give the page a moment to load before messages arrive.
+  setTimeout(() => telegram.start(), 4000);
+});
+ipcMain.handle('tg-status', () => telegram.status());
+ipcMain.handle('tg-connect', async (_e, token) => telegram.connect(token));
+ipcMain.handle('tg-pair', () => telegram.pair());
+ipcMain.handle('tg-ack', (_e, ids) => telegram.ack(ids));
+ipcMain.handle('tg-send', (_e, text, extra) => telegram.send(String(text).slice(0, 4000), extra || {}));
+ipcMain.handle('tg-edit', (_e, id, text, extra) => telegram.edit(id, String(text).slice(0, 4000), extra || {}));
+ipcMain.handle('tg-answer', (_e, id, text) => telegram.answer(id, text));
+ipcMain.handle('tg-disconnect', () => telegram.disconnect());
+ipcMain.handle('open-external', (_e, url) => { if (/^https:\/\/t\.me\//.test(url)) shell.openExternal(url); return true; });

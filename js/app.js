@@ -27,6 +27,7 @@ import * as Plan from './screens/plan.js';
 import * as Clients from './screens/clients.js';
 import * as Rules from './screens/rules.js';
 import * as Goals from './screens/goals.js';
+import * as Telegram from './screens/telegram.js';
 import { openBankImport, rowsFromFile, decodeText } from './screens/bankimport.js';
 import { guessMapping } from './bank.js';
 import { forecast } from './forecast.js';
@@ -194,7 +195,7 @@ function renderSidebar() {
   badge('plan', due ? String(due) : '', 'alert');
   badge('clients', overdue ? String(overdue) : open ? String(open) : '', overdue ? 'alert' : '');
   badge('log', todayCount ? `${todayCount} today` : '', 'soft');
-  badge('goals', gs.target ? `${Math.round(gs.ratio * 100)}%` : '', 'gold');
+  badge('goals', gs.target && gs.ratio > 0 ? `${Math.round(gs.ratio * 100)}%` : '', 'gold');
   const r = 15;
   const c = 2 * Math.PI * r;
   bottom.innerHTML = `${gs.target ? `<button type="button" class="sf-goal" data-go="goals" title="${esc(g.name)}">
@@ -520,6 +521,7 @@ function viewSettings() {
   </section>
 
   ${Rules.settingsCard()}
+  ${Telegram.settingsCard()}
 
   <section class="card"><h2>Look</h2>
     <div class="row2">
@@ -1568,7 +1570,7 @@ const SCREENS = {
   people: PeopleScreen,
   reports: ReportsScreen,
   rates: RatesScreen,
-  settings: { view: viewSettings, onClick: (a, el) => Security.onClick(a, el) || Rules.onClick(a, el) || Binance.onClick(a) || Sync.onClick(a) || SelfCheck.onClick(a) || Backups.onClick(a, el) || (a.startsWith('update-') && (Updates.onClick(a), true)), onChange: Security.onChange },
+  settings: { view: viewSettings, onClick: (a, el) => Security.onClick(a, el) || Rules.onClick(a, el) || Telegram.onClick(a) || Binance.onClick(a) || Sync.onClick(a) || SelfCheck.onClick(a) || Backups.onClick(a, el) || (a.startsWith('update-') && (Updates.onClick(a), true)), onChange: (el) => Security.onChange(el) || Telegram.onChange(el) },
 };
 
 function openMoreSheet() {
@@ -1639,6 +1641,7 @@ Object.assign(ctx, {
     Sync.refreshConnected().then((on) => on && Sync.syncNow());
     Binance.syncBinance();
     Plan.runAuto();
+    Telegram.resume();
     setTimeout(snapshotToday, 3000);
   },
   // Lock screen "Reset this device": wipe local data and start fresh.
@@ -1796,6 +1799,7 @@ Binance.initBinance();
 Sync.initSync();
 Backups.initBackups();
 Plan.initPlan();
+Telegram.initTelegram();
 
 // One net-worth snapshot a day (crypto and rates of that day included).
 function snapshotToday() {
@@ -1822,6 +1826,7 @@ document.addEventListener('submit', (e) => {
   if (e.target.closest('.sheet') || !e.target.id) return;
   if (e.target.id === 'bn-form') { e.preventDefault(); Binance.onSubmit(e.target); }
   if (e.target.id === 'sync-form') { e.preventDefault(); Sync.onSubmit(e.target); }
+  if (e.target.id === 'tg-form') { e.preventDefault(); Telegram.onSubmit(e.target); }
 });
 seedDemo();
 updateRates();
