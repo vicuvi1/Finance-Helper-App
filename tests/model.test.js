@@ -126,7 +126,7 @@ test('jars: spending jars use income × pct, savings jar measures what you kept'
 
 test('goal: pace from recent months and an ETA', () => {
   const state = defaultState();
-  state.settings.goal.target = 10000000; // 100 000
+  state.goals[0].target = 10000000; // 100 000
   for (const m of ['07', '08', '09']) {
     state.tx.push(tx('income', 15000, `2026-${m}-05`), tx('expense', 5000, `2026-${m}-10`));
   }
@@ -143,7 +143,7 @@ test('goal: pace from recent months and an ETA', () => {
   assert.equal(gg.pace, 1786000);
   assert.equal(gg.eta, '2027-03');
 
-  state.settings.goal.account = 'safe';
+  state.goals[0].account = 'safe';
   assert.equal(goalStatus(state, '2026-10-09').current, 0);
 });
 

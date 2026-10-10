@@ -73,6 +73,8 @@ export function defaultState() {
     recurring: [],
     // Invoices to clients (js/invoices.js).
     invoices: [],
+    // Money goals (see goalStatus). The old single settings.goal becomes the first one.
+    goals: [{ id: 'g-main', name: 'Safe goal', emoji: '🏦', target: 10000000, account: 'all', saved: 0, history: [], deadline: null, doneAt: null, theme: 'gold', updatedAt: 0 }],
     // One net-worth snapshot per day (id nw-YYYY-MM-DD), so crypto and
     // exchange rates of the day are kept; older history is rebuilt from records.
     netWorth: [],
@@ -123,7 +125,10 @@ export function normalizeState(raw) {
     .filter((i) => i && typeof i.id === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(i.date || ''))
     .map((i) => ({ items: [], note: '', sent: false, paidDate: null, paidTx: null, currency: 'USD', ...i, updatedAt: i.updatedAt || 0 }));
   const netWorth = (Array.isArray(raw.netWorth) ? raw.netWorth : []).filter((x) => x && /^\d{4}-\d{2}-\d{2}$/.test(x.date || '') && Number.isFinite(x.total));
-  return { version: SCHEMA_VERSION, settings, tx, people, recurring, invoices, netWorth, deleted, rates: raw.rates || null, meta: { ...base.meta, ...(raw.meta || {}) } };
+  const goals = Array.isArray(raw.goals)
+    ? raw.goals.filter((g) => g && typeof g.id === 'string' && g.name).map((g) => ({ emoji: '🎯', account: 'all', saved: 0, history: [], deadline: null, doneAt: null, ...g, updatedAt: g.updatedAt || 0 }))
+    : [{ id: 'g-main', name: settings.goal.name || 'Safe goal', emoji: '🏦', target: settings.goal.target || 0, account: settings.goal.account || 'all', saved: 0, history: [], deadline: null, doneAt: null, theme: 'gold', updatedAt: 0 }];
+  return { version: SCHEMA_VERSION, settings, tx, people, recurring, invoices, netWorth, goals, deleted, rates: raw.rates || null, meta: { ...base.meta, ...(raw.meta || {}) } };
 }
 
 function validTx(t) {
@@ -319,28 +324,48 @@ function jarFallback(state) {
   return nonSavings ? nonSavings.id : state.settings.jars[0].id;
 }
 
-function goalCurrent(state) {
-  return goalValueAt(state, null);
+// ---------- Goals ----------
+// Several goals (state.goals). Each counts money from all accounts, your
+// savings accounts, one account, or what you add by hand ("manual").
+
+export const mainGoal = (state) => (state.goals || []).find((g) => !g.doneAt && !g.archived) || (state.goals || [])[0] || { ...state.settings.goal, id: 'g-main' };
+
+// The goal's money in the base currency at the end of a day (null = now).
+// Past values use today's rates; good enough for a pace estimate.
+function goalValueAt(state, iso, goal = mainGoal(state)) {
+  if (goal.account === 'manual') return goal.saved || 0;
+  const vals = accountValues(state, iso);
+  const isSaving = (a) => a.savings || a.kind === 'savings';
+  const pick = goal.account === 'savings' ? vals.filter((v) => !v.account.archived && isSaving(v.account))
+    : goal.account && goal.account !== 'all' ? vals.filter((v) => v.account.id === goal.account)
+      : vals.filter((v) => !v.account.archived);
+  return pick.reduce((a, v) => a + (v.inBase ?? 0), 0);
 }
 
 // Average monthly growth of the goal's money over your last (up to 3) months
 // with records, before this one. Gaps where you logged nothing are skipped,
 // so a break from logging doesn't read as "saved zero". Used for the ETA.
-export function goalStatus(state, today) {
-  const { goal } = state.settings;
-  const current = goalCurrent(state);
+export function goalStatus(state, today, goal = mainGoal(state)) {
+  const current = goalValueAt(state, null, goal);
   const target = goal.target || 0;
   const thisMonth = monthKey(today);
   const end = (k) => `${k}-${String(daysInMonth(k)).padStart(2, '0')}`;
   const active = new Set(state.tx.map((t) => monthKey(t.date)));
   const months = [...active].filter((k) => k < thisMonth).sort().slice(-3);
   let pace = null;
-  if (months.length) {
-    const growth = months.map((k) => goalValueAt(state, end(k)) - goalValueAt(state, end(addMonths(k, -1))));
-    pace = Math.round(growth.reduce((a, b) => a + b, 0) / months.length);
-  } else if (active.has(thisMonth)) {
-    // Only this month so far: use what it grew by until today.
-    pace = goalValueAt(state, today) - goalValueAt(state, end(addMonths(thisMonth, -1)));
+  if (goal.account !== 'manual') {
+    if (months.length) {
+      const growth = months.map((k) => goalValueAt(state, end(k), goal) - goalValueAt(state, end(addMonths(k, -1)), goal));
+      pace = Math.round(growth.reduce((a, b) => a + b, 0) / months.length);
+    } else if (active.has(thisMonth)) {
+      // Only this month so far: use what it grew by until today.
+      pace = goalValueAt(state, today, goal) - goalValueAt(state, end(addMonths(thisMonth, -1)), goal);
+    }
+  } else if (goal.history?.length) {
+    // Manual goals: what you added over the last 90 days, per month.
+    const since = addDays(today, -90);
+    const added = goal.history.filter((h) => h.date >= since).reduce((a, h) => a + h.amount, 0);
+    pace = added ? Math.round(added / 3) : null;
   }
   const remaining = Math.max(0, target - current);
   let monthsLeft = null;
@@ -350,16 +375,43 @@ export function goalStatus(state, today) {
     monthsLeft = Math.ceil(remaining / pace);
     eta = addMonths(thisMonth, monthsLeft);
   }
-  return { target, current, remaining, ratio: target ? Math.min(1, Math.max(0, current / target)) : 0, pace, monthsLeft, eta };
+  // With a deadline: what you'd need to put away each month from now.
+  let perMonth = null;
+  let deadlineMonths = null;
+  if (goal.deadline && remaining > 0) {
+    deadlineMonths = Math.max(1, monthsBetweenKeys(thisMonth, monthKey(goal.deadline)) + (goal.deadline.slice(8) >= '15' ? 1 : 0));
+    perMonth = Math.ceil(remaining / deadlineMonths / 100) * 100;
+  }
+  const ratio = target ? Math.min(1, Math.max(0, current / target)) : 0;
+  const milestone = [100, 75, 50, 25].find((m) => ratio * 100 >= m) || 0;
+  const onTrack = perMonth == null ? null : pace != null && pace >= perMonth;
+  return { target, current, remaining, ratio, pace, monthsLeft, eta, perMonth, deadlineMonths, milestone, onTrack };
 }
 
-// The goal's money in the base currency at the end of a day (null = now).
-// Past values use today's rates; good enough for a pace estimate.
-function goalValueAt(state, iso) {
-  const { goal } = state.settings;
-  const vals = accountValues(state, iso);
-  const pick = goal.account && goal.account !== 'all' ? vals.filter((v) => v.account.id === goal.account) : vals.filter((v) => !v.account.archived);
-  return pick.reduce((a, v) => a + (v.inBase ?? 0), 0);
+// Six months of your usual spending: a sensible emergency fund.
+export function emergencyTarget(state, today, months = 6) {
+  const key = monthKey(today);
+  let total = 0;
+  let n = 0;
+  for (let i = 1; i <= 3; i++) {
+    const s = monthSummary(state, addMonths(key, -i));
+    if (s.count) { total += s.expense; n++; }
+  }
+  const monthly = n ? total / n : monthSummary(state, key).expense;
+  return Math.ceil((monthly * months) / 100000) * 100000; // round up to 1 000
+}
+
+// An encouraging line for where you are.
+export function goalMessage(st) {
+  if (!st.target) return 'Set a target and watch it fill up.';
+  const p = Math.round(st.ratio * 100);
+  if (p >= 100) return 'You did it. Enjoy it, then dream bigger.';
+  if (p >= 90) return 'Almost there. One more push!';
+  if (p >= 75) return 'Three quarters done. The finish line is in sight.';
+  if (p >= 50) return 'Halfway there. Every lei counts from here.';
+  if (p >= 25) return 'A quarter of the way. The habit is working.';
+  if (p > 0) return 'Good start. Small steps add up fast.';
+  return 'Every big goal starts with the first lei.';
 }
 
 export function yearOverview(state, year) {

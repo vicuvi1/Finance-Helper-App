@@ -18,7 +18,7 @@ export function toCloud(state, deviceId, now = Date.now()) {
     schema: SCHEMA_VERSION,
     savedAt: now,
     deviceId,
-    data: { settings, tx: state.tx, people: state.people, recurring: state.recurring || [], invoices: state.invoices || [], netWorth: state.netWorth || [], deleted: state.deleted },
+    data: { settings, tx: state.tx, people: state.people, recurring: state.recurring || [], invoices: state.invoices || [], netWorth: state.netWorth || [], goals: state.goals || [], deleted: state.deleted },
   };
 }
 
@@ -38,7 +38,12 @@ function mergeList(a = [], b = [], deleted) {
   return out;
 }
 
-const fingerprint = (data) => JSON.stringify(data, (k, v) => (k === 'savedAt' ? undefined : v));
+// Same data = same fingerprint, whatever order the fields were written in.
+const fingerprint = (data) => JSON.stringify(data, (k, v) => {
+  if (k === 'savedAt') return undefined;
+  if (v && typeof v === 'object' && !Array.isArray(v)) return Object.fromEntries(Object.keys(v).sort().map((x) => [x, v[x]]));
+  return v;
+});
 
 // Merge `remote` (the Drive file, or null) into `local`. Returns the merged
 // state and whether this device and/or Drive need the new version.
@@ -68,6 +73,7 @@ export function mergeStates(local, remote) {
     recurring: mergeList(local.recurring, r.recurring, deleted),
     invoices: mergeList(local.invoices, r.invoices, deleted),
     netWorth: mergeList(local.netWorth, r.netWorth, deleted),
+    goals: mergeList(local.goals, r.goals, deleted),
     deleted,
   };
   const localData = toCloud(local, '').data;

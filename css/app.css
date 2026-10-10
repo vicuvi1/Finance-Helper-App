@@ -989,3 +989,61 @@ table.grid tr.is-today:not(.day-row) td { background: color-mix(in srgb, var(--t
 .cal-day.today { outline: 2px solid var(--today-c); outline-offset: -2px; background: color-mix(in srgb, var(--today-c) 12%, var(--surface)); }
 .cal-day .today-dot { margin-left: 6px; font-size: 10px; font-weight: 700; color: var(--today-c); text-transform: uppercase; letter-spacing: 0.06em; }
 @media (prefers-reduced-motion: reduce) { .log-body.slide-l, .log-body.slide-r, .mp-bar i, .today-chip i { animation: none; } }
+
+/* Goals */
+.goal-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 16px; margin-bottom: 20px; }
+:where(.goal-card, .goal-mini) { --g1: #3a2a08; --g2: #f3d27a; }
+.goal-card { position: relative; display: grid; grid-template-columns: 132px minmax(0, 1fr); gap: 20px; align-items: center;
+  padding: 22px; border-radius: 20px; cursor: pointer; overflow: hidden; border: 1px solid var(--line);
+  background: radial-gradient(90% 120% at 0% 0%, color-mix(in srgb, var(--g2) 16%, transparent), transparent 60%), var(--surface);
+  transition: transform 0.2s ease, border-color 0.2s, box-shadow 0.2s; }
+.goal-card:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--g2) 45%, var(--line)); box-shadow: 0 18px 40px -20px color-mix(in srgb, var(--g2) 55%, transparent); }
+.goal-card:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.goal-card.done { border-color: color-mix(in srgb, var(--g2) 60%, var(--line)); }
+.goal-card.done::before { content: "✓ Reached"; position: absolute; top: 14px; right: 16px; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--g2); }
+.gc-ring { position: relative; width: 132px; height: 132px; display: grid; place-items: center; }
+.gc-ring.sm { width: 96px; height: 96px; }
+.g-ring { position: absolute; inset: 0; filter: drop-shadow(0 0 10px color-mix(in srgb, var(--g2) 35%, transparent)); }
+.g-track { fill: none; stroke: var(--surface-3); stroke-width: 10; }
+.gc-ring.sm .g-track, .gc-ring.sm .g-prog { stroke-width: 8; }
+.g-prog { fill: none; stroke-width: 10; stroke-linecap: round; stroke-dasharray: var(--c); stroke-dashoffset: var(--off); animation: g-draw 1.2s cubic-bezier(.2,.8,.2,1) both; }
+@keyframes g-draw { from { stroke-dashoffset: var(--c); } }
+.g-tick { fill: var(--surface); stroke: var(--line-strong); stroke-width: 1.5; }
+.g-tick.on { fill: var(--g2); stroke: var(--g2); }
+.g-center { position: relative; display: flex; flex-direction: column; align-items: center; line-height: 1.1; }
+.g-center b { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.gc-ring.sm .g-center b { font-size: 19px; }
+.g-center span { font-size: 18px; margin-top: 2px; }
+.gc-ring.sm .g-center span { font-size: 14px; }
+.gc-body { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.gc-body h3 { margin: 0; font-size: 19px; letter-spacing: -0.01em; }
+.gc-amt b { font-size: 20px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.gc-amt span { color: var(--muted); font-size: 14px; }
+.gc-ms { display: flex; gap: 6px; flex-wrap: wrap; }
+.gc-ms span { font-size: 11px; font-weight: 650; padding: 2px 8px; border-radius: 99px; color: var(--muted); border: 1px solid var(--line); }
+.gc-ms span.on { color: var(--g2); border-color: color-mix(in srgb, var(--g2) 55%, transparent); background: color-mix(in srgb, var(--g2) 12%, transparent); }
+.gc-msg { margin: 2px 0 0; font-weight: 600; color: var(--text); }
+.g-dl { margin: 0; font-size: 13px; color: var(--muted); }
+.g-dl.ok { color: var(--income); }
+.g-dl.warn { color: var(--warn, var(--gold)); }
+.gc-add { align-self: flex-start; margin-top: 4px; }
+.goal-add { border: 1.5px dashed var(--line-strong); border-radius: 20px; background: transparent; color: var(--muted); min-height: 176px;
+  display: grid; place-items: center; align-content: center; gap: 4px; font-weight: 600; transition: border-color 0.2s, color 0.2s, background 0.2s; }
+.goal-add:hover { border-color: var(--gold); color: var(--gold); background: var(--gold-soft); }
+.goal-add span { font-size: 28px; line-height: 1; }
+.section-h { font-size: 13px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin: 8px 0 12px; }
+.g-next { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; flex-wrap: wrap; }
+.g-next span { font-size: 22px; }
+.goal-mini { cursor: pointer; }
+.goal-card .g-prog, .goal-mini .g-prog { --g1-ring: color-mix(in srgb, var(--g2) 55%, var(--g1)); }
+.gm-row { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 16px; align-items: center; }
+.confetti { position: fixed; inset: 0; pointer-events: none; z-index: 100; overflow: hidden; }
+.confetti i { position: absolute; top: -12px; left: var(--x); width: 8px; height: 13px; border-radius: 2px; opacity: 0.95;
+  transform: scale(var(--s)); animation: confetti-fall 2.6s cubic-bezier(.25,.6,.4,1) var(--d) forwards; }
+@keyframes confetti-fall { to { transform: translateY(105vh) rotate(var(--r)) scale(var(--s)); opacity: 0.9; } }
+@media (max-width: 520px) {
+  .goal-grid { grid-template-columns: minmax(0, 1fr); }
+  .goal-card { grid-template-columns: 104px minmax(0, 1fr); gap: 14px; padding: 16px; }
+  .goal-card .gc-ring { width: 104px; height: 104px; }
+}
+@media (prefers-reduced-motion: reduce) { .g-prog { animation: none; } .goal-card { transition: none; } }

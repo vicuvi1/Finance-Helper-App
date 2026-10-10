@@ -26,6 +26,7 @@ import * as Backups from './screens/backups.js';
 import * as Plan from './screens/plan.js';
 import * as Clients from './screens/clients.js';
 import * as Rules from './screens/rules.js';
+import * as Goals from './screens/goals.js';
 import { openBankImport, rowsFromFile, decodeText } from './screens/bankimport.js';
 import { guessMapping } from './bank.js';
 import { forecast } from './forecast.js';
@@ -241,22 +242,6 @@ function jarsCard(key) {
     ${body}</section>`;
 }
 
-function goalCard() {
-  const today = todayISO();
-  const g = M.goalStatus(state, today);
-  const goal = state.settings.goal;
-  const where = goal.account === 'all' ? 'all my money' : accOf(goal.account).name;
-  let line;
-  if (!g.target) line = 'Set a goal in Settings.';
-  else if (g.monthsLeft === 0) line = 'Goal reached. Time to set a bigger one.';
-  else if (g.eta) line = `At ${money(g.pace)}/month you reach it in <b>${monthLabel(g.eta)}</b> (${g.monthsLeft} month${g.monthsLeft === 1 ? '' : 's'}). Save ${money(Math.ceil(g.remaining / Math.max(1, g.monthsLeft - 1) / 100) * 100)}/month to get there a month sooner.`;
-  else if (g.pace != null && g.pace < 0) line = `This went down by ${money(-g.pace)}/month lately. Keep more than you spend and I'll predict when you get there.`;
-  else line = 'Log a month of income and spending and I\'ll predict when you get there.';
-  return `<section class="card goal"><h2>${esc(goal.name)} <span class="right muted">${esc(where)}</span></h2>
-    <div class="row"><b class="money">${countUp(Math.round(g.current / 100) * 100, 'goal')}</b><span class="muted money">of ${money(g.target)} · ${Math.round(g.ratio * 100)}%</span></div>
-    <div class="bar gold"><i style="width:${(g.ratio * 100).toFixed(1)}%"></i></div>
-    <p>${line}</p></section>`;
-}
 
 // ---------- Screens ----------
 
@@ -331,7 +316,7 @@ function viewHome() {
     </div>
     <div class="dash-side">
       ${Plan.homeCard()}
-      ${goalCard()}
+      ${Goals.homeCard()}
       ${tips.length ? `<section class="card"><h2>Heads up <button class="card-link right" data-go="reports">Reports</button></h2>${tips.map(tipCard).join('')}</section>` : ''}
       ${jarsCard(key)}
     </div>
@@ -430,12 +415,9 @@ function viewSettings() {
   ${installPrompt ? '<div class="banner"><p>Install the app for one-tap access, even offline.</p><button class="btn primary" data-act="install">Install</button></div>' : ''}
   ${isIOS ? '<div class="banner"><p>To install on iPhone: tap Share, then “Add to Home Screen”.</p></div>' : ''}
 
-  <section class="card"><h2>Goal</h2>
-    <label class="field"><span>Name</span><input type="text" data-set="goal.name" value="${esc(st.goal.name)}"></label>
-    <div class="row2">
-      <label class="field"><span>Target (${esc(st.currency)})</span><input type="text" inputmode="decimal" data-set="goal.target" value="${centsToPlain(st.goal.target)}"></label>
-      <label class="field"><span>Counts</span><select data-set="goal.account">${accOptions(st.goal.account, true)}</select></label>
-    </div>
+  <section class="card"><h2>Goals</h2>
+    <p class="muted small" style="margin-top:0">Your goals (emergency fund, car, trip…) have their own screen now, with progress that fills by itself.</p>
+    <button class="btn block" data-go="goals">Open Goals</button>
   </section>
 
   <section class="card"><h2>Smart split <span class="right" id="jar-sum"></span></h2>
@@ -577,6 +559,8 @@ function render({ enter = false } = {}) {
     else a.removeAttribute('aria-current');
   }
   if (ui.tab === 'settings') updateJarSum();
+  clearTimeout(render.ms);
+  render.ms = setTimeout(() => Goals.checkMilestones(), 700);
 }
 
 // ---------- Bottom sheet ----------
@@ -1492,7 +1476,7 @@ document.addEventListener('input', (e) => {
   }
 });
 
-// Desktop shortcuts: N = new record, / = search, 1-9 = sections, Esc = close.
+// Desktop shortcuts: N = new record, / = search, 1-9 and 0 = sections, Esc = close.
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && sheetRoot.firstChild) { closeSheet(); return; }
   if (e.key === 'Enter' && e.target.closest('#tx-table') && e.target.matches('input')) {
@@ -1505,7 +1489,7 @@ document.addEventListener('keydown', (e) => {
   if (e.target.closest('input, select, textarea')) return;
   if ((e.key === 'l' || e.key === 'L') && Security.hasLock()) { Security.lock(); return; }
   if (ui.tab === 'log' && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) { e.preventDefault(); goToMonth(addMonths(ui.month, e.key === 'ArrowLeft' ? -1 : 1)); return; }
-  const tabs = { 1: 'home', 2: 'log', 3: 'accounts', 4: 'plan', 5: 'clients', 6: 'people', 7: 'reports', 8: 'rates', 9: 'settings' };
+  const tabs = { 1: 'home', 2: 'log', 3: 'accounts', 4: 'goals', 5: 'plan', 6: 'clients', 7: 'people', 8: 'reports', 9: 'rates', 0: 'settings' };
   if (e.key === 'n' || e.key === 'N') { e.preventDefault(); openTxSheet(); }
   else if (e.key === '/') {
     e.preventDefault();
@@ -1520,6 +1504,7 @@ const SCREENS = {
   home: { view: viewHome, onClick: (a, el) => Plan.onClick(a, el) },
   log: { view: viewLog },
   accounts: AccountsScreen,
+  goals: Goals,
   plan: Plan,
   clients: Clients,
   people: PeopleScreen,
@@ -1532,6 +1517,7 @@ function openMoreSheet() {
   const item = (tab, label, sub) => `<a href="#${tab}" class="tx more-item"><span class="t"><b>${label}</b><span>${sub}</span></span><span class="muted">›</span></a>`;
   openSheet(`<h3>More <button type="button" class="icon-btn" data-close aria-label="Close">✕</button></h3>
     <div class="list more-list">
+      ${item('goals', 'Goals', 'What you are saving for, filling up by itself')}
       ${item('plan', 'Plan', 'Budgets, bills, subscriptions, regular income')}
       ${item('clients', 'Clients', 'Invoices, payments, what an hour earns')}
       ${item('people', 'People', 'Who gave you money, who you gave to, loans')}
@@ -1657,7 +1643,7 @@ if (!DEMO && 'serviceWorker' in navigator && (location.protocol === 'https:' || 
 // the old sheet format plus this month across several accounts and
 // currencies) so every screen has something to show. Bumping DEMO_VERSION
 // re-seeds previews opened before.
-const DEMO_VERSION = 8;
+const DEMO_VERSION = 9;
 
 async function seedDemo() {
   if (!DEMO || state.meta.demoSeeded === DEMO_VERSION) return;
@@ -1732,6 +1718,11 @@ async function seedDemo() {
   // Budgets for a few categories.
   for (const [id, lei] of [['food', 400], ['clothes', 300], ['hygiene', 250], ['transport', 300], ['fun', 800]]) M.category(state, id).budget = lei * 100;
   for (const [id, theme] of [['maib-visa', 'ocean'], ['maib-virt', 'plum'], ['maib-biz', 'graphite'], ['vb-usd', 'crimson'], ['wallet', 'emerald'], ['safe', 'gold'], ['binance', 'midnight']]) M.account(state, id).cardTheme = theme;
+  state.goals = [
+    { id: 'g-ef', name: 'Emergency fund', emoji: '🛟', target: 3000000, account: 'savings', saved: 0, history: [], deadline: null, doneAt: null, theme: 'teal', updatedAt: now },
+    { id: 'g-car', name: 'Car', emoji: '🚗', target: 25000000, account: 'all', saved: 0, history: [], deadline: `${Number(today.slice(0, 4)) + 2}-06-01`, doneAt: null, theme: 'ocean', updatedAt: now },
+    { id: 'g-trip', name: 'Trip to Italy', emoji: '✈️', target: 2500000, account: 'manual', saved: 1650000, history: [{ date: day(2), amount: 400000 }], deadline: `${Number(today.slice(0, 4)) + 1}-05-15`, doneAt: null, theme: 'sunset', updatedAt: now },
+  ];
   state.settings.savingsAccount = 'safe';
   state.meta.demoSeeded = DEMO_VERSION;
   commit();
