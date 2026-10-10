@@ -19,6 +19,7 @@ A personal finance app that replaces the "finance 2026" Google Sheet: the same d
 | 🏷️ **Category rules** | "Description contains *linella* → Food": your rules file new records and bank imports. The app also learns words your records always file the same way, and when you change a record's category it offers to make a rule and move the similar ones. |
 | 🧮 **Smart split** | Every income is split 70% deposit / 10% food & transport / 10% investing & self-development / 10% hygiene & cosmetics (editable). One tap moves the 70% into the Safe. |
 | 🫙 **Jars** | Each spending category belongs to a jar. You see live how much is left in each one this month, and what overspent it. |
+| 📈 **Net worth over time** | Accounts → Net worth: a line of everything you own month by month, with the change since last month and over the year. History is rebuilt from your records; from now on a snapshot is saved every day (crypto and that day's rates included) and synced. |
 | 👛 **Wallet, Safe, Card** | Real balances per account, plus moves between them. "All my money" shows on the home screen. |
 | 🎯 **Goal with an ETA** | "At 17 860 MDL/month you reach 100 000 in March 2027." It uses your real pace from recent months. |
 | 🧠 **Insights** | Savings rate vs your 70% target, overspent jars, categories growing vs a normal month, your biggest expense, small purchases that add up, no-spend days, and the yearly cost of subscriptions. |

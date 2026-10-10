@@ -1530,6 +1530,7 @@ Object.assign(ctx, {
     Sync.refreshConnected().then((on) => on && Sync.syncNow());
     Binance.syncBinance();
     Plan.runAuto();
+    setTimeout(snapshotToday, 3000);
   },
   // Lock screen "Reset this device": wipe local data and start fresh.
   resetDevice: () => {
@@ -1679,6 +1680,14 @@ Binance.initBinance();
 Sync.initSync();
 Backups.initBackups();
 Plan.initPlan();
+
+// One net-worth snapshot a day (crypto and rates of that day included).
+function snapshotToday() {
+  if (DEMO || state._sealed) return;
+  if (M.takeSnapshot(state, todayISO())) { persist(); Sync.changed(); }
+}
+setTimeout(snapshotToday, 5000);
+setInterval(snapshotToday, 60 * 60000);
 
 // Desktop: Ctrl+Alt+N from any app brings this window up with a new record.
 if (window.desktop?.onQuickAdd) {

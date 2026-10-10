@@ -73,6 +73,9 @@ export function defaultState() {
     recurring: [],
     // Invoices to clients (js/invoices.js).
     invoices: [],
+    // One net-worth snapshot per day (id nw-YYYY-MM-DD), so crypto and
+    // exchange rates of the day are kept; older history is rebuilt from records.
+    netWorth: [],
     // id -> time it was deleted, so a sync can tell "deleted here" from
     // "never existed there".
     deleted: {},
@@ -119,7 +122,8 @@ export function normalizeState(raw) {
   const invoices = (Array.isArray(raw.invoices) ? raw.invoices : [])
     .filter((i) => i && typeof i.id === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(i.date || ''))
     .map((i) => ({ items: [], note: '', sent: false, paidDate: null, paidTx: null, currency: 'USD', ...i, updatedAt: i.updatedAt || 0 }));
-  return { version: SCHEMA_VERSION, settings, tx, people, recurring, invoices, deleted, rates: raw.rates || null, meta: { ...base.meta, ...(raw.meta || {}) } };
+  const netWorth = (Array.isArray(raw.netWorth) ? raw.netWorth : []).filter((x) => x && /^\d{4}-\d{2}-\d{2}$/.test(x.date || '') && Number.isFinite(x.total));
+  return { version: SCHEMA_VERSION, settings, tx, people, recurring, invoices, netWorth, deleted, rates: raw.rates || null, meta: { ...base.meta, ...(raw.meta || {}) } };
 }
 
 function validTx(t) {
@@ -197,6 +201,60 @@ export function totalBalance(state, { includeArchived = false } = {}) {
   }
   return { total, missing };
 }
+
+// ---------- Net worth over time ----------
+
+// Today's total, saved once a day (updated if you change things later that
+// day). Returns true when something changed.
+export function takeSnapshot(state, today, now = Date.now()) {
+  const { total } = totalBalance(state);
+  const crypto = accountValues(state).filter((v) => !v.account.archived).reduce((a, v) => a + (v.coins || 0), 0);
+  const list = state.netWorth || (state.netWorth = []);
+  const id = `nw-${today}`;
+  const have = list.find((x) => x.id === id);
+  if (have && have.total === total && have.crypto === crypto) return false;
+  if (have) Object.assign(have, { total, crypto, updatedAt: now });
+  else list.push({ id, date: today, total, crypto, updatedAt: now });
+  return true;
+}
+
+// Money on a past date from your records, in the main currency at today's
+// rates. Coin holdings are only known for today, so they are left out.
+export function rebuiltTotal(state, date) {
+  const baseCur = state.settings.currency;
+  const bal = accountBalances(state, date);
+  let total = 0;
+  for (const a of state.settings.accounts) {
+    const v = convert(bal[a.id] || 0, a.currency, baseCur, state.rates);
+    if (v != null) total += v;
+  }
+  return total;
+}
+
+// One point per month end: the last snapshot of that month when there is
+// one, otherwise rebuilt from records; this month is today's real total.
+export function netWorthSeries(state, today, months = 12) {
+  const now = monthKey(today);
+  const first = state.tx.reduce((m, t) => (t.date < m ? t.date : m), today).slice(0, 7);
+  const span = Math.min(months, monthsBetweenKeys(first, now) + 1);
+  const snaps = [...(state.netWorth || [])].sort((a, b) => a.date.localeCompare(b.date));
+  const out = [];
+  for (let i = span - 1; i >= 0; i--) {
+    const key = addMonths(now, -i);
+    const end = key === now ? today : `${key}-${String(daysInMonth(key)).padStart(2, '0')}`;
+    const snap = snaps.filter((x) => x.date.startsWith(key) && x.date <= end).at(-1);
+    // Today is known exactly (crypto included), snapshot or not.
+    const value = key === now ? totalBalance(state).total : snap ? snap.total : rebuiltTotal(state, end);
+    out.push({ key, date: end, value, snap: !!snap || key === now });
+  }
+  return out;
+}
+
+const monthsBetweenKeys = (a, b) => {
+  const [ya, ma] = a.split('-').map(Number);
+  const [yb, mb] = b.split('-').map(Number);
+  return Math.max(0, (yb - ya) * 12 + (mb - ma));
+};
 
 export const txInMonth = (state, key) => state.tx.filter((t) => monthKey(t.date) === key);
 

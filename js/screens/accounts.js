@@ -34,6 +34,25 @@ function savingsHistory(state) {
   return out;
 }
 
+// Net worth: month ends from your records, daily snapshots where taken.
+function netWorthCard(state) {
+  const range = ctx.ui.nwRange || 12;
+  const today = todayISO();
+  const pts = M.netWorthSeries(state, today, range).map((p) => ({ ...p, value: Math.round(p.value / 100) * 100 })); // whole lei
+  if (pts.length < 2) return '';
+  const last = pts.at(-1).value;
+  const delta = (i) => (pts.length > i ? last - pts.at(-1 - i).value : null);
+  const sign = (c) => (c == null ? '–' : `<b class="${c >= 0 ? 'income' : 'expense'}">${ctx.money(c, { sign: true })}</b>`);
+  const firstSnap = pts.slice(0, -1).find((p) => p.snap);
+  const chip = (n, label) => `<button class="chip" aria-pressed="${range === n}" data-act="nw-range" data-n="${n}">${label}</button>`;
+  return `<section class="card"><h2>Net worth <span class="right">${chip(12, '1 year')}${chip(120, 'All')}</span></h2>
+    <div class="kv"><span>Since last month</span>${sign(delta(1))}</div>
+    <div class="kv"><span>Since ${esc(monthLabel(pts[0].key, true))}</span>${sign(last - pts[0].value)}</div>
+    ${lineChart(pts.map((p) => ({ label: monthLabel(p.key, true).slice(0, 3) + (range > 12 && p.key.endsWith('-01') ? ` ${p.key.slice(2, 4)}` : ''), value: p.value })), (c) => ctx.money(c))}
+    <p class="muted small" style="margin:6px 0 0">${firstSnap && firstSnap === pts[0] ? 'From daily snapshots.' : `Earlier months are rebuilt from your records at today's rates, without crypto${firstSnap ? `; daily snapshots from ${esc(monthLabel(firstSnap.key))}` : '. A snapshot is saved every day from now on'}.`}</p>
+  </section>`;
+}
+
 function accountRow(v) {
   const { state } = ctx;
   const a = v.account;
@@ -87,6 +106,7 @@ export function view() {
       ${archived.length ? `<details class="card"><summary>Archived (${archived.length})</summary><div class="list">${archived.map(accountRow).join('')}</div></details>` : ''}
     </div>
     <div class="dash-side">
+      ${netWorthCard(state)}
       <section class="card"><h2>Savings over 12 months</h2>${lineChart(hist, (c) => ctx.money(c))}</section>
     </div>
   </div>`;
@@ -229,6 +249,7 @@ function editAccount(id) {
 export function onClick(act, el) {
   if (act === 'acc-new') { editAccount(null); return true; }
   if (act === 'acc-open') { openAccount(el.dataset.id); return true; }
+  if (act === 'nw-range') { ctx.ui.nwRange = Number(el.dataset.n); ctx.render(); return true; }
   return false;
 }
 
