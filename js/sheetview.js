@@ -47,6 +47,7 @@ function dataCells(t, side, key, base) {
 }
 
 export function sheetHTML(state, key, { today, extra = new Set(), fmt, tabs }) {
+  const yearBtns = tabs.years.map((y) => `<button type="button" class="gs-year${y === tabs.year ? ' on' : ''}" data-act="sh-year" data-year="${y}" aria-pressed="${y === tabs.year}">${y}</button>`).join('');
   const base = state.settings.currency;
   const cat = (id) => state.settings.categories.find((x) => x.id === id)?.name || '';
   const rows = [`<tr class="gs-head-row"><th class="gs-rn">1</th><td class="gs-h">Date</td><td class="gs-h in">Amount earned✅</td><td class="gs-h in">Description</td><td class="gs-h out">Amount invested❌</td><td class="gs-h out">Description2</td></tr>`];
@@ -70,17 +71,24 @@ export function sheetHTML(state, key, { today, extra = new Set(), fmt, tabs }) {
   }
   rows.push(`<tr class="gs-total"><th class="gs-rn">${r}</th><td class="gs-date"><b>Total</b></td><td class="gs-num in"><b class="income">${fmt(earned)}</b></td><td></td><td class="gs-num out"><b class="expense">${fmt(spent)}</b></td><td></td></tr>`);
   const letters = `<tr class="gs-letters"><th class="gs-corner"></th>${COLS.map((l) => `<th>${l}</th>`).join('')}</tr>`;
-  const tabBar = `<nav class="gs-tabs" aria-label="Months">${tabs.map((t) => `<button type="button" class="gs-tab${t.key === key ? ' on' : ''}" data-act="goto-month" data-month="${t.key}">${esc(t.label)}</button>`).join('')}</nav>`;
+  const tabBar = `<nav class="gs-tabs" aria-label="Months"><span class="gs-years" role="group" aria-label="Year">${yearBtns}</span>
+    ${tabs.months.map((t) => `<button type="button" class="gs-tab${t.key === key ? ' on' : ''}" data-act="goto-month" data-month="${t.key}">${esc(t.label)}</button>`).join('')}
+    <button type="button" class="gs-tab gs-new" data-act="sh-new-month" title="Add the next month" aria-label="Add the next month">+</button></nav>`;
   return `<div class="gs-wrap"><div class="gs-scroll"><table class="gs-grid" id="sheet-grid">
     <colgroup><col class="w-rn"><col class="w-date"><col class="w-amt"><col class="w-desc"><col class="w-amt"><col class="w-desc"></colgroup>
     <thead>${letters}</thead><tbody>${rows.join('')}</tbody></table></div>${tabBar}</div>`;
 }
 
-// The sheet tabs: every month with records, plus the current one.
-export function monthTabs(state, current, today) {
-  const keys = new Set(state.tx.map((t) => t.date.slice(0, 7)));
-  keys.add(today.slice(0, 7));
-  keys.add(current);
-  const thisYear = today.slice(0, 4);
-  return [...keys].sort().map((k) => ({ key: k, label: k.startsWith(thisYear) ? roMonth(k) : `${roMonth(k)} ${k.slice(2, 4)}` }));
+// The sheet tabs: the years you have, and the chosen year's months (every
+// month with records, the current one and months added with +).
+export function monthTabs(state, current, today, added = []) {
+  const keys = new Set([...state.tx.map((t) => t.date.slice(0, 7)), ...added, today.slice(0, 7), current]);
+  const all = [...keys].sort();
+  const year = current.slice(0, 4);
+  return {
+    years: [...new Set(all.map((k) => k.slice(0, 4)))],
+    year,
+    months: all.filter((k) => k.startsWith(year)).map((k) => ({ key: k, label: roMonth(k) })),
+    last: all.at(-1),
+  };
 }

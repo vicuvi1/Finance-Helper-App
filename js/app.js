@@ -247,7 +247,8 @@ function todayChip() {
 
 function goToMonth(k) {
   const now = monthKey(todayISO());
-  const next = k > now ? now : k;
+  // Future months only when added as a sheet tab (+).
+  const next = k > now && !(state.meta.sheetMonths || []).includes(k) ? now : k;
   if (next === ui.month) return;
   ui.monthDir = next > ui.month ? 1 : -1;
   ui.month = next;
@@ -650,7 +651,7 @@ function viewLog() {
 
   let content;
   if (view === 'sheet' && !q) {
-    content = sheetHTML(state, ui.month, { today: todayISO(), extra: ui.sheetExtra, fmt: (c) => formatMoney(c, ''), tabs: monthTabs(state, ui.month, todayISO()) });
+    content = sheetHTML(state, ui.month, { today: todayISO(), extra: ui.sheetExtra, fmt: (c) => formatMoney(c, ''), tabs: monthTabs(state, ui.month, todayISO(), state.meta.sheetMonths || []) });
   } else if (view === 'calendar') {
     content = `<section class="card">${calendarHTML(state, ui.month)}</section>`;
   } else if (view === 'table' || view === 'sheet') {
@@ -692,7 +693,7 @@ function viewLog() {
   ${view === 'calendar' || (view === 'sheet' && !q) ? '' : `<div class="chips">${chip('all', 'All')}${chip('expense', 'Spent')}${chip('income', 'Earned')}${chip('transfer', 'Moves')}</div>`}
   ${q && view !== 'calendar' ? searchCard(list) : view === 'calendar' ? '' : `<p class="search-hint muted small">Search all months: <span>${esc(SEARCH_HINT)}</span></p>`}
   ${content}
-  ${view === 'sheet' && !q ? '<p class="muted small">Just like your Google Sheet: type an amount in <b>Amount earned</b> or <b>Amount invested</b> and it is saved for that day (the category comes from the description; hover an amount to see it). Clear an amount to delete it. <b>+</b> next to a date adds another row for that day, <b>Enter</b> moves down, the tabs at the bottom switch months. Categories, accounts and moves between accounts: <b>Table</b> view.</p>' : ''}
+  ${view === 'sheet' && !q ? '<p class="muted small">Type an amount and it saves. Clear it to delete. <b>+</b> at the bottom adds the next month.</p>' : ''}
   ${view === 'table' ? '<p class="muted small">Edit any cell; it saves by itself. <b>Enter</b> moves down a row. <b>←</b> / <b>→</b> switch months. Tick rows (Shift+click for a range) to change many at once. <b>Ctrl+Z</b> undoes anything. Paste rows copied from Excel or Google Sheets anywhere on this page to import them.</p>' : ''}
   </div>`;
 }
@@ -1760,7 +1761,19 @@ document.addEventListener('click', (e) => {
     render();
   } else if (act === 'row-del') deleteTx(el.dataset.id);
   else if (act === 'sel') onSelect(el, e.shiftKey);
-  else if (act === 'sh-add') {
+  else if (act === 'sh-year') {
+    // Another year: its last month you have (or January).
+    const y = el.dataset.year;
+    const have = [...new Set(state.tx.map((x) => x.date.slice(0, 7)))].filter((k) => k.startsWith(y) && k <= monthKey(todayISO())).sort();
+    goToMonth(have.at(-1) || `${y}-01`);
+  } else if (act === 'sh-new-month') {
+    // Like adding a sheet tab: the month after your last one.
+    const next = addMonths(monthTabs(state, ui.month, todayISO(), state.meta.sheetMonths || []).last, 1);
+    state.meta.sheetMonths = [...new Set([...(state.meta.sheetMonths || []), next])].sort();
+    persist({ quiet: true });
+    goToMonth(next);
+    toast('New month added');
+  } else if (act === 'sh-add') {
     ui.sheetExtra.add(el.dataset.date);
     render();
     const rows = [...document.querySelectorAll(`#sheet-grid tr[data-date="${el.dataset.date}"]`)];
