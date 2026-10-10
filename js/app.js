@@ -203,7 +203,8 @@ function renderSidebar() {
       <svg viewBox="0 0 38 38" width="38" height="38" aria-hidden="true"><circle cx="19" cy="19" r="${r}" class="sf-track"/><circle cx="19" cy="19" r="${r}" class="sf-prog" style="stroke-dasharray:${c.toFixed(1)};stroke-dashoffset:${(c * (1 - gs.ratio)).toFixed(1)}" transform="rotate(-90 19 19)"/></svg>
       <span><b>${esc(g.emoji || '🎯')} ${esc(g.name)}</b><small>${Math.round(gs.ratio * 100)}% · ${money(Math.round(gs.remaining / 100) * 100, { compact: true })} to go</small></span>
     </button>` : ''}
-    <span class="sf-today dow-${dowIndex(today)}"><i aria-hidden="true"></i>${DOW_LONG[dowIndex(today)]}, ${Number(today.slice(8, 10))} ${MONTHS[Number(today.slice(5, 7)) - 1]}</span>`;
+    <div class="sf-row"><span class="sf-today dow-${dowIndex(today)}"><i aria-hidden="true"></i>${DOW_LONG[dowIndex(today)].slice(0, 3)}, ${Number(today.slice(8, 10))} ${MONTHS[Number(today.slice(5, 7)) - 1].slice(0, 3)}</span>
+    <button type="button" class="sf-buddy" data-act="bd-toggle" aria-pressed="${Buddy.isOn()}" title="${Buddy.isOn() ? 'Hide' : 'Show'} ${esc(Buddy.buddyName())}">🤖 <span>${esc(Buddy.buddyName())}</span><b>${Buddy.isOn() ? 'On' : 'Off'}</b></button></div>`;
 }
 
 // "Today · Saturday, 10 October" in today's weekday color.
@@ -1458,6 +1459,7 @@ document.addEventListener('click', (e) => {
   if (act === 'acc-open') AccountsScreen.openAccount(el.dataset.id);
   else if (act === 'person-open') PeopleScreen.openPerson(el.dataset.id);
   else if (act === 'more') openMoreSheet();
+  else if (act === 'bd-toggle') Buddy.toggle();
   else if (act === 'quick-pick') {
     const p = M.quickPicks(state, todayISO(), 8)[Number(el.dataset.i)];
     if (p) openTxSheet(null, { type: p.type, note: p.note, category: p.category, account: p.account, amountText: centsToPlain(p.amount) });

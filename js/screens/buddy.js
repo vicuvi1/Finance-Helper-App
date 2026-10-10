@@ -103,9 +103,10 @@ export function initBuddy() {
   el.id = 'buddy';
   el.className = 'buddy';
   el.dataset.mood = 'idle';
-  el.innerHTML = `<div class="bd-bubble" role="status" aria-live="polite"></div><button type="button" class="bd-body" title="Say hi">${ROBOT}</button>`;
+  el.innerHTML = `<div class="bd-bubble" role="status" aria-live="polite"></div><button type="button" class="bd-close" aria-label="Hide ${esc(prefs().name)}" title="Hide">×</button><button type="button" class="bd-body" title="Say hi">${ROBOT}</button>`;
   document.body.appendChild(el);
   apply();
+  el.querySelector('.bd-close').addEventListener('click', () => toggle(false));
   el.querySelector('.bd-body').addEventListener('click', () => {
     if (el.classList.contains('talking')) { el.classList.remove('talking'); return; }
     say(greeting(ctx.state, todayISO(), new Date().getHours()), { force: true });
@@ -117,6 +118,23 @@ export function initBuddy() {
     say(greeting(ctx.state, todayISO(), new Date().getHours()));
   }, 2200);
 }
+
+// Show or hide (the × on the robot and the switch in the sidebar).
+export function toggle(on = !prefs().on) {
+  ctx.state.meta.buddy = { ...prefs(), on };
+  ctx.persist();
+  apply();
+  refresh();
+  if (on) say({ mood: 'excited', text: 'I\'m back! 👋' }, { force: true });
+  else {
+    el?.classList.remove('talking');
+    ctx.toast(`${prefs().name} is hidden. Turn it back on at the bottom of the sidebar or in Settings → Buddy.`);
+  }
+  ctx.render();
+}
+
+export const isOn = () => prefs().on;
+export const buddyName = () => prefs().name;
 
 // ---------- Settings ----------
 
