@@ -713,11 +713,11 @@ kbd {
   .nav-more { display: none; }
 
   .app { margin-left: var(--side); max-width: none; padding: 28px 28px 40px; }
-  .view-reports, .view-settings { column-width: 380px; column-gap: 14px; max-width: 1840px; }
+  .view-reports { column-width: 380px; column-gap: 14px; max-width: 1840px; }
   .view-rates { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 14px; align-items: start; }
   .view-rates > .top, .view-rates > :not(.card) { grid-column: 1 / -1; }
-  .view-reports > *, .view-settings > *, .view-rates > * { break-inside: avoid; }
-  .view-reports > .top, .view-reports > .rep-bar, .view-reports > .rep-kpis, .view-settings > .top, .view-settings > .banner, .view-rates > .top, .view-rates > .conv { column-span: all; }
+  .view-reports > *, .view-rates > * { break-inside: avoid; }
+  .view-reports > .top, .view-reports > .rep-bar, .view-reports > .rep-kpis, .view-rates > .top, .view-rates > .conv { column-span: all; }
   .app { max-width: none; }
   .card { margin-bottom: 14px; }
   .top h1 { font-size: 28px; }
@@ -1406,3 +1406,32 @@ table.grid tr.selected td { background: var(--gold-soft); }
 .gs-tab { padding: 7px 16px; font-size: 13.5px; }
 .gs-new { min-width: 34px; padding: 4px 10px; font-size: 18px; font-weight: 600; color: var(--muted); border: 1px dashed var(--gs-line); border-radius: 6px; margin-left: 4px; }
 .gs-new:hover { color: var(--c6); border-color: var(--c6); }
+
+/* Settings: sections on the left, one section's cards on the right */
+.set-layout { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); align-items: start; }
+.set-nav { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; }
+.set-tab { display: flex; align-items: center; gap: 10px; flex: none; padding: 9px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--muted); text-align: left; transition: background 0.15s, color 0.15s, border-color 0.15s; }
+.set-tab:hover { color: var(--text); background: var(--surface-2); }
+.set-tab[aria-current="page"] { color: var(--text); border-color: color-mix(in srgb, var(--gold) 55%, transparent); background: var(--gold-soft); }
+.set-ic { font-size: 18px; line-height: 1; }
+.set-t { display: grid; gap: 1px; }
+.set-t b { font-size: 14px; font-weight: 650; white-space: nowrap; }
+.set-t span { display: none; font-size: 12px; color: var(--muted); }
+.set-foot { display: none; }
+.set-title { margin: 2px 0 14px; font-size: 20px; font-weight: 650; letter-spacing: -0.01em; text-transform: none; color: var(--text); }
+.set-grid { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr); align-items: start; }
+.set-grid > .card { margin: 0; }
+@media (min-width: 900px) {
+  .set-layout { grid-template-columns: 270px minmax(0, 1fr); gap: 24px; }
+  .set-nav { flex-direction: column; gap: 4px; overflow: visible; position: sticky; top: 20px; }
+  .set-tab { border-color: transparent; background: none; padding: 10px 12px; }
+  .set-tab[aria-current="page"] { border-color: color-mix(in srgb, var(--gold) 40%, transparent); }
+  .set-t span { display: block; }
+  .set-foot { display: block; margin: 14px 12px 0; }
+}
+/* Wide screens: cards pack into 2 (or 3) columns with no gaps. */
+@media (min-width: 1400px) {
+  .set-grid { display: block; columns: 2; column-gap: 14px; }
+  .set-grid > .card { break-inside: avoid; margin: 0 0 14px; }
+}
+@media (min-width: 2300px) { .set-grid { columns: 3; } }

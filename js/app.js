@@ -714,30 +714,24 @@ function viewSettings() {
   const lastBackup = state.meta.lastBackup ? new Date(state.meta.lastBackup).toLocaleDateString() : 'never';
   const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.navigator.standalone;
 
-  return `<header class="top"><h1>Settings</h1></header>
-  ${installPrompt ? '<div class="banner"><p>Install the app for one-tap access, even offline.</p><button class="btn primary" data-act="install">Install</button></div>' : ''}
-  ${isIOS ? '<div class="banner"><p>To install on iPhone: tap Share, then “Add to Home Screen”.</p></div>' : ''}
-
-  <section class="card"><h2>Goals</h2>
-    <p class="muted small" style="margin-top:0">Your goals (emergency fund, car, trip…) have their own screen now, with progress that fills by itself.</p>
+  const cards = {
+    goals: `<section class="card"><h2>Goals</h2>
+    <p class="muted small" style="margin-top:0">Your goals (emergency fund, car, trip…) have their own screen, with progress that fills by itself.</p>
     <button class="btn block" data-go="goals">Open Goals</button>
-  </section>
-
-  <section class="card"><h2>Smart split <span class="right" id="jar-sum"></span></h2>
+  </section>`,
+    split: `<section class="card"><h2>Smart split <span class="right" id="jar-sum"></span></h2>
     <p class="muted small" style="margin-top:0">Every income is split like this. Spending is checked against each jar.</p>
     ${st.jars.map((j) => `<div class="set-row">
       <input type="text" value="${esc(j.name)}" data-jar="${esc(j.id)}" data-field="label" aria-label="Jar name">
       <label style="display:flex;align-items:center;gap:6px"><input type="number" class="pct" min="0" max="100" step="1" value="${j.pct}" data-jar="${esc(j.id)}" data-field="pct" aria-label="Percent for ${esc(j.name)}">%</label>
     </div>`).join('')}
-  </section>
-
-  <section class="card"><h2>Accounts</h2>
+  </section>`,
+    accounts: `<section class="card"><h2>Accounts</h2>
     <p class="muted small" style="margin-top:0">Cards, cash, banks, currencies and crypto are managed on the Accounts screen.</p>
     <button class="btn block" data-go="accounts">Open Accounts</button>
     <label class="field" style="margin:12px 0 0"><span>The "move to savings" button sends money to</span><select data-set="savingsAccount">${accOptions(st.savingsAccount, false)}</select></label>
-  </section>
-
-  <details class="card"><summary>Categories</summary>
+  </section>`,
+    categories: `<section class="card"><h2>Categories</h2>
     <p class="muted small" style="margin-top:0">Spending: pick which jar it comes from.</p>
     ${st.categories.filter((c) => c.type === 'expense').map(catRow).join('')}
     <p class="muted small">Income sources</p>
@@ -746,9 +740,8 @@ function viewSettings() {
       <button class="btn" data-act="add-cat" data-type="expense">+ Spending category</button>
       <button class="btn" data-act="add-cat" data-type="income">+ Income source</button>
     </div>
-  </details>
-
-  <section class="card"><h2>Your data</h2>
+  </section>`,
+    data: `<section class="card"><h2>Your data</h2>
     <p class="muted small" style="margin-top:0">${state.tx.length} records, saved only on this device. Last backup: ${esc(lastBackup)}.</p>
     <div class="btns">
       <button class="btn primary" data-act="export-json">Back up</button>
@@ -763,34 +756,40 @@ function viewSettings() {
       <button class="btn" data-act="import-bank">Import bank statement</button>
       <button class="btn" data-act="export-csv">Export CSV</button>
     </div>
-    <p class="muted small" style="margin-bottom:0">From Google Sheets: File → Download → <b>Microsoft Excel (.xlsx)</b> and import the whole file: every month tab at once, you pick which. A single tab as .csv works too. Bank statements: export CSV or Excel from maib / Victoriabank online banking. Importing the same thing twice is safe.</p>
-  </section>
-
-  ${Rules.settingsCard()}
-  ${Telegram.settingsCard()}
-  ${Buddy.settingsCard()}
-  ${WorkHour.settingsCard()}
-
-  <section class="card"><h2>Look</h2>
+    <p class="muted small" style="margin-bottom:0">From Google Sheets: File → Download → <b>Microsoft Excel (.xlsx)</b> and import the whole file: every month tab at once, you pick which. Bank statements: export CSV or Excel from maib / Victoriabank online banking. Importing the same thing twice is safe.</p>
+  </section>`,
+    look: `<section class="card"><h2>Look</h2>
     <div class="row2">
       <label class="field"><span>Theme</span><select data-set="theme">
         ${['system', 'dark', 'light'].map((t) => `<option value="${t}" ${st.theme === t ? 'selected' : ''}>${t[0].toUpperCase() + t.slice(1)}</option>`).join('')}
       </select></label>
       <label class="field"><span>Currency</span><input type="text" data-set="currency" value="${esc(st.currency)}" maxlength="5"></label>
     </div>
-  </section>
-
-  ${Sync.settingsCard()}
-  ${Backups.settingsCard()}
-  ${Binance.settingsCard()}
-  ${Security.settingsCard()}
-  ${Updates.settingsCard()}
-  ${SelfCheck.settingsCard()}
-
-  <section class="card"><h2>Danger zone</h2>
+  </section>`,
+    danger: `<section class="card"><h2>Danger zone</h2>
     <button class="btn danger block" data-act="wipe">Erase everything on this device</button>
-  </section>
-  <p class="muted small" style="text-align:center">Finance Helper · private, offline, no account, no tracking.</p>`;
+  </section>`,
+  };
+  // One section at a time, picked on the left (like any settings screen).
+  const sections = [
+    { id: 'general', icon: '⚙️', label: 'General', sub: 'Look, smart split, your hour', html: () => cards.look + cards.split + WorkHour.settingsCard() + cards.accounts + cards.goals },
+    { id: 'categories', icon: '🏷️', label: 'Categories & rules', sub: 'Categories, jars, auto-rules', html: () => cards.categories + Rules.settingsCard() },
+    { id: 'data', icon: '💾', label: 'Data & backups', sub: 'Import, export, backups, sync', html: () => cards.data + Backups.settingsCard() + Sync.settingsCard() },
+    { id: 'connect', icon: '🔗', label: 'Telegram & Binance', sub: 'Your bot, crypto balances', html: () => Telegram.settingsCard() + Binance.settingsCard() },
+    { id: 'buddy', icon: '🤖', label: 'Bit, your buddy', sub: 'Show, name, color', html: () => Buddy.settingsCard() },
+    { id: 'security', icon: '🔒', label: 'Security', sub: 'PIN and encryption', html: () => Security.settingsCard() },
+    { id: 'about', icon: 'ℹ️', label: 'About & updates', sub: 'Version, check, erase', html: () => Updates.settingsCard() + SelfCheck.settingsCard() + cards.danger },
+  ];
+  const cur = sections.find((x) => x.id === ui.settingsTab) || sections[0];
+
+  return `<header class="top"><h1>Settings</h1></header>
+  ${installPrompt ? '<div class="banner"><p>Install the app for one-tap access, even offline.</p><button class="btn primary" data-act="install">Install</button></div>' : ''}
+  ${isIOS ? '<div class="banner"><p>To install on iPhone: tap Share, then “Add to Home Screen”.</p></div>' : ''}
+  <div class="set-layout">
+    <nav class="set-nav" aria-label="Settings sections">${sections.map((x) => `<button type="button" class="set-tab" data-act="set-tab" data-sec="${x.id}" aria-current="${x.id === cur.id ? 'page' : 'false'}"><span class="set-ic" aria-hidden="true">${x.icon}</span><span class="set-t"><b>${x.label}</b><span>${x.sub}</span></span></button>`).join('')}
+      <p class="muted small set-foot">Finance Helper · private, offline, no account, no tracking.</p></nav>
+    <div class="set-body"><h2 class="set-title">${cur.icon} ${cur.label}</h2><div class="set-grid">${cur.html()}</div></div>
+  </div>`;
 }
 
 function updateJarSum() {
@@ -1761,6 +1760,7 @@ document.addEventListener('click', (e) => {
     render();
   } else if (act === 'row-del') deleteTx(el.dataset.id);
   else if (act === 'sel') onSelect(el, e.shiftKey);
+  else if (act === 'set-tab') { ui.settingsTab = el.dataset.sec; render(); window.scrollTo(0, 0); }
   else if (act === 'sh-year') {
     // Another year: its last month you have (or January).
     const y = el.dataset.year;
@@ -1800,12 +1800,10 @@ document.addEventListener('click', (e) => {
     const type = el.dataset.type;
     state.settings.categories.push({ id: `c-${M.uid()}`, type, name: type === 'income' ? 'New source' : 'New category', emoji: '', updatedAt: Date.now(), ...(type === 'expense' ? { jar: state.settings.jars.find((j) => !j.savings)?.id } : {}) });
     commit();
-    document.querySelector('details.card')?.setAttribute('open', '');
   } else if (act === 'del-cat') {
     state.settings.categories = state.settings.categories.filter((c) => c.id !== el.dataset.id);
     state.deleted[el.dataset.id] = Date.now();
     commit();
-    document.querySelector('details.card')?.setAttribute('open', '');
   } else if (act === 'wipe') openWipeSheet();
 });
 
