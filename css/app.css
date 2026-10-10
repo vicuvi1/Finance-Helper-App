@@ -1226,3 +1226,21 @@ body.locked .buddy, body.printing .buddy { display: none; }
   .sf-buddy[aria-pressed="true"] b { color: var(--income); background: var(--income-soft); }
   .sf-buddy:hover { color: var(--text); border-color: var(--line-strong); }
 }
+
+/* Undo / redo and bulk changes (Log → Table) */
+.undo-pair { display: inline-flex; gap: 6px; }
+.log-actions .icon-btn { width: 42px; height: 42px; font-size: 18px; }
+table.grid .selc { text-align: center; }
+table.grid input.sel { width: 16px; height: 16px; min-height: 0; padding: 0; margin: 0; accent-color: var(--gold); cursor: pointer; vertical-align: middle; outline-offset: 2px; }
+table.grid tbody tr:not(:hover):not(.selected) input.sel:not(:focus) { opacity: 0.3; }
+table.grid tr.selected td { background: var(--gold-soft); }
+.bulk-bar {
+  position: sticky; top: 10px; z-index: 6; display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: center;
+  padding: 10px 12px; margin-bottom: 10px; background: var(--surface-3); border: 1px solid color-mix(in srgb, var(--gold) 45%, transparent);
+  border-radius: var(--radius); box-shadow: var(--shadow-pop); animation: rise 0.25s var(--ease-out) both;
+}
+.bulk-bar > b { font-size: 14px; }
+.bulk-bar select, .bulk-bar input[type="date"] { width: auto; min-height: 38px; padding: 6px 10px; font-size: 13px; }
+.bulk-bar .bulk-date { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
+.bulk-bar .btn { min-height: 38px; padding: 6px 14px; }
+.bulk-bar .btn:first-of-type { margin-left: auto; }

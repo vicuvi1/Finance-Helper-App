@@ -29,7 +29,8 @@ A personal finance app that replaces the "finance 2026" Google Sheet: the same d
 | 🎯 **Goal with an ETA** | "At 17 860 MDL/month you reach 100 000 in March 2027." It uses your real pace from recent months. |
 | 🧠 **Insights** | Savings rate vs your 70% target, overspent jars, categories growing vs a normal month, your biggest expense, small purchases that add up, no-spend days, and the yearly cost of subscriptions. |
 | 💸 **Make more** | Income broken down by source (work, family, side jobs, competitions…), with a nudge when one source is all you have. |
-| 📊 **Table view** | The month as a spreadsheet: edit any cell and it saves, **Enter** moves down a row, sort by any column, type new rows at the bottom. |
+| 📊 **Table view** | The month as a spreadsheet: edit any cell and it saves, **Enter** moves down a row, sort by any column, type new rows at the bottom. Tick rows (Shift+click for a range) to change their category, account or date, or delete them, all at once. |
+| ↶ **Undo everything** | **Ctrl+Z** undoes any change (an edit, a delete, a bulk change, an import, a setting) and **Ctrl+Y** redoes it, as many steps back as you like; also the ↶ ↷ buttons on Log. |
 | 🗓️ **Calendar view** | The month as a calendar with what came in and went out each day, weekly totals, and darker days where you spent more. |
 | 📤 **Excel in and out** | **Copy table** and paste into Excel or Google Sheets; paste rows from them back in to import. **Export month** or **Export to Excel** gives a real `.xlsx` with one tab per month, a year overview, live SUM formulas and filters. |
 | 📅 **Year overview** | The "2026 Overview" tab: earned / spent / kept / % for every month. |

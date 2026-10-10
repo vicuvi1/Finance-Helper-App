@@ -29,7 +29,7 @@ function apply(payload) {
   a.holdings = rows.map((r) => ({ asset: r.asset, qty: r.qty }));
   M.touch(a);
   state.meta.binanceSyncedAt = Date.now();
-  ctx.commit();
+  ctx.commit({ quiet: true }); // fetched, not something to undo
   ctx.updateRates({ force: true }); // prices for any new coin
   return rows.length;
 }

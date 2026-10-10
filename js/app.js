@@ -37,8 +37,12 @@ import { FREQS, markDone, dueItems } from './recurring.js';
 import { invoiceStatus } from './invoices.js';
 import { tableHTML, calendarHTML, dayLabelHTML } from './logviews.js';
 import { dailyChart } from './charts.js';
+import { createHistory } from './history.js';
 
 let state = load();
+// Undo / redo for this session (js/history.js).
+const history = createHistory();
+history.reset(state);
 const ui = {
   tab: 'home',
   month: monthKey(todayISO()),
@@ -50,6 +54,9 @@ const ui = {
   incomePeriod: 'month',
   // Table view's empty "new row": keeps date/type/account between adds.
   draft: null,
+  // Table rows ticked for a bulk change.
+  selected: new Set(),
+  lastSel: null,
 };
 let installPrompt = null;
 let toastTimer = null;
@@ -90,14 +97,30 @@ function bigMoney(c) {
 // Money that counts up to its value when a screen opens.
 const countUp = (c, key, opts) => `<span data-count="${c}" data-ck="${key}" data-cur="1"${opts?.sign ? ' data-sign="1"' : ''}>${money(c, opts)}</span>`;
 
-function persist() {
+// Save. Each save is an undo step, except quiet ones: changes that didn't
+// come from you (sync, the daily net-worth snapshot, Binance balances).
+function persist({ quiet = false } = {}) {
   if (!save(state)) toast('Could not save. Is your browser storage full or blocked?');
+  if (quiet) history.reset(state);
+  else history.record(state);
 }
 
-function commit() {
-  persist();
+function commit(opts) {
+  persist(opts);
   render();
   Sync.changed();
+}
+
+// Ctrl+Z / Ctrl+Y and the Undo / Redo buttons.
+function undoRedo(dir) {
+  if (state._sealed) return;
+  const e = dir < 0 ? history.undo(state) : history.redo(state);
+  if (!e) { toast(dir < 0 ? 'Nothing to undo' : 'Nothing to redo'); return; }
+  if (!save(state)) toast('Could not save. Is your browser storage full or blocked?');
+  ui.selected?.clear();
+  render();
+  Sync.changed();
+  toast(`${dir < 0 ? 'Undone' : 'Redone'}: ${e.label}`, dir < 0 ? 'Redo' : 'Undo', () => undoRedo(-dir));
 }
 
 function applyTheme() {
@@ -399,6 +422,115 @@ function logRecords() {
   return list;
 }
 
+function undoButtons() {
+  const u = history.nextUndo();
+  const r = history.nextRedo();
+  return `<span class="undo-pair" role="group" aria-label="Undo and redo">
+    <button type="button" class="icon-btn" data-act="undo" ${u ? '' : 'disabled'} title="${u ? `Undo: ${esc(u)} (Ctrl+Z)` : 'Nothing to undo'}" aria-label="Undo">↶</button>
+    <button type="button" class="icon-btn" data-act="redo" ${r ? '' : 'disabled'} title="${r ? `Redo: ${esc(r)} (Ctrl+Y)` : 'Nothing to redo'}" aria-label="Redo">↷</button></span>`;
+}
+
+// ---------- Bulk changes (Table) ----------
+
+function selectedTx() {
+  return state.tx.filter((t) => ui.selected.has(t.id));
+}
+
+function bulkBar() {
+  const list = selectedTx();
+  if (!list.length) return '';
+  const out = list.filter((t) => t.type === 'expense').reduce((a, t) => a + M.B(t), 0);
+  const inc = list.filter((t) => t.type === 'income').reduce((a, t) => a + M.B(t), 0);
+  const cats = (type, label) => `<optgroup label="${label}">${state.settings.categories.filter((c) => c.type === type).map((c) => `<option value="${esc(c.id)}">${esc(`${c.emoji || ''} ${c.name}`.trim())}</option>`).join('')}</optgroup>`;
+  return `<div class="bulk-bar" role="toolbar" aria-label="Change selected records">
+    <b>${list.length} selected</b>
+    <span class="muted small">${[out ? `−${money(out)}` : '', inc ? `+${money(inc)}` : ''].filter(Boolean).join(' · ')}</span>
+    <select data-bulk="category" aria-label="Set category"><option value="">Category…</option>${cats('expense', 'Spent')}${cats('income', 'Earned')}</select>
+    <select data-bulk="account" aria-label="Set account"><option value="">Account…</option>${state.settings.accounts.filter((a) => !a.archived).map((a) => `<option value="${esc(a.id)}">${esc(a.name)}</option>`).join('')}</select>
+    <label class="bulk-date"><span>Date</span><input type="date" data-bulk="date" aria-label="Set date"></label>
+    <button type="button" class="btn danger" data-act="bulk-del">Delete</button>
+    <button type="button" class="btn" data-act="bulk-clear">Clear</button>
+  </div>`;
+}
+
+// Ticking rows updates only the ticks and the bar, not the whole table.
+function refreshSelection() {
+  const slot = document.getElementById('bulk-slot');
+  if (slot) slot.innerHTML = bulkBar();
+  for (const tr of document.querySelectorAll('#tx-table tr[data-id]')) {
+    const on = ui.selected.has(tr.dataset.id);
+    tr.classList.toggle('selected', on);
+    const box = tr.querySelector('.sel');
+    if (box) box.checked = on;
+  }
+  const all = document.querySelector('#tx-table [data-act="sel-all"]');
+  const rows = [...document.querySelectorAll('#tx-table tr[data-id]')];
+  if (all) all.checked = rows.length > 0 && rows.every((r) => ui.selected.has(r.dataset.id));
+}
+
+function onSelect(el, shift) {
+  const id = el.dataset.id;
+  const rows = [...document.querySelectorAll('#tx-table tr[data-id]')].map((r) => r.dataset.id);
+  if (shift && ui.lastSel && rows.includes(ui.lastSel)) {
+    const [a, b] = [rows.indexOf(ui.lastSel), rows.indexOf(id)].sort((x, y) => x - y);
+    for (const x of rows.slice(a, b + 1)) ui.selected.add(x);
+  } else if (el.checked) ui.selected.add(id);
+  else ui.selected.delete(id);
+  ui.lastSel = id;
+  refreshSelection();
+}
+
+function onSelectAll(el) {
+  const rows = [...document.querySelectorAll('#tx-table tr[data-id]')].map((r) => r.dataset.id);
+  for (const id of rows) if (el.checked) ui.selected.add(id); else ui.selected.delete(id);
+  refreshSelection();
+}
+
+// Moving a record to another account: in that account's currency, at
+// today's rate (or the last one used).
+function setTxAccount(t, id) {
+  t.account = id;
+  const cur = M.account(state, id)?.currency || state.settings.currency;
+  if (cur !== t.currency) {
+    t.currency = cur;
+    t.rate = suggestedRate(cur) || t.rate || 1;
+    t.base = Math.round(t.amount * t.rate);
+  }
+}
+
+function onBulkChange(el) {
+  const v = el.value;
+  if (!v) return;
+  const list = selectedTx();
+  let changed = 0;
+  let skipped = 0;
+  for (const t of list) {
+    if (el.dataset.bulk === 'date') {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return;
+      t.date = v;
+    } else if (t.type === 'transfer') { skipped++; continue; }
+    else if (el.dataset.bulk === 'category') {
+      if (M.category(state, v)?.type !== t.type) { skipped++; continue; }
+      t.category = v;
+    } else if (el.dataset.bulk === 'account') setTxAccount(t, v);
+    M.touch(t);
+    changed++;
+  }
+  if (!changed) { toast(skipped ? 'None of the selected records can take that (moves, or a different type)' : 'Nothing changed'); el.value = ''; return; }
+  commit();
+  const what = { category: 'category', account: 'account', date: 'date' }[el.dataset.bulk];
+  toast(`Changed the ${what} of ${changed} record${changed === 1 ? '' : 's'}${skipped ? ` (${skipped} skipped)` : ''}`, 'Undo', () => undoRedo(-1));
+}
+
+function bulkDelete() {
+  const list = selectedTx();
+  if (!list.length) return;
+  for (const t of list) M.removeTx(state, t.id);
+  ui.selected.clear();
+  commit();
+  toast(`Deleted ${list.length} record${list.length === 1 ? '' : 's'}`, 'Undo', () => undoRedo(-1));
+}
+
 function draftRow() {
   const inMonth = monthKey(todayISO()) === ui.month ? todayISO() : `${ui.month}-01`;
   if (!ui.draft || !ui.draft.date.startsWith(ui.month)) {
@@ -417,7 +549,10 @@ function viewLog() {
   if (view === 'calendar') {
     content = `<section class="card">${calendarHTML(state, ui.month)}</section>`;
   } else if (view === 'table') {
-    content = tableHTML(state, list, { sort: ui.sort, draft: draftRow(), fmt: (c) => money(c) })
+    const shown = new Set(list.map((t) => t.id));
+    for (const id of ui.selected) if (!shown.has(id)) ui.selected.delete(id);
+    content = `<div id="bulk-slot">${bulkBar()}</div>`
+      + tableHTML(state, list, { sort: ui.sort, draft: draftRow(), fmt: (c) => money(c), selected: ui.selected })
       + `<datalist id="people-list">${state.people.map((p) => `<option value="${esc(p.name)}">`).join('')}</datalist>`;
   } else {
     const groups = new Map();
@@ -444,6 +579,7 @@ function viewLog() {
     <div class="seg seg-views" role="group" aria-label="View">${viewBtn('table', 'Table')}${viewBtn('calendar', 'Calendar')}${viewBtn('list', 'List')}</div>
     ${view === 'calendar' ? '' : `<input type="search" id="search" placeholder="Search notes, categories, amounts" value="${esc(ui.search)}" aria-label="Search all records">`}
     <div class="log-actions">
+      ${undoButtons()}
       <button type="button" class="btn" data-act="copy-table" title="Copy this month as a table to paste into Excel or Google Sheets">Copy table</button>
       <button type="button" class="btn" data-act="export-month" title="Download this month as a file Excel opens">Export month</button>
     </div>
@@ -451,7 +587,7 @@ function viewLog() {
   ${view === 'calendar' ? '' : `<div class="chips">${chip('all', 'All')}${chip('expense', 'Spent')}${chip('income', 'Earned')}${chip('transfer', 'Moves')}</div>`}
   ${q && view !== 'calendar' ? `<p class="muted small">${list.length} result${list.length === 1 ? '' : 's'} in all months</p>` : ''}
   ${content}
-  ${view === 'table' ? '<p class="muted small">Edit any cell; it saves by itself. <b>Enter</b> moves down a row. <b>←</b> / <b>→</b> switch months. Paste rows copied from Excel or Google Sheets anywhere on this page to import them.</p>' : ''}
+  ${view === 'table' ? '<p class="muted small">Edit any cell; it saves by itself. <b>Enter</b> moves down a row. <b>←</b> / <b>→</b> switch months. Tick rows (Shift+click for a range) to change many at once. <b>Ctrl+Z</b> undoes anything. Paste rows copied from Excel or Google Sheets anywhere on this page to import them.</p>' : ''}
   </div>`;
 }
 
@@ -992,10 +1128,7 @@ function deleteTx(id) {
   if (!removed) return;
   commit();
   closeSheet();
-  toast('Deleted', 'Undo', () => {
-    M.restoreTx(state, removed);
-    commit();
-  });
+  toast('Deleted', 'Undo', () => undoRedo(-1));
 }
 
 function toast(text, actionLabel, action) {
@@ -1152,15 +1285,7 @@ function onCellChange(el) {
     if (v === other) { toast('Pick two different accounts'); el.value = t[col]; return; }
     t[col] = v;
   } else if (col === 'account') {
-    t.account = v;
-    // Moved to an account in another currency: the amount is now in that
-    // currency, priced at today's rate (or the last one used).
-    const cur = M.account(state, v)?.currency || state.settings.currency;
-    if (cur !== t.currency) {
-      t.currency = cur;
-      t.rate = suggestedRate(cur) || t.rate || 1;
-      t.base = Math.round(t.amount * t.rate);
-    }
+    setTxAccount(t, v);
   } else if (col === 'person') {
     const id = M.ensurePerson(state, v);
     if (id) t.person = id; else { delete t.person; delete t.loan; }
@@ -1486,6 +1611,12 @@ document.addEventListener('click', (e) => {
     ui.sort = { col, dir: ui.sort.col === col ? -ui.sort.dir : 1 };
     render();
   } else if (act === 'row-del') deleteTx(el.dataset.id);
+  else if (act === 'sel') onSelect(el, e.shiftKey);
+  else if (act === 'sel-all') onSelectAll(el);
+  else if (act === 'bulk-clear') { ui.selected.clear(); refreshSelection(); }
+  else if (act === 'bulk-del') bulkDelete();
+  else if (act === 'undo') undoRedo(-1);
+  else if (act === 'redo') undoRedo(1);
   else if (act === 'row-add') addDraftRow();
   else if (act === 'day') openDaySheet(el.dataset.date);
   else if (act === 'copy-table') copyTable();
@@ -1513,7 +1644,9 @@ document.addEventListener('click', (e) => {
 document.addEventListener('change', (e) => {
   if (e.target.closest('.sheet')) return;
   if (SCREENS[ui.tab]?.onChange?.(e.target)) return;
-  if (e.target.closest('#tx-table')) onCellChange(e.target);
+  if (e.target.dataset.bulk) onBulkChange(e.target);
+  else if (e.target.classList.contains('sel')) return;
+  else if (e.target.closest('#tx-table')) onCellChange(e.target);
   else if (e.target.id === 'file-csv') {
     const file = e.target.files?.[0];
     e.target.value = '';
@@ -1545,12 +1678,23 @@ document.addEventListener('input', (e) => {
 // Desktop shortcuts: N = new record, / = search, 1-9 and 0 = sections, Esc = close.
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && sheetRoot.firstChild) { closeSheet(); return; }
+  if (e.key === 'Escape' && ui.selected.size && !e.target.closest('input:not(.sel), select, textarea')) { ui.selected.clear(); refreshSelection(); return; }
   if (e.key === 'Enter' && e.target.closest('#tx-table') && e.target.matches('input')) {
     e.preventDefault();
     onTableEnter(e.target);
     return;
   }
   if (Security.isLocked()) return;
+  // Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y: undo and redo, unless you're in the
+  // middle of typing in a box (then the box's own undo works).
+  const z = e.key.toLowerCase();
+  if ((e.ctrlKey || e.metaKey) && !e.altKey && (z === 'z' || z === 'y') && !sheetRoot.firstChild) {
+    const f = e.target.closest?.('input, textarea');
+    if (f && f.type !== 'checkbox' && f.value !== f.defaultValue) return;
+    e.preventDefault();
+    undoRedo(z === 'y' || e.shiftKey ? 1 : -1);
+    return;
+  }
   if (e.ctrlKey || e.metaKey || e.altKey || sheetRoot.firstChild) return;
   if (e.target.closest('input, select, textarea')) return;
   if ((e.key === 'l' || e.key === 'L') && Security.hasLock()) { Security.lock(); return; }
@@ -1638,9 +1782,10 @@ Object.assign(ctx, {
   restoreFromText: (text) => onJSONFile(text),
   buddy: (msg) => Buddy.say(msg),
   // Sync brings in a merged copy of the data.
-  replaceState: (next) => { state = next; persist(); },
+  replaceState: (next) => { state = next; persist({ quiet: true }); },
   // Swap the data in memory without saving (lock / unlock with encryption).
-  setState: (next) => { state = next; },
+  // Undo steps hold readable data, so they go too.
+  setState: (next) => { state = next; history.clear(); history.reset(next); },
   // After unlocking encrypted data: catch up on what waited for it.
   afterUnlock: () => {
     applyTheme();
@@ -1793,7 +1938,8 @@ async function seedDemo() {
   ];
   state.settings.savingsAccount = 'safe';
   state.meta.demoSeeded = DEMO_VERSION;
-  commit();
+  history.clear();
+  commit({ quiet: true });
 }
 
 Spending.bindHover(app);
@@ -1812,7 +1958,7 @@ Buddy.initBuddy();
 // One net-worth snapshot a day (crypto and rates of that day included).
 function snapshotToday() {
   if (DEMO || state._sealed) return;
-  if (M.takeSnapshot(state, todayISO())) { persist(); Sync.changed(); }
+  if (M.takeSnapshot(state, todayISO())) { persist({ quiet: true }); Sync.changed(); }
 }
 setTimeout(snapshotToday, 5000);
 setInterval(snapshotToday, 60 * 60000);
