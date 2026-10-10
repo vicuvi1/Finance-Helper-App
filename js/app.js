@@ -1969,6 +1969,7 @@ Object.assign(ctx, {
   restoreFromText: (text) => onJSONFile(text),
   buddy: (msg) => Buddy.say(msg),
   openSplit: (tx) => openSplitSheet(tx),
+  backupNow: () => Backups.autoBackup({ force: true }),
   // Sync brings in a merged copy of the data.
   replaceState: (next) => { state = next; persist({ quiet: true }); },
   // Swap the data in memory without saving (lock / unlock with encryption).

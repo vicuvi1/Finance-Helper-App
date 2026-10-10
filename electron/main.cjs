@@ -2,10 +2,11 @@
 // private app:// origin so ES modules and saved data work like on the web,
 // and nothing is loaded from the internet.
 
-const { app, BrowserWindow, protocol, net, shell, Menu, ipcMain, safeStorage, globalShortcut, Tray, nativeImage } = require('electron');
+const { app, BrowserWindow, protocol, net, shell, Menu, ipcMain, safeStorage, globalShortcut, Tray, nativeImage, dialog } = require('electron');
 const { createTelegram } = require('./telegram.cjs');
 const { createBinance } = require('./binance.cjs');
 const { createDrive } = require('./gdrive.cjs');
+const { createFolderSync } = require('./folder.cjs');
 const path = require('node:path');
 const fs = require('node:fs');
 const { pathToFileURL } = require('node:url');
@@ -167,6 +168,21 @@ ipcMain.handle('drive-snap-put', (_e, name, text) => drive.putSnapshot(String(na
 ipcMain.handle('drive-snap-list', () => drive.listSnapshots());
 ipcMain.handle('drive-snap-read', (_e, id) => drive.readSnapshot(String(id)));
 ipcMain.handle('drive-snap-delete', (_e, id) => drive.deleteSnapshot(String(id)));
+
+// ---------- Sync through a folder (the Google Drive folder on this PC) ----------
+
+const folder = createFolderSync({ getPref: (k) => prefs()[k], setPref: (k, v) => savePrefs({ [k]: v }), dialog, shell, win: () => BrowserWindow.getAllWindows()[0] });
+ipcMain.handle('folder-status', () => folder.status());
+ipcMain.handle('folder-use', (_e, p) => folder.use(String(p)));
+ipcMain.handle('folder-pick', () => folder.pick());
+ipcMain.handle('folder-off', () => folder.disconnect());
+ipcMain.handle('folder-open', () => folder.open());
+ipcMain.handle('folder-pull', () => folder.pull());
+ipcMain.handle('folder-push', (_e, text) => folder.push(String(text)));
+ipcMain.handle('folder-snap-put', (_e, name, text) => folder.putSnapshot(String(name), String(text)));
+ipcMain.handle('folder-snap-list', () => folder.listSnapshots());
+ipcMain.handle('folder-snap-read', (_e, id) => folder.readSnapshot(String(id)));
+ipcMain.handle('folder-snap-delete', (_e, id) => folder.deleteSnapshot(String(id)));
 
 // ---------- Updates (GitHub Releases, via electron-updater) ----------
 // The page asks; nothing downloads or installs without a click, except the

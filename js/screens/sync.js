@@ -2,6 +2,9 @@
 // and a copy in your own Google Drive keeps all devices in step. Syncs at
 // start, after you change something (a few seconds later), every 5 minutes
 // and when the internet comes back.
+// Two ways in: the desktop app can simply use the Google Drive folder on the
+// computer (Google Drive for desktop uploads it: no keys, no sign-in), or
+// connect to Drive itself with Google Cloud keys (advanced; the web app).
 
 import { ctx, esc } from '../ctx.js';
 import { mergeStates, toCloud } from '../sync.js';
@@ -9,13 +12,14 @@ import { uid } from '../model.js';
 import { webDrive, signIn } from '../gdrive-web.js';
 import { hasSession, isEncrypted, isSealed, openImported, sealForExport } from '../store.js';
 
-const s = { busy: false, error: '', connected: false };
+const s = { busy: false, error: '', connected: false, mode: null, folder: null, suggested: null };
 let timer = null;
 
 const meta = () => ctx.state.meta;
 const when = (ts) => (ts ? new Date(ts).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : 'never');
 const isDesktop = () => !!window.desktop?.drive;
-const transport = () => (isDesktop() ? window.desktop.drive : meta().driveWebClientId ? webDrive(meta().driveWebClientId) : null);
+const hasFolder = () => !!window.desktop?.folder;
+const transport = () => (s.mode === 'folder' ? window.desktop.folder : isDesktop() ? window.desktop.drive : meta().driveWebClientId ? webDrive(meta().driveWebClientId) : null);
 
 function deviceId() {
   if (!meta().deviceId) { meta().deviceId = `d-${uid()}`; ctx.persist(); }
@@ -84,8 +88,38 @@ export function changed() {
 // is only readable after unlocking when the data is encrypted).
 export async function refreshConnected() {
   if (ctx.DEMO) return false;
+  if (hasFolder()) {
+    const f = await window.desktop.folder.status().catch(() => ({}));
+    s.folder = f.folder || null;
+    s.suggested = f.suggested || null;
+    if (f.connected) { s.mode = 'folder'; s.connected = true; return true; }
+  }
+  s.mode = isDesktop() || meta().driveWebConnected ? 'drive' : null;
   s.connected = isDesktop() ? !!(await window.desktop.drive.status().catch(() => ({}))).connected : !!meta().driveWebConnected;
   return s.connected;
+}
+
+// The easy way: use the Google Drive folder on this computer.
+async function useFolder(pick) {
+  s.busy = true;
+  s.error = '';
+  refresh();
+  try {
+    const f = pick ? await window.desktop.folder.pick() : await window.desktop.folder.use(s.suggested);
+    s.busy = false;
+    if (!f.connected) { refresh(); return; }
+    s.folder = f.folder;
+    s.mode = 'folder';
+    s.connected = true;
+    ctx.toast('Connected to your Google Drive folder');
+    await syncNow({ announce: true });
+    // A first backup there right away, not only at tomorrow's.
+    ctx.backupNow?.().catch(() => {});
+  } catch (e) {
+    s.error = clean(e);
+    s.busy = false;
+  }
+  refresh();
 }
 
 export async function initSync() {
@@ -114,23 +148,35 @@ export function settingsCard() {
   }
   if (!s.connected) {
     const desktop = isDesktop();
-    return `<section class="card" id="sync-card"><h2>Google Drive sync</h2>
-      <p class="muted small" style="margin-top:0">Keep this ${desktop ? 'computer' : 'device'} and your others in step through your own Google Drive. The app uses a hidden app folder there and can't see your other files. One-time setup, about 5 minutes:</p>
-      ${steps(desktop)}
-      <form id="sync-form" autocomplete="off">
+    const form = `<form id="sync-form" autocomplete="off">
         <label class="field"><span>Client ID</span><input id="g-id" type="text" spellcheck="false" value="${esc(desktop ? '' : m.driveWebClientId || '')}" placeholder="…apps.googleusercontent.com"></label>
         ${desktop ? '<label class="field"><span>Client secret</span><input id="g-secret" type="password"></label>' : ''}
-        ${s.error ? `<p class="lock-msg">${esc(s.error)}</p>` : ''}
-        <button class="btn primary block" type="submit" ${s.busy ? 'disabled' : ''}>${s.busy ? 'Waiting for Google…' : 'Connect Google Drive'}</button>
+        <button class="btn block" type="submit" ${s.busy ? 'disabled' : ''}>${s.busy ? 'Waiting for Google…' : 'Connect Google Drive'}</button>
         ${desktop ? '<p class="muted small">Your browser opens Google\'s sign-in. Allow access, then come back here.</p>' : ''}
-      </form></section>`;
+      </form>`;
+    if (!hasFolder()) {
+      return `<section class="card" id="sync-card"><h2>Google Drive sync</h2>
+      <p class="muted small" style="margin-top:0">Keep this device and your others in step through your own Google Drive. The easiest way is the desktop app with <b>Google Drive for desktop</b> (one click, no keys). Here in the browser it needs a one-time setup, about 5 minutes:</p>
+      ${steps(false)}${s.error ? `<p class="lock-msg">${esc(s.error)}</p>` : ''}${form}</section>`;
+    }
+    return `<section class="card" id="sync-card"><h2>Google Drive sync</h2>
+      <p class="muted small" style="margin-top:0">Uses the <b>Google Drive folder on this computer</b> (Google Drive for desktop). The app saves a copy and a daily backup in <b>Finance Helper</b> there; Drive uploads them by itself. No keys, no sign-in. Another computer using the same Drive stays in step.</p>
+      ${s.suggested
+    ? `<div class="sync-found"><span class="muted small">Found your Google Drive</span><b>${esc(s.suggested)}</b></div>
+        <div class="btns"><button class="btn primary" data-act="sync-folder-use" ${s.busy ? 'disabled' : ''}>${s.busy ? 'Connecting…' : 'Use this folder'}</button><button class="btn" data-act="sync-folder-pick" ${s.busy ? 'disabled' : ''}>Choose another folder…</button></div>`
+    : `<p class="small" style="margin:0 0 10px">Google Drive for desktop wasn't found. Install it from <b>google.com/drive/download</b> and sign in, or pick any folder that is synced.</p>
+        <button class="btn primary block" data-act="sync-folder-pick" ${s.busy ? 'disabled' : ''}>${s.busy ? 'Connecting…' : 'Choose folder…'}</button>`}
+      ${s.error ? `<p class="lock-msg">${esc(s.error)}</p>` : ''}
+      <details class="sync-adv"><summary>Advanced: connect to Drive with Google Cloud keys</summary>${steps(true)}${form}</details>
+    </section>`;
   }
   return `<section class="card" id="sync-card"><h2>Google Drive sync</h2>
     <div class="kv"><span>Status</span><b class="${s.error ? 'expense' : 'income'}">${s.busy ? 'Syncing…' : s.error ? 'Problem' : 'Connected'}</b></div>
+    ${s.mode === 'folder' ? `<div class="kv"><span>Folder</span><b class="sync-path">${esc(s.folder)} › Finance Helper</b></div>` : ''}
     <div class="kv"><span>Last sync</span><b>${esc(when(m.lastSync))}</b></div>
     ${m.lastSyncNote && !s.error ? `<div class="kv"><span>Result</span><b>${esc(m.lastSyncNote)}</b></div>` : ''}
     ${s.error ? `<p class="lock-msg">${esc(s.error)}</p>` : ''}
-    <div class="btns" style="margin-top:10px"><button class="btn primary" data-act="sync-now" ${s.busy ? 'disabled' : ''}>Sync now</button><button class="btn danger" data-act="sync-off">Disconnect</button></div>
+    <div class="btns" style="margin-top:10px"><button class="btn primary" data-act="sync-now" ${s.busy ? 'disabled' : ''}>Sync now</button>${s.mode === 'folder' ? '<button class="btn" data-act="sync-folder-open">Open folder</button>' : ''}<button class="btn danger" data-act="sync-off">${s.mode === 'folder' ? 'Stop' : 'Disconnect'}</button></div>
   </section>`;
 }
 
@@ -143,12 +189,14 @@ export async function onSubmit(form) {
   try {
     if (isDesktop()) {
       await window.desktop.drive.connect(id, form.querySelector('#g-secret').value.trim());
+      s.mode = 'drive';
     } else {
       if (!/\.apps\.googleusercontent\.com$/.test(id)) throw new Error('The Client ID should end with .apps.googleusercontent.com');
       await signIn(id, true);
       meta().driveWebClientId = id;
       meta().driveWebConnected = true;
       ctx.persist();
+      s.mode = 'drive';
     }
     s.connected = true;
     s.busy = false;
@@ -164,8 +212,13 @@ export async function onSubmit(form) {
 
 export function onClick(act) {
   if (act === 'sync-now') { syncNow({ announce: true }); return true; }
+  if (act === 'sync-folder-use') { useFolder(false); return true; }
+  if (act === 'sync-folder-pick') { useFolder(true); return true; }
+  if (act === 'sync-folder-open') { window.desktop?.folder?.open(); return true; }
   if (act === 'sync-off') {
     transport()?.disconnect();
+    if (s.mode === 'folder') refreshConnected().then(refresh);
+    s.mode = null;
     s.connected = false;
     meta().driveWebConnected = false;
     ctx.persist();

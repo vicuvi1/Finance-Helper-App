@@ -3,7 +3,7 @@
 // On Linux run it under a display: xvfb-run -a npm run e2e
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, mkdirSync, existsSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { _electron as electron } from 'playwright';
@@ -55,5 +55,44 @@ test('desktop app opens a visible window and keeps data across restarts', { skip
     await app.close().catch(() => {});
   } finally {
     rmSync(userData, { recursive: true, force: true });
+  }
+});
+
+test('desktop: sync through the Google Drive folder in one click', { skip: !canRun && 'needs a display (xvfb-run)' }, async () => {
+  const userData = mkdtempSync(join(tmpdir(), 'fh-e2e-'));
+  const home = mkdtempSync(join(tmpdir(), 'fh-home-'));
+  const drive = join(home, 'Google Drive');
+  mkdirSync(drive);
+  try {
+    const app = await electron.launch({
+      args: [ROOT, '--no-sandbox', '--password-store=basic'],
+      env: { ...process.env, HOME: home, FH_USER_DATA: userData, FH_TG_TEST_MEMORY: '1', FH_TG_API: 'http://127.0.0.1:9' },
+    });
+    const win = await app.firstWindow();
+    const errors = [];
+    win.on('pageerror', (e) => errors.push(e.message));
+    await win.waitForSelector('#app header.top', { timeout: 20000 });
+    await win.evaluate(() => { location.hash = 'log'; });
+    await win.keyboard.press('n');
+    await win.waitForSelector('#tx-amount');
+    await win.fill('#tx-amount', '77');
+    await win.fill('#tx-note', 'folder sync e2e');
+    await win.click('.sheet button[type=submit]');
+    await win.evaluate(() => { location.hash = 'settings'; });
+    await win.click('[data-act="set-tab"][data-sec="data"]');
+    await win.waitForSelector('[data-act="sync-folder-use"]');
+    assert.match(await win.textContent('.sync-found'), /Google Drive/);
+    await win.click('[data-act="sync-folder-use"]');
+    const file = join(drive, 'Finance Helper', 'finance-helper-sync.json');
+    for (let i = 0; i < 40 && !existsSync(file); i++) await new Promise((r) => setTimeout(r, 250));
+    assert.ok(existsSync(file), 'sync file written into the Drive folder');
+    assert.match(readFileSync(file, 'utf8'), /folder sync e2e/);
+    assert.match(await win.textContent('#sync-card'), /Connected/);
+    assert.deepEqual(errors, []);
+    await app.evaluate(({ app: a }) => { a.quit(); });
+    await app.close().catch(() => {});
+  } finally {
+    rmSync(userData, { recursive: true, force: true });
+    rmSync(home, { recursive: true, force: true });
   }
 });

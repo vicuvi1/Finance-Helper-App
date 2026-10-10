@@ -1435,3 +1435,11 @@ table.grid tr.selected td { background: var(--gold-soft); }
   .set-grid > .card { break-inside: avoid; margin: 0 0 14px; }
 }
 @media (min-width: 2300px) { .set-grid { columns: 3; } }
+
+/* Google Drive sync through the Drive folder */
+.sync-found { display: grid; gap: 2px; padding: 12px 14px; margin-bottom: 12px; border-radius: var(--radius-sm); background: var(--income-soft); }
+.sync-found b { font-family: var(--mono, monospace); font-size: 14px; overflow-wrap: anywhere; }
+.sync-path { font-size: 12.5px; overflow-wrap: anywhere; text-align: right; }
+.sync-adv { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 10px; }
+.sync-adv summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+.sync-adv[open] summary { margin-bottom: 8px; }

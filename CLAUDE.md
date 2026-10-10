@@ -49,7 +49,9 @@ tested); `js/app.js` only renders and handles taps.
 - Sync: `js/sync.js` merges per record by `updatedAt` with `state.deleted`
   tombstones; anything new that is edited must call `M.touch()` (settings
   scalars: `settings.updatedAt`). Device-only: `meta`, `rates`, `theme`,
-  `logView`. Desktop transport `electron/gdrive.cjs`, web `js/gdrive-web.js`.
+  `logView`. Desktop transport `electron/gdrive.cjs` (Drive API keys) or, the easy way,
+  `electron/folder.cjs` (writes into the Google Drive for desktop folder; Drive uploads
+  it), web `js/gdrive-web.js`.
 - Secrets (Binance key, Google refresh token) live only in the desktop main
   process, encrypted with safeStorage; never in state, never in the page.
 - Encryption (optional, Settings → Security): `js/store.js` keeps the data
