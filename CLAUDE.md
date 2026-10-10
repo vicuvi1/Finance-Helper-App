@@ -19,6 +19,8 @@ tested); `js/app.js` only renders and handles taps.
   `index.html`, `css/*`, `js/*`, `icons/icon.svg` and `sample.csv`.
   The preview sets `window.FH_DEMO = true`: example data, no downloads,
   no service worker.
+  Publish every file under `js/` (new ones too): one missing module stops
+  the whole app and the preview shows only the sidebar.
 
 - The owner works on the **desktop** app: check and screenshot changes at
   desktop width (1280–1440px) first, then make sure phone width still works.
