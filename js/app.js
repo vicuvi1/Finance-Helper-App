@@ -38,6 +38,7 @@ import { invoiceStatus } from './invoices.js';
 import { tableHTML, calendarHTML, dayLabelHTML } from './logviews.js';
 import { dailyChart } from './charts.js';
 import { createHistory } from './history.js';
+import { searchTx, searchSummary, SEARCH_HINT } from './search.js';
 
 let state = load();
 // Undo / redo for this session (js/history.js).
@@ -411,15 +412,26 @@ function logView() {
 }
 
 function logRecords() {
-  const q = ui.search.trim().toLowerCase();
-  let list = q
-    ? state.tx.filter((t) => {
-      const hay = [t.note, catOf(t.category).name, t.type === 'transfer' ? `${accOf(t.from).name} ${accOf(t.to).name}` : accOf(t.account).name, centsToPlain(t.amount)].join(' ').toLowerCase();
-      return hay.includes(q);
-    })
-    : M.txInMonth(state, ui.month);
+  const q = ui.search.trim();
+  let list = q ? searchTx(state, q, todayISO()) : M.txInMonth(state, ui.month);
   if (ui.filter !== 'all') list = list.filter((t) => t.type === ui.filter);
   return list;
+}
+
+// Search results: how many, the totals, and when it first and last happened.
+function searchCard(list) {
+  const r = searchSummary(list, M.B);
+  if (!r.count) return '';
+  const d = (iso) => `${Number(iso.slice(8))} ${MONTHS[Number(iso.slice(5, 7)) - 1].slice(0, 3)} ${iso.slice(0, 4)}`;
+  const kpi = (label, value, cls = '') => `<div class="kpi"><span class="muted small">${label}</span><b class="${cls}">${value}</b></div>`;
+  return `<section class="card search-card"><div class="rep-kpis">
+    ${kpi('Found', `${r.count} record${r.count === 1 ? '' : 's'}<span class="muted small"> · ${r.months} month${r.months === 1 ? '' : 's'}</span>`)}
+    ${r.spent ? kpi('Spent', money(r.spent), 'expense') : ''}
+    ${r.earned ? kpi('Earned', money(r.earned), 'income') : ''}
+    ${r.spent && r.months > 1 ? kpi('Per month', money(Math.round(r.spent / r.months))) : ''}
+    ${kpi('Last time', d(r.last))}
+    ${r.count > 1 ? kpi('First time', d(r.first)) : ''}
+  </div></section>`;
 }
 
 function undoButtons() {
@@ -552,7 +564,7 @@ function viewLog() {
     const shown = new Set(list.map((t) => t.id));
     for (const id of ui.selected) if (!shown.has(id)) ui.selected.delete(id);
     content = `<div id="bulk-slot">${bulkBar()}</div>`
-      + tableHTML(state, list, { sort: ui.sort, draft: draftRow(), fmt: (c) => money(c), selected: ui.selected })
+      + tableHTML(state, list, { sort: ui.sort, draft: q ? null : draftRow(), fmt: (c) => money(c), selected: ui.selected, years: !!q })
       + `<datalist id="people-list">${state.people.map((p) => `<option value="${esc(p.name)}">`).join('')}</datalist>`;
   } else {
     const groups = new Map();
@@ -564,20 +576,20 @@ function viewLog() {
       const net = items.reduce((a, t) => a + (t.type === 'income' ? t.amount : t.type === 'expense' ? -t.amount : 0), 0);
       return `<div class="day dow-${dowIndex(date)}${date === todayISO() ? ' is-today' : ''}"><div class="day-head"><span class="dh">${dayLabelHTML(date, todayISO())}${q ? ` ${date.slice(0, 4)}` : ''}</span><span class="money ${net > 0 ? 'income' : ''}">${net ? money(net, { sign: true }) : ''}</span></div>
         <div class="list">${items.map((t) => txRow(t)).join('')}</div></div>`;
-    }).join('') || `<div class="empty"><b>${q ? 'Nothing found' : 'No records this month'}</b>${q ? 'Try another word.' : 'Tap + to add one.'}</div>`;
+    }).join('') || `<div class="empty"><b>${q ? 'Nothing found' : 'No records this month'}</b>${q ? `Try: ${esc(SEARCH_HINT)}` : 'Tap + to add one.'}</div>`;
   }
 
   const chip = (id, label) => `<button class="chip" data-act="filter" data-filter="${id}" aria-pressed="${ui.filter === id}">${label}</button>`;
   const viewBtn = (id, label) => `<button type="button" data-act="log-view" data-view="${id}" aria-pressed="${view === id}">${label}</button>`;
   const dir = ui.monthDir;
   ui.monthDir = 0;
-  return `<header class="top"><div><h1>Log</h1><div class="sub">${monthLabel(ui.month)}</div></div>${todayChip()}</header>
+  return `<header class="top"><div><h1>Log</h1><div class="sub">${q ? 'Searching all months' : monthLabel(ui.month)}</div></div>${todayChip()}</header>
   ${q ? '' : monthNav()}
   <div class="log-body${dir ? ` slide-${dir > 0 ? 'l' : 'r'}` : ''}">
   ${q ? '' : `<section class="card">${stats(s)}${rateBar(s)}</section>`}
   <div class="log-tools">
     <div class="seg seg-views" role="group" aria-label="View">${viewBtn('table', 'Table')}${viewBtn('calendar', 'Calendar')}${viewBtn('list', 'List')}</div>
-    ${view === 'calendar' ? '' : `<input type="search" id="search" placeholder="Search notes, categories, amounts" value="${esc(ui.search)}" aria-label="Search all records">`}
+    ${view === 'calendar' ? '' : `<input type="search" id="search" placeholder="Search all months: coffee, maib, >1000, march…" value="${esc(ui.search)}" aria-label="Search all records">`}
     <div class="log-actions">
       ${undoButtons()}
       <button type="button" class="btn" data-act="copy-table" title="Copy this month as a table to paste into Excel or Google Sheets">Copy table</button>
@@ -585,7 +597,7 @@ function viewLog() {
     </div>
   </div>
   ${view === 'calendar' ? '' : `<div class="chips">${chip('all', 'All')}${chip('expense', 'Spent')}${chip('income', 'Earned')}${chip('transfer', 'Moves')}</div>`}
-  ${q && view !== 'calendar' ? `<p class="muted small">${list.length} result${list.length === 1 ? '' : 's'} in all months</p>` : ''}
+  ${q && view !== 'calendar' ? searchCard(list) : view === 'calendar' ? '' : `<p class="search-hint muted small">Search all months: <span>${esc(SEARCH_HINT)}</span></p>`}
   ${content}
   ${view === 'table' ? '<p class="muted small">Edit any cell; it saves by itself. <b>Enter</b> moves down a row. <b>←</b> / <b>→</b> switch months. Tick rows (Shift+click for a range) to change many at once. <b>Ctrl+Z</b> undoes anything. Paste rows copied from Excel or Google Sheets anywhere on this page to import them.</p>' : ''}
   </div>`;

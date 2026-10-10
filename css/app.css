@@ -1244,3 +1244,9 @@ table.grid tr.selected td { background: var(--gold-soft); }
 .bulk-bar .bulk-date { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
 .bulk-bar .btn { min-height: 38px; padding: 6px 14px; }
 .bulk-bar .btn:first-of-type { margin-left: auto; }
+.search-hint { margin: -2px 0 10px; }
+.search-hint span { color: var(--faint); }
+.search-card { margin-bottom: 12px; }
+.search-card .kpi b { font-size: 17px; font-weight: 600; font-feature-settings: "tnum"; }
+.search-card .kpi b.expense { color: var(--expense); }
+.search-card .kpi b.income { color: var(--income); }

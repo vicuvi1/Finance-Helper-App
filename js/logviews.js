@@ -71,12 +71,12 @@ export function dayLabelHTML(date, today) {
   return `<span class="dow-pill dow-${di}">${DOW_LONG[di]}</span><b>${Number(date.slice(8, 10))} ${MONTHS[Number(date.slice(5, 7)) - 1]}</b>${rel ? `<span class="rel-tag${rel === 'Today' ? ' today-tag' : ''}">${rel}</span>` : ''}`;
 }
 
-function dayRow(date, d, today, fmt) {
+function dayRow(date, d, today, fmt, year) {
   const parts = [d.in ? `<span class="income">+${fmt(d.in)}</span>` : '', d.out ? `<span>−${fmt(d.out)}</span>` : '', `<span class="muted">${d.n} record${d.n === 1 ? '' : 's'}</span>`].filter(Boolean).join(' · ');
-  return `<tr class="day-row dow-${dowIndex(date)}${date === today ? ' is-today' : ''}" aria-hidden="true"><td colspan="9"><span class="dr">${dayLabelHTML(date, today)}<span class="dr-sum">${parts}</span></span></td></tr>`;
+  return `<tr class="day-row dow-${dowIndex(date)}${date === today ? ' is-today' : ''}" aria-hidden="true"><td colspan="9"><span class="dr">${dayLabelHTML(date, today)}${year ? `<span class="muted">${date.slice(0, 4)}</span>` : ''}<span class="dr-sum">${parts}</span></span></td></tr>`;
 }
 
-export function tableHTML(state, list, { sort, draft, fmt, selected = new Set() }) {
+export function tableHTML(state, list, { sort, draft, fmt, selected = new Set(), years = false }) {
   const rows = sortRows(state, list, sort);
   const today = todayISO();
   // Sorted by date: a header row for each day with its weekday and totals.
@@ -92,7 +92,7 @@ export function tableHTML(state, list, { sort, draft, fmt, selected = new Set() 
   const body = rows.map((t) => {
     const newDay = t.date !== prevDate;
     prevDate = t.date;
-    const head = byDate && newDay ? dayRow(t.date, perDay[t.date], today, fmt) : '';
+    const head = byDate && newDay ? dayRow(t.date, perDay[t.date], today, fmt, years) : '';
     const on = selected.has(t.id);
     return `${head}<tr data-id="${esc(t.id)}" class="t-${t.type}${newDay ? ' newday' : ''}${t.date === today ? ' is-today' : ''}${on ? ' selected' : ''}"><td class="selc"><input type="checkbox" class="sel" data-act="sel" data-id="${esc(t.id)}" ${on ? 'checked' : ''} aria-label="Select this record"></td>${cells(state, t)}
       <td><button type="button" class="row-del" data-act="row-del" data-id="${esc(t.id)}" aria-label="Delete this record" title="Delete">×</button></td></tr>`;
@@ -104,8 +104,8 @@ export function tableHTML(state, list, { sort, draft, fmt, selected = new Set() 
     <colgroup><col style="width:34px"><col style="width:128px"><col style="width:88px"><col style="width:160px"><col><col style="width:118px"><col style="width:132px"><col style="width:132px"><col style="width:36px"></colgroup>
     <thead><tr><th class="selc"><input type="checkbox" class="sel" data-act="sel-all" ${list.length && list.every((t) => selected.has(t.id)) ? 'checked' : ''} aria-label="Select all shown"></th>${COLUMNS.map((c) => `<th class="${c.num ? 'num' : ''}"><button type="button" data-act="sort" data-col="${c.id}" aria-label="Sort by ${c.label}">${c.label}${arrow(c.id)}</button></th>`).join('')}<th></th></tr></thead>
     <tbody>${body}
-      <tr class="draft t-${draft.type}" data-draft><td class="selc"></td>${cells(state, { ...draft, amount: 0 })}
-        <td><button type="button" class="row-add" data-act="row-add" aria-label="Add this record" title="Add (Enter)">＋</button></td></tr>
+      ${draft ? `<tr class="draft t-${draft.type}" data-draft><td class="selc"></td>${cells(state, { ...draft, amount: 0 })}
+        <td><button type="button" class="row-add" data-act="row-add" aria-label="Add this record" title="Add (Enter)">＋</button></td></tr>` : ''}
     </tbody>
     <tfoot><tr><td colspan="6">${list.length} record${list.length === 1 ? '' : 's'}</td>
       <td colspan="3" class="num"><span class="income">+${fmt(income)}</span> &nbsp; <span class="expense">−${fmt(expense)}</span> &nbsp; <b>= ${fmt(income - expense)}</b></td></tr></tfoot>
