@@ -802,12 +802,19 @@ export function noteSuggestions(state, type, limit = 30) {
 // given to them, and open loans. `owesMe` > 0 means they owe you; < 0 means
 // you owe them.
 export function peopleSummary(state, { from = null, to = null } = {}) {
-  const rows = new Map(state.people.map((p) => [p.id, { person: p, received: 0, given: 0, owesMe: 0, count: 0, last: null }]));
+  const rows = new Map(state.people.map((p) => [p.id, { person: p, received: 0, given: 0, owesMe: 0, owes: {}, count: 0, last: null }]));
   for (const t of state.tx) {
     if (!t.person || !rows.has(t.person) || t.type === 'transfer') continue;
     const r = rows.get(t.person);
     const v = B(t);
-    if (t.loan) r.owesMe += t.type === 'expense' ? v : -v;
+    if (t.loan) {
+      r.owesMe += t.type === 'expense' ? v : -v;
+      // Loans are owed in the currency they were made in (a debt in USD
+      // stays 100 USD whatever the rate), see loanAmount().
+      const { amount, currency } = loanAmount(t);
+      r.owes[currency] = (r.owes[currency] || 0) + (t.type === 'expense' ? amount : -amount);
+      if (!r.owes[currency]) delete r.owes[currency];
+    }
     if (from && t.date < from) continue;
     if (to && t.date > to) continue;
     if (t.type === 'income') r.received += v; else r.given += v;
@@ -815,6 +822,27 @@ export function peopleSummary(state, { from = null, to = null } = {}) {
     if (!r.last || t.date > r.last) r.last = t.date;
   }
   return [...rows.values()].sort((a, b) => (b.last || '').localeCompare(a.last || '') || a.person.name.localeCompare(b.person.name));
+}
+
+// A loan record's debt: in its own currency unless it carries `debt`
+// (lent 100 USD out of an MDL card: the record is in MDL, the debt in USD).
+export const loanAmount = (t) => (t.debt && Number.isInteger(t.debt.amount) && t.debt.currency ? { amount: t.debt.amount, currency: t.debt.currency } : { amount: t.amount, currency: t.currency });
+
+export const PERSON_GROUPS = ['Family', 'Friends', 'Work', 'Clients', 'Other'];
+
+// Removes a person but keeps their records (with the name written on them).
+export function deletePerson(state, id, now = Date.now()) {
+  const p = state.people.find((x) => x.id === id);
+  if (!p) return null;
+  state.people = state.people.filter((x) => x.id !== id);
+  state.deleted[id] = now;
+  for (const t of state.tx) {
+    if (t.person !== id) continue;
+    delete t.person;
+    t.personName = p.name;
+    touch(t, now);
+  }
+  return p;
 }
 
 // Finds a person by name (any case) or adds them. Returns the id.

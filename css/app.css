@@ -1443,3 +1443,44 @@ table.grid tr.selected td { background: var(--gold-soft); }
 .sync-adv { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 10px; }
 .sync-adv summary { cursor: pointer; color: var(--muted); font-size: 13px; }
 .sync-adv[open] summary { margin-bottom: 8px; }
+
+/* People */
+.pp-sum { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.pp-tile { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; display: grid; gap: 6px; }
+.pp-tile > span { color: var(--muted); font-size: 12.5px; }
+.pp-big { font-size: 22px; font-weight: 650; font-feature-settings: "tnum"; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 6px; }
+.pp-big b { font-weight: 650; }
+.pp-tools { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 16px; }
+.pp-tools input[type="search"] { flex: 1 1 260px; min-width: 0; min-height: 42px; }
+.pp-tools .chips { margin: 0; }
+.pp-group { margin-bottom: 18px; }
+.pp-group > h2 { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin: 0 0 10px; }
+.pp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 12px; }
+.pp-card { display: grid; gap: 12px; align-content: start; text-align: left; padding: 16px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); color: var(--text); cursor: pointer;
+  transition: border-color 0.15s, transform 0.15s var(--ease-out), box-shadow 0.15s; position: relative; overflow: hidden; }
+.pp-card::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 3px; background: var(--pc); opacity: 0.8; }
+.pp-card:hover { border-color: color-mix(in srgb, var(--pc) 45%, var(--line)); transform: translateY(-2px); box-shadow: var(--shadow-pop); }
+.pp-top { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.pp-av { width: 42px; height: 42px; border-radius: 13px; flex: none; display: grid; place-items: center; font-weight: 750; font-size: 17px; color: var(--pc); background: color-mix(in srgb, var(--pc) 16%, transparent); }
+.pp-av.sm { width: 30px; height: 30px; border-radius: 9px; font-size: 14px; display: inline-grid; vertical-align: middle; margin-right: 6px; }
+.pp-name { display: grid; gap: 2px; min-width: 0; }
+.pp-name b { font-size: 15.5px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pp-name span { font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pp-badges { display: flex; flex-wrap: wrap; gap: 6px; }
+.pp-badge { font-size: 12px; font-weight: 650; padding: 4px 9px; border-radius: 99px; }
+.pp-badge.in { color: var(--income); background: var(--income-soft); }
+.pp-badge.out { color: var(--expense); background: var(--expense-soft); }
+.pp-badge.none { color: var(--faint); background: var(--surface-2); font-weight: 500; }
+.pp-flow { display: grid; gap: 4px; }
+.pp-row { display: flex; justify-content: space-between; font-size: 12.5px; color: var(--muted); }
+.pp-row b { color: var(--text); font-weight: 600; font-feature-settings: "tnum"; }
+.pp-row b.income { color: var(--income); }
+.pp-bar { height: 5px; border-radius: 99px; background: var(--surface-3); overflow: hidden; margin-bottom: 4px; }
+.pp-bar i { display: block; height: 100%; border-radius: 99px; }
+.pp-bar i.in { background: var(--income); } .pp-bar i.out { background: var(--muted); }
+.pp-foot { font-size: 12px; color: var(--faint); }
+.pp-sheet-stats { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--muted); margin: 4px 0 12px; }
+.pp-danger { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--line); }
+.loan-kinds { grid-template-columns: repeat(4, 1fr); }
+@media (max-width: 520px) { .loan-kinds { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 520px) { .pp-sum { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; } .pp-tile { padding: 12px; } .pp-big { font-size: 17px; } }

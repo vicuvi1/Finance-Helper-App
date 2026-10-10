@@ -48,6 +48,7 @@ A personal finance app that replaces the "finance 2026" Google Sheet: the same d
 | 🧾 **Budgets** | A monthly limit per category (with your 3-month average as a hint). Bars show what's used and where an even pace would be; you get a warning at 80%, when you go over, and when your pace would take you over. |
 | 🏦 **Bank statements** | Import the CSV or Excel statement from maib, Victoriabank or any bank. The app finds the headings (Romanian, Russian or English), the date, amount or debit/credit and description columns, shows a preview with totals, and remembers the layout next time. Statements already imported are skipped. |
 | 💼 **Clients & invoices** | Invoices in USD or any currency (hours × rate or fixed lines), numbered INV-2026-001…, printed or saved as PDF with your details. Draft → sent → paid; when the money lands, mark it paid and the income is logged in that account (after fees). Per client: paid this year, per month, and what an hour of your work really earned in lei. |
+| 👥 **People & loans** | Everyone who gives you money or gets it, as cards grouped Family / Friends / Work / Clients (guessed until you set it), with received, given and open loans. **+ Loan** records I lent / I borrowed / they paid back / I paid back in any currency: lend 100 USD from an MDL card and it stays "owes you 100 USD" whatever the rate. Edit a person's name, group, usual currency and note, or delete them (their records stay). |
 | 💾 **Backups** | One-tap JSON backup and restore, plus CSV export. The app reminds you when it's been a while. |
 
 ## Use it
