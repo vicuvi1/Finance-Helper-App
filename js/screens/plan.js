@@ -8,6 +8,8 @@ import * as R from '../recurring.js';
 import { todayISO, dayLabel, daysBetween, addDays, monthKey, monthLabel, daysInMonth } from '../dates.js';
 import { evalAmount, formatMoney, centsToPlain } from '../money.js';
 import { convert } from '../fx.js';
+import { forecast } from '../forecast.js';
+import { lineChart } from '../charts.js';
 
 const initial = (name) => esc((String(name).match(/\p{L}|\p{N}/u) || ['•'])[0].toUpperCase());
 const catOf = (id) => M.category(ctx.state, id) || { name: 'Other', emoji: '•' };
@@ -75,6 +77,7 @@ export function view() {
   </section>
   <div class="dash">
     <div class="dash-main">
+      ${forecastCard()}
       ${budgetCard()}
       ${due.length ? `<section class="card"><h2>Due now <span class="right muted">${due.length}</span></h2><div class="list">${due.map((x) => itemRow(x, today, { due: true })).join('')}</div>
         <p class="muted small" style="margin-bottom:0">"Paid" logs the planned amount on its date. Tap the name to change the amount first.</p></section>` : ''}
@@ -91,6 +94,30 @@ export function view() {
           <button class="btn sm" data-act="rec-from" data-id="${esc(s.tx.id)}">Make recurring</button></div>`).join('')}</div></section>` : ''}
     </div>
   </div>`;
+}
+
+// ---------- Cash-flow forecast ----------
+
+const shortDay = (iso) => dayLabel(iso).replace(/^\w+, /, '');
+
+function forecastCard() {
+  const days = ctx.ui.fcDays || 60;
+  const f = forecast(ctx.state, todayISO(), { days });
+  const lei = (c) => Math.round(c / 100) * 100;
+  const chip = (n) => `<button class="chip" aria-pressed="${days === n}" data-act="fc-days" data-n="${n}">${n} days</button>`;
+  const short = f.low.value < 0;
+  const next = f.events.slice(0, 6);
+  return `<section class="card"><h2>Cash-flow forecast <span class="right">${chip(30)}${chip(60)}${chip(90)}</span></h2>
+    <div class="fc-stats">
+      <div><span class="k">Spending money now</span><b>${ctx.money(lei(f.start))}</b></div>
+      <div><span class="k">In ${days} days</span><b class="${f.end < 0 ? 'expense' : ''}">${ctx.money(lei(f.end))}</b></div>
+      <div><span class="k">Lowest</span><b class="${short ? 'expense' : ''}">${ctx.money(lei(f.low.value))}</b><span class="muted small">${esc(shortDay(f.low.date))}</span></div>
+    </div>
+    ${short ? `<p class="fc-warn">Money runs short around <b>${esc(dayLabel(f.low.date))}</b>. Move some from savings before then, or plan smaller spending.</p>` : ''}
+    ${lineChart(f.points.map((p) => ({ label: shortDay(p.date), value: lei(p.value) })), (c) => ctx.money(c), { color: short ? 'var(--expense)' : 'var(--gold)' })}
+    ${next.length ? `<div class="fc-events">${next.map((e) => `<div class="kv"><span>${esc(shortDay(e.date))} · ${esc(e.label)}${e.late ? ' <span class="pill pill-out">late</span>' : ''}</span><b class="${e.amount > 0 ? 'income' : ''}">${ctx.money(lei(e.amount), { sign: true })}</b></div>`).join('')}</div>` : ''}
+    <p class="muted small" style="margin-bottom:0">Cards and cash only (not savings or crypto). Counts your recurring bills and income, unpaid invoices, and about ${ctx.money(lei(f.daily))} a day of everyday spending (your last 90 days).</p>
+  </section>`;
 }
 
 // ---------- Budgets ----------
@@ -330,6 +357,7 @@ const findRule = (id) => (ctx.state.recurring || []).find((r) => r.id === id);
 
 export function onClick(act, el) {
   if (act === 'budget-set') { budgetSheet(); return true; }
+  if (act === 'fc-days') { ctx.ui.fcDays = Number(el.dataset.n); ctx.render(); return true; }
   if (act === 'rec-new') { editRule(); return true; }
   if (act === 'rec-edit') { const r = findRule(el.dataset.id); if (r) editRule(r); return true; }
   if (act === 'rec-log') { const r = findRule(el.dataset.id); if (r) logNow(r, el.dataset.date); return true; }

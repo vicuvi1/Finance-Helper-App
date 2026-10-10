@@ -15,6 +15,7 @@ const SHELL = [
   './js/recurring.js',
   './js/bank.js',
   './js/invoices.js',
+  './js/forecast.js',
   './js/screens/rules.js',
   './js/screens/clients.js',
   './js/screens/bankimport.js',

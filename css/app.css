@@ -829,3 +829,13 @@ body.printing > *:not(#print-root) { display: none !important; }
 .rule-row { align-items: center; }
 .rule-row > span { color: var(--text); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rule-row .icon-btn { width: 30px; height: 30px; flex: none; }
+
+/* Cash-flow forecast */
+.fc-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-bottom: 10px; }
+.fc-stats > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.fc-stats .k { font-size: 12px; color: var(--muted); }
+.fc-stats b { font-size: 18px; font-weight: 600; white-space: nowrap; }
+.fc-warn { margin: 0 0 8px; padding: 10px 12px; border-radius: 10px; background: var(--expense-soft); color: var(--text); font-size: 13px; }
+.fc-events { margin-top: 8px; }
+.fc-events .kv span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 520px) { .fc-stats b { font-size: 15px; } }

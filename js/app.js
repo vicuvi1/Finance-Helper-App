@@ -28,6 +28,7 @@ import * as Clients from './screens/clients.js';
 import * as Rules from './screens/rules.js';
 import { openBankImport, rowsFromFile, decodeText } from './screens/bankimport.js';
 import { guessMapping } from './bank.js';
+import { forecast } from './forecast.js';
 import { FREQS, markDone } from './recurring.js';
 import { tableHTML, calendarHTML } from './logviews.js';
 import { dailyChart } from './charts.js';
@@ -228,7 +229,10 @@ function viewHome() {
   const { total, missing } = M.totalBalance(state);
   const s = M.monthSummary(state, key);
   const recent = M.sortTx(state.tx).slice(0, 5);
-  const tips = M.insights(state, key, today).filter((t) => t.level !== 'info').slice(0, 2);
+  const fc = forecast(state, today, { days: 45 });
+  const fcTip = fc.low.value < 0 && (state.recurring.length || state.tx.length > 20)
+    ? [{ level: 'bad', title: `Money may run short around ${dayLabel(fc.low.date)}`, text: `With your bills and usual spending, cards and cash would be at ${money(Math.round(fc.low.value / 100) * 100)}. See the forecast on Plan.` }] : [];
+  const tips = [...fcTip, ...M.insights(state, key, today).filter((t) => t.level !== 'info')].slice(0, 2);
   const hour = new Date().getHours();
   const hello = hour < 5 ? 'Good night' : hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
 

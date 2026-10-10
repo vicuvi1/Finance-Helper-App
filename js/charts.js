@@ -77,7 +77,8 @@ export function lineChart(points, fmt, { color = 'var(--gold)' } = {}) {
   const line = xy.map(([x, y], i) => `${i ? 'L' : 'M'}${x.toFixed(1)} ${y.toFixed(1)}`).join(' ');
   const area = `${line} L${xy.at(-1)[0].toFixed(1)} ${top + plotH} L${xy[0][0].toFixed(1)} ${top + plotH} Z`;
   const [lx, ly] = xy.at(-1);
-  const labels = points.map((p, i) => (i % Math.ceil(points.length / 6) === 0 || i === points.length - 1
+  const every = Math.ceil(points.length / 6);
+  const labels = points.map((p, i) => ((i % every === 0 && points.length - 1 - i >= every / 2) || i === points.length - 1
     ? `<text x="${xy[i][0].toFixed(1)}" y="${H - 5}" text-anchor="${i === 0 ? 'start' : i === points.length - 1 ? 'end' : 'middle'}">${p.label}</text>` : '')).join('');
   const dots = points.map((p, i) => `<circle cx="${xy[i][0].toFixed(1)}" cy="${xy[i][1].toFixed(1)}" r="9" style="fill:transparent"><title>${p.label}: ${fmt(p.value)}</title></circle>`).join('');
   return `<svg class="chart line-chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Savings over time">
