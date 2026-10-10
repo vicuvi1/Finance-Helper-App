@@ -1304,3 +1304,37 @@ table.grid tr.selected td { background: var(--gold-soft); }
 .rates-col { display: grid; gap: 14px; align-content: start; min-width: 0; }
 .rates-col > .card { margin: 0; }
 @media (min-width: 1100px) { .view-rates > .rates-col { grid-column: auto; } .view-rates { row-gap: 14px; } }
+
+/* Year in review */
+.btns-inline { display: flex; gap: 8px; flex-wrap: wrap; }
+.yr-hero { display: grid; gap: 18px; background: radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--gold) 16%, transparent), transparent 60%), var(--surface); }
+.yr-big { display: grid; gap: 4px; }
+.yr-big .fig { font-size: 44px; font-weight: 700; letter-spacing: -0.03em; line-height: 1.05; }
+.yr-big .yr-pct { color: var(--gold); font-weight: 600; }
+.yr-hero .k, .yr-tile .k { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.07em; font-weight: 600; }
+.yr-split { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.yr-split > div { display: grid; gap: 3px; }
+.yr-split b { font-size: 24px; font-weight: 650; font-feature-settings: "tnum"; }
+.yr-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; margin-bottom: 14px; }
+.yr-tile { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; display: grid; gap: 4px; align-content: start; animation: rise 0.45s var(--ease-out) both; }
+.yr-tile:nth-child(2) { animation-delay: 40ms; } .yr-tile:nth-child(3) { animation-delay: 80ms; } .yr-tile:nth-child(4) { animation-delay: 120ms; }
+.yr-tile:nth-child(5) { animation-delay: 160ms; } .yr-tile:nth-child(6) { animation-delay: 200ms; } .yr-tile:nth-child(n+7) { animation-delay: 240ms; }
+.yr-ic { font-size: 22px; line-height: 1; margin-bottom: 4px; }
+.yr-tile b { font-size: 19px; font-weight: 650; overflow-wrap: anywhere; }
+.yr-tax h2 .btn { text-transform: none; letter-spacing: 0; font-size: 13px; min-height: 34px; padding: 6px 12px; }
+.yr-tax-total { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.yr-tax-total .fig { font-size: 28px; font-weight: 700; color: var(--income); }
+.yr-tax-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-bottom: 10px; }
+.yr-h3 { font-size: 13px; margin: 0 0 6px; color: var(--muted); font-weight: 600; }
+@media (min-width: 900px) { .yr-hero { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); align-items: center; } }
+@media (prefers-reduced-motion: reduce) { .yr-tile { animation: none; } }
+.yr-bars { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 6px; align-items: end; margin: 6px 0 4px; }
+.yr-m { display: grid; gap: 6px; justify-items: center; border-radius: 8px; padding: 4px 0; cursor: default; }
+.yr-m:hover { background: var(--surface-2); }
+.yr-bb { height: 180px; width: 100%; display: flex; gap: 2px; align-items: flex-end; justify-content: center; }
+.yr-bb i { width: min(16px, 40%); border-radius: 4px 4px 0 0; transition: height 0.6s var(--ease-out); }
+.yr-bb i.in { background: var(--income); }
+.yr-bb i.out { background: var(--expense); }
+.yr-m span { font-size: 11px; color: var(--muted); }
+.yr-m.none span { color: var(--faint); }
+@media (max-width: 600px) { .yr-bb { height: 120px; } .yr-big .fig { font-size: 34px; } }

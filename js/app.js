@@ -32,6 +32,7 @@ import * as Telegram from './screens/telegram.js';
 import * as Buddy from './screens/buddy.js';
 import * as ImportCheck from './screens/importcheck.js';
 import * as WorkHour from './screens/workhour.js';
+import * as YearReview from './screens/yearreview.js';
 import { workText } from './workhours.js';
 import { planSplit, splitTransfers, splitPrefs, isSplit } from './split.js';
 import { openBankImport, rowsFromFile, decodeText } from './screens/bankimport.js';
@@ -777,7 +778,7 @@ function render({ enter = false } = {}) {
     ui.flashId = null;
   }
   for (const a of document.querySelectorAll('.tabbar a, .more-list a')) {
-    if (a.dataset.tab === ui.tab) a.setAttribute('aria-current', 'page');
+    if (a.dataset.tab === (ui.tab === 'review' ? 'reports' : ui.tab)) a.setAttribute('aria-current', 'page');
     else a.removeAttribute('aria-current');
   }
   if (ui.tab === 'settings') updateJarSum();
@@ -1779,6 +1780,7 @@ const SCREENS = {
   clients: Clients,
   people: PeopleScreen,
   reports: ReportsScreen,
+  review: YearReview,
   rates: RatesScreen,
   settings: { view: viewSettings, onClick: (a, el) => Security.onClick(a, el) || Rules.onClick(a, el) || Telegram.onClick(a) || Buddy.onClick(a, el) || Binance.onClick(a) || Sync.onClick(a) || SelfCheck.onClick(a) || Backups.onClick(a, el) || (a.startsWith('update-') && (Updates.onClick(a), true)), onChange: (el) => Security.onChange(el) || Telegram.onChange(el) || Buddy.onChange(el) || WorkHour.onChange(el) },
 };
