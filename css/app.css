@@ -1338,3 +1338,18 @@ table.grid tr.selected td { background: var(--gold-soft); }
 .yr-m span { font-size: 11px; color: var(--muted); }
 .yr-m.none span { color: var(--faint); }
 @media (max-width: 600px) { .yr-bb { height: 120px; } .yr-big .fig { font-size: 34px; } }
+
+/* Tabs for sections that share a sidebar item */
+.subtabs { grid-column: 1 / -1; display: flex; gap: 4px; padding: 4px; margin: -4px 0 16px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; width: max-content; max-width: 100%; overflow-x: auto; }
+.subtabs a { padding: 8px 16px; border-radius: 9px; font-size: 14px; font-weight: 550; color: var(--muted); white-space: nowrap; text-decoration: none; transition: background 0.15s, color 0.15s; }
+.subtabs a:hover { color: var(--text); }
+.subtabs a[aria-current="page"] { background: var(--surface); color: var(--text); box-shadow: 0 1px 0 var(--line-strong); }
+
+/* Home on a wide screen: the sidebar already shows all your money, so the
+   top of Home is just this month. */
+@media (min-width: 720px) {
+  .view-home .hero { grid-template-columns: minmax(0, 1fr); }
+  .view-home .hero-main { display: none; }
+  .view-home .hero-month { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 8px 28px; align-items: center; }
+  .view-home .hero-month .label { grid-column: 1 / -1; margin: 0; }
+}

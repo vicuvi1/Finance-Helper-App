@@ -79,7 +79,7 @@ export function view() {
   const year = rs.preset === 'year' || rs.preset === 'lastyear' ? M.yearOverview(state, Number(r0.from.slice(0, 4))) : null;
 
   return `<header class="top"><div><h1>Reports</h1><div class="sub">${esc(r0.label)} · ${r.days} day${r.days === 1 ? '' : 's'} · ${r.count} record${r.count === 1 ? '' : 's'}</div></div>
-    <div class="btns-inline"><a class="btn" href="#review">✨ Year in review</a><button class="btn" data-act="rep-export">Export to Excel</button></div></header>
+    <button class="btn" data-act="rep-export">Export to Excel</button></header>
   <div class="rep-bar">
     <div class="chips">${PRESETS.map((x) => `<button class="chip" data-act="rep-preset" data-preset="${x.id}" aria-pressed="${rs.preset === x.id}">${x.name}</button>`).join('')}</div>
     ${r0.step ? `<div class="month-switch"><button class="icon-btn" data-act="rep-step" data-step="-1" aria-label="Previous">‹</button><b>${esc(r0.label)}</b><button class="icon-btn" data-act="rep-step" data-step="1" aria-label="Next">›</button></div>` : ''}

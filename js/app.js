@@ -42,7 +42,6 @@ import { bindTilt } from './cards.js';
 import { FREQS, markDone, dueItems } from './recurring.js';
 import { invoiceStatus } from './invoices.js';
 import { tableHTML, calendarHTML, dayLabelHTML } from './logviews.js';
-import { dailyChart } from './charts.js';
 import { createHistory } from './history.js';
 import { searchTx, searchSummary, SEARCH_HINT } from './search.js';
 
@@ -372,14 +371,6 @@ function viewHome() {
     <p class="muted small" style="margin-bottom:0">Already have money in the wallet or safe? Set it under Settings → Accounts.</p>
   </section>`;
 
-  const days = [];
-  const dim = Number(today.slice(8, 10));
-  for (let d = 1; d <= new Date(Date.UTC(Number(key.slice(0, 4)), Number(key.slice(5, 7)), 0)).getUTCDate(); d++) {
-    const iso = `${key}-${String(d).padStart(2, '0')}`;
-    days.push({ day: d, iso, amount: s.expenses.filter((t) => t.date === iso).reduce((a, t) => a + t.amount, 0), future: d > dim });
-  }
-  const perDay = dim ? Math.round(s.expense / dim) : 0;
-
   return `<header class="top"><div><h1>${hello}</h1><div class="sub">${dayLabel(today)}</div></div></header>
   ${Updates.updateBanner()}
   ${DEMO ? '<div class="banner"><p>Live preview with <b>example data</b> (a made-up month). What you add here stays in this browser only.</p></div>' : ''}
@@ -403,8 +394,6 @@ function viewHome() {
   <div class="dash">
     <div class="dash-main">
       ${Spending.spendingCard({ period: ui.spendPeriod })}
-      <section class="card"><h2>Spending this month <span class="right muted">${money(perDay)} a day on average</span></h2>
-        ${dailyChart(days, (c) => money(c))}</section>
       ${recent.length ? `<section class="card"><h2>Recent <button class="card-link right" data-go="log">Open log</button></h2><div class="list">${recent.map((t) => txRow(t, { showDate: true })).join('')}</div></section>` : ''}
     </div>
     <div class="dash-side">
@@ -762,6 +751,9 @@ function render({ enter = false } = {}) {
   document.documentElement.style.setProperty('--today-c', `var(--dow${dowIndex(todayISO())})`);
   app.className = `app view-${ui.tab}`;
   app.innerHTML = (SCREENS[ui.tab] || SCREENS.home).view();
+  // Sections that share a sidebar item get tabs under their title.
+  const group = SUB_TABS.find((g) => g.some((x) => x.tab === ui.tab));
+  if (group) app.querySelector('header.top')?.insertAdjacentHTML('afterend', `<nav class="subtabs" aria-label="Sections">${group.map((x) => `<a href="#${x.tab}"${x.tab === ui.tab ? ' aria-current="page"' : ''}>${x.label}</a>`).join('')}</nav>`);
   if (enter) {
     shownCounts.clear();
     playEnter();
@@ -778,7 +770,7 @@ function render({ enter = false } = {}) {
     ui.flashId = null;
   }
   for (const a of document.querySelectorAll('.tabbar a, .more-list a')) {
-    if (a.dataset.tab === (ui.tab === 'review' ? 'reports' : ui.tab)) a.setAttribute('aria-current', 'page');
+    if (a.dataset.tab === (NAV_PARENT[ui.tab] || ui.tab)) a.setAttribute('aria-current', 'page');
     else a.removeAttribute('aria-current');
   }
   if (ui.tab === 'settings') updateJarSum();
@@ -1760,7 +1752,7 @@ document.addEventListener('keydown', (e) => {
   if (e.target.closest('input, select, textarea')) return;
   if ((e.key === 'l' || e.key === 'L') && Security.hasLock()) { Security.lock(); return; }
   if (ui.tab === 'log' && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) { e.preventDefault(); goToMonth(addMonths(ui.month, e.key === 'ArrowLeft' ? -1 : 1)); return; }
-  const tabs = { 1: 'home', 2: 'log', 3: 'accounts', 4: 'goals', 5: 'plan', 6: 'clients', 7: 'people', 8: 'reports', 9: 'rates', 0: 'settings' };
+  const tabs = { 1: 'home', 2: 'log', 3: 'accounts', 4: 'goals', 5: 'plan', 6: 'clients', 7: 'reports', 0: 'settings' };
   if (e.key === 'n' || e.key === 'N') { e.preventDefault(); openTxSheet(); }
   else if (e.key === '/') {
     e.preventDefault();
@@ -1770,6 +1762,15 @@ document.addEventListener('keydown', (e) => {
 });
 
 // ---------- Screens ----------
+
+// Rates live under Accounts, People under Clients, Year in review under
+// Reports: one sidebar item each, with tabs on the screen.
+const SUB_TABS = [
+  [{ tab: 'accounts', label: 'Cards & accounts' }, { tab: 'rates', label: 'Rates & converter' }],
+  [{ tab: 'clients', label: 'Clients & invoices' }, { tab: 'people', label: 'People & loans' }],
+  [{ tab: 'reports', label: 'Reports' }, { tab: 'review', label: 'Year in review' }],
+];
+const NAV_PARENT = { rates: 'accounts', people: 'clients', review: 'reports' };
 
 const SCREENS = {
   home: { view: viewHome, onClick: (a, el) => Plan.onClick(a, el) },
@@ -1791,10 +1792,9 @@ function openMoreSheet() {
     <div class="list more-list">
       ${item('goals', 'Goals', 'What you are saving for, filling up by itself')}
       ${item('plan', 'Plan', 'Budgets, bills, subscriptions, regular income')}
-      ${item('clients', 'Clients', 'Invoices, payments, what an hour earns')}
-      ${item('people', 'People', 'Who gave you money, who you gave to, loans')}
-      ${item('reports', 'Reports', 'Any month, quarter, year or your own dates')}
-      ${item('rates', 'Rates & converter', 'Live exchange rates and crypto prices')}
+      ${item('clients', 'Clients & people', 'Invoices, payments, who gave you money, loans')}
+      ${item('reports', 'Reports', 'Any period, year in review, income for taxes')}
+      ${item('rates', 'Rates & converter', 'Exchange rates, good day to convert USD?')}
       ${item('settings', 'Settings', 'Goal, smart split, categories, backups')}
     </div>`);
 }
