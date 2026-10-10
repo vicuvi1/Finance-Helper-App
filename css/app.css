@@ -1250,3 +1250,24 @@ table.grid tr.selected td { background: var(--gold-soft); }
 .search-card .kpi b { font-size: 17px; font-weight: 600; font-feature-settings: "tnum"; }
 .search-card .kpi b.expense { color: var(--expense); }
 .search-card .kpi b.income { color: var(--income); }
+
+/* Import check */
+.ic-sum { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border-radius: var(--radius-sm); margin-bottom: 12px; font-size: 14px; }
+.ic-sum.ok { background: color-mix(in srgb, var(--income) 12%, transparent); }
+.ic-sum.bad { background: color-mix(in srgb, var(--expense) 12%, transparent); }
+.ic-wrap { margin-bottom: 8px; border: 1px solid var(--line); border-radius: var(--radius-sm); overflow: hidden; }
+.ic-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.ic-table th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 600; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+.ic-table th span { text-transform: none; letter-spacing: 0; font-weight: 500; color: var(--faint); }
+.ic-table td { padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.ic-table .num { text-align: right; font-feature-settings: "tnum"; }
+.ic-table .ic-st { text-align: right; white-space: nowrap; }
+.ic-diff { display: block; color: var(--expense); font-size: 12px; font-weight: 600; margin-top: 2px; }
+.ic-table tr.ic-bad > td { border-bottom: 0; }
+.ic-why td { background: color-mix(in srgb, var(--expense) 6%, transparent); font-size: 13px; }
+.ic-why p { margin: 0 0 6px; }
+.ic-why ul { margin: 0 0 8px; padding-left: 18px; }
+.ic-table td { white-space: normal; }
+.ic-table td.num { white-space: nowrap; }
+.ic-why p, .ic-why li { overflow-wrap: anywhere; }
+@media (max-width: 520px) { .ic-table th, .ic-table td { padding: 9px 8px; } }

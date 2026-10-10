@@ -7,7 +7,7 @@ import { formatMoney, evalAmount, centsToPlain } from './money.js';
 import { todayISO, monthKey, monthLabel, addMonths, dayLabel, dowIndex, DOW_LONG, MONTHS } from './dates.js';
 import { convert, pairRate } from './fx.js';
 import { parseCSV, toCSV } from './csv.js';
-import { importRows, importWorkbook, exportRows, toTSV, monthSheet, overviewSheet, detectColumns } from './importer.js';
+import { importRows, importWorkbook, importCheck, exportRows, toTSV, monthSheet, overviewSheet, detectColumns } from './importer.js';
 import { readWorkbook } from './xlsx-read.js';
 import { workbook } from './xlsx.js';
 import { refreshRates } from './rates.js';
@@ -29,6 +29,7 @@ import * as Rules from './screens/rules.js';
 import * as Goals from './screens/goals.js';
 import * as Telegram from './screens/telegram.js';
 import * as Buddy from './screens/buddy.js';
+import * as ImportCheck from './screens/importcheck.js';
 import { openBankImport, rowsFromFile, decodeText } from './screens/bankimport.js';
 import { guessMapping } from './bank.js';
 import { forecast } from './forecast.js';
@@ -662,6 +663,7 @@ function viewSettings() {
     <div class="btns" style="margin-top:8px">
       <button class="btn" data-act="import-csv">Import Excel / Google Sheet</button>
       <button class="btn" data-act="export-xlsx">Export to Excel</button>
+      ${state.meta.lastImportCheck ? '<button class="btn" data-act="import-check">Last import check</button>' : ''}
     </div>
     <div class="btns" style="margin-top:8px">
       <button class="btn" data-act="import-bank">Import bank statement</button>
@@ -1397,6 +1399,8 @@ async function onCSVFile(text) {
   const res = importRows(rows, state);
   if (!res.tx.length) {
     toast(res.duplicates ? `Already imported (${res.duplicates} records).` : 'No records found. Rows need a date and an amount.');
+    // Importing again is also how you check a sheet against the app.
+    if (res.duplicates && res.format === 'sheet') ImportCheck.show(importCheck([{ name: res.allMonths.map((m) => monthLabel(m)).join(', ') || 'Your sheet', ...res }]));
     return;
   }
   const incomes = res.tx.filter((t) => t.type === 'income').length;
@@ -1418,6 +1422,7 @@ async function onCSVFile(text) {
       ui.month = res.months[res.months.length - 1];
       location.hash = '#log';
       toast(`Imported ${res.tx.length} records`);
+      if (res.format === 'sheet') setTimeout(() => ImportCheck.show(importCheck([{ name: res.allMonths.map((m) => monthLabel(m)).join(', '), ...res }])), 250);
     });
   });
 }
@@ -1432,6 +1437,8 @@ async function onWorkbookFile(buf) {
   if (!useful.length) {
     const dup = tabs.reduce((a, t) => a + (t.duplicates || 0), 0);
     toast(dup ? `Already imported (${dup} records).` : 'No records found in this file. Rows need a date and an amount.');
+    const checks = importCheck(tabs.filter((t) => t.format === 'sheet'));
+    if (checks.length) ImportCheck.show(checks);
     return;
   }
   const row = (t, i) => `<label class="tab-row ${t.tx.length ? '' : 'empty'}">
@@ -1452,7 +1459,8 @@ async function onWorkbookFile(buf) {
     btn.addEventListener('click', () => {
       const acc = sheet.querySelector('#imp-acc').value;
       const cur = M.account(state, acc)?.currency || state.settings.currency;
-      const picked = [...sheet.querySelectorAll('[data-tab-i]:checked')].flatMap((el) => tabs[el.dataset.tabI].tx);
+      const pickedTabs = [...sheet.querySelectorAll('[data-tab-i]:checked')].map((el) => tabs[el.dataset.tabI]);
+      const picked = pickedTabs.flatMap((t) => t.tx);
       for (const t of picked) {
         if (!t.account) continue;
         t.account = acc;
@@ -1465,6 +1473,8 @@ async function onWorkbookFile(buf) {
       if (months.length) ui.month = months.at(-1);
       location.hash = '#log';
       toast(`Imported ${picked.length} records from ${months.length} month${months.length === 1 ? '' : 's'}`);
+      const checks = importCheck(pickedTabs.filter((t) => t.format === 'sheet'));
+      if (checks.length) setTimeout(() => ImportCheck.show(checks), 250);
     });
   });
 }
@@ -1637,6 +1647,7 @@ document.addEventListener('click', (e) => {
   else if (act === 'export-json') exportJSON();
   else if (act === 'export-csv') exportCSV();
   else if (act === 'import-csv') document.getElementById('file-csv').click();
+  else if (act === 'import-check') ImportCheck.open();
   else if (act === 'import-bank') document.getElementById('file-bank').click();
   else if (act === 'import-json') document.getElementById('file-json').click();
   else if (act === 'install') installPrompt?.prompt().finally(() => { installPrompt = null; render(); });

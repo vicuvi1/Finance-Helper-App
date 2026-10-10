@@ -58,13 +58,24 @@ export function importRows(rows, state, { account } = {}) {
   const out = [];
   let duplicates = 0;
   let skipped = 0;
+  // For the import check: what was already here, and rows with an amount
+  // that couldn't be imported (no date).
+  const dup = { income: 0, expense: 0 };
+  const skippedRows = [];
   let base = Date.now();
 
   const baseCur = state.settings.currency;
   const accCur = (id) => state.settings.accounts.find((a) => a.id === id)?.currency || baseCur;
+  const allMonths = new Set();
   const add = (t) => {
+    allMonths.add(t.date.slice(0, 7));
     const key = txKey(t);
-    if (existing.get(key) > 0) { existing.set(key, existing.get(key) - 1); duplicates++; return; }
+    if (existing.get(key) > 0) {
+      existing.set(key, existing.get(key) - 1);
+      duplicates++;
+      if (dup[t.type] != null) dup[t.type] += t.amount;
+      return;
+    }
     const currency = t.currency || accCur(t.account || t.from);
     const rate = currency === baseCur ? 1 : pairRate(currency, baseCur, state.rates);
     const stamp = base++;
@@ -104,9 +115,13 @@ export function importRows(rows, state, { account } = {}) {
     }
 
     const date = parseLooseDate(cell(row, cols.date));
-    if (!date) { skipped++; continue; }
     const earned = parseAmount(cell(row, cols.earned));
     const spent = parseAmount(cell(row, cols.spent));
+    if (!date) {
+      skipped++;
+      if (earned > 0 || spent > 0) skippedRows.push({ row: r + 1, label: String(cell(row, cols.date) || '').trim(), earned: Math.max(0, earned || 0), spent: Math.max(0, spent || 0) });
+      continue;
+    }
     if (earned > 0) {
       const note = String(cell(row, cols.earnedNote)).trim();
       add({ type: 'income', amount: earned, date, note, account: defaultAccount, category: suggestCategory(state, note, 'income') || 'other-in' });
@@ -120,7 +135,49 @@ export function importRows(rows, state, { account } = {}) {
   const income = out.filter((t) => t.type === 'income').reduce((a, t) => a + t.amount, 0);
   const expense = out.filter((t) => t.type === 'expense').reduce((a, t) => a + t.amount, 0);
   const months = [...new Set(out.map((t) => t.date.slice(0, 7)))].sort();
-  return { format: cols.format, tx: out, duplicates, skipped, income, expense, months };
+  return { format: cols.format, tx: out, duplicates, skipped, income, expense, months, allMonths: [...allMonths].sort(), dup, skippedRows, stated: cols.format === 'sheet' ? statedTotals(rows) : null };
+}
+
+// Totals your sheet states itself, from cells labelled e.g. "PROFIT (this
+// month)" / "SPENT (this month)" (the value is the cell below). Null when
+// there are none or they're empty (formulas not calculated).
+export function statedTotals(rows) {
+  const find = (re) => {
+    for (let r = 0; r < rows.length - 1; r++) {
+      for (let c = 0; c < rows[r].length; c++) {
+        if (!re.test(norm(rows[r][c]))) continue;
+        const v = parseAmount(rows[r + 1]?.[c]);
+        if (v > 0) return v;
+      }
+    }
+    return null;
+  };
+  const earned = find(/^(profit|earned|income|venit|castig)\b.*(month|luna|total)/);
+  const spent = find(/^(spent|cheltuit|cheltuieli|expenses)\b.*(month|luna|total)/);
+  return earned == null && spent == null ? null : { earned, spent };
+}
+
+// After an import: does what's in the app now match the sheet? Per tab:
+// the sheet's own totals (stated cells, a total row at the bottom, or the
+// columns added up) against the records from it now in the app (new and
+// already there), with the rows that explain any difference.
+export function importCheck(results) {
+  return results.filter((t) => t.tx.length || t.duplicates).map((t) => {
+    const app = { earned: t.income + (t.dup?.income || 0), spent: t.expense + (t.dup?.expense || 0) };
+    let rows = t.skippedRows || [];
+    // A row without a date whose amount is the column's total is a total row.
+    const totalRow = (k) => rows.find((x) => x[k] > 0 && x[k] === app[k]);
+    const sheet = {};
+    const source = {};
+    for (const k of ['earned', 'spent']) {
+      if (t.stated?.[k] != null) { sheet[k] = t.stated[k]; source[k] = 'stated'; }
+      else if (totalRow(k)) { sheet[k] = app[k]; source[k] = 'total row'; }
+      else { sheet[k] = app[k] + rows.reduce((a, x) => a + x[k], 0); source[k] = 'columns'; }
+    }
+    rows = rows.filter((x) => !(x.earned && x.earned === app.earned && source.earned === 'total row') && !(x.spent && x.spent === app.spent && source.spent === 'total row'));
+    const diff = { earned: sheet.earned - app.earned, spent: sheet.spent - app.spent };
+    return { name: t.name || '', months: t.allMonths || t.months, sheet, app, source, diff, ok: !diff.earned && !diff.spent, skippedRows: rows, duplicates: t.duplicates || 0, added: t.tx.length };
+  });
 }
 
 // A whole workbook (every tab): each tab is imported on its own, so you can
