@@ -1813,7 +1813,7 @@ if (window.desktop?.onQuickAdd) {
     openTxSheet();
   });
   window.desktop.hotkey?.().then((h) => {
-    const keys = document.querySelector('.tabbar .keys');
+    const keys = document.querySelector('.tabbar .keys p');
     if (h?.ok && keys) keys.insertAdjacentHTML('beforeend', `<br>${h.key.split('+').map((k) => `<kbd>${k}</kbd>`).join('')} from anywhere`);
   }).catch(() => {});
 }
