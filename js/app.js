@@ -30,6 +30,8 @@ import * as Goals from './screens/goals.js';
 import * as Telegram from './screens/telegram.js';
 import * as Buddy from './screens/buddy.js';
 import * as ImportCheck from './screens/importcheck.js';
+import * as WorkHour from './screens/workhour.js';
+import { workText } from './workhours.js';
 import { openBankImport, rowsFromFile, decodeText } from './screens/bankimport.js';
 import { guessMapping } from './bank.js';
 import { forecast } from './forecast.js';
@@ -297,7 +299,7 @@ function rateBar(summary) {
 function stats(s, key = 'm') {
   return `<div class="stats">
     <div class="stat"><span class="k">Earned</span><b class="income">${countUp(s.income, `${key}-in`)}</b></div>
-    <div class="stat"><span class="k">Spent</span><b class="expense">${countUp(s.expense, `${key}-out`)}</b></div>
+    <div class="stat"><span class="k">Spent</span><b class="expense">${countUp(s.expense, `${key}-out`)}</b>${s.expense ? (() => { const w = workText(state, s.expense, todayISO()); return w ? `<span class="work-time" title="What it cost in your work time (Settings → Your hour)">≈ ${w} of work</span>` : ''; })() : ''}</div>
     <div class="stat"><span class="k">Kept</span><b>${countUp(s.net, `${key}-net`)}</b></div>
   </div>`;
 }
@@ -675,6 +677,7 @@ function viewSettings() {
   ${Rules.settingsCard()}
   ${Telegram.settingsCard()}
   ${Buddy.settingsCard()}
+  ${WorkHour.settingsCard()}
 
   <section class="card"><h2>Look</h2>
     <div class="row2">
@@ -920,6 +923,10 @@ function openTxSheet(existing = null, preset = {}) {
     if (/[+\-*/x×÷()]/i.test(raw.slice(1))) parts.push(v != null && v > 0 ? `= ${formatMoney(v, cur)}` : '…');
     const rate = Number(String(sheet.querySelector('#tx-rate')?.value || '').replace(',', '.'));
     if (v > 0 && cur !== baseCur && draft.type !== 'transfer' && rate > 0) parts.push(`≈ ${money(Math.round(v * rate))}`);
+    if (v > 0 && draft.type === 'expense') {
+      const w = workText(state, Math.round(v * (cur === baseCur ? 1 : rate || suggestedRate(cur) || 0)), todayISO());
+      if (w) parts.push(`⏱ ${w} of your work`);
+    }
     const toEl = sheet.querySelector('#tx-to-amount');
     if (toEl && !toTouched && v > 0) {
       const conv = convert(v, cur, toCur(), state.rates);
@@ -1743,7 +1750,7 @@ const SCREENS = {
   people: PeopleScreen,
   reports: ReportsScreen,
   rates: RatesScreen,
-  settings: { view: viewSettings, onClick: (a, el) => Security.onClick(a, el) || Rules.onClick(a, el) || Telegram.onClick(a) || Buddy.onClick(a, el) || Binance.onClick(a) || Sync.onClick(a) || SelfCheck.onClick(a) || Backups.onClick(a, el) || (a.startsWith('update-') && (Updates.onClick(a), true)), onChange: (el) => Security.onChange(el) || Telegram.onChange(el) || Buddy.onChange(el) },
+  settings: { view: viewSettings, onClick: (a, el) => Security.onClick(a, el) || Rules.onClick(a, el) || Telegram.onClick(a) || Buddy.onClick(a, el) || Binance.onClick(a) || Sync.onClick(a) || SelfCheck.onClick(a) || Backups.onClick(a, el) || (a.startsWith('update-') && (Updates.onClick(a), true)), onChange: (el) => Security.onChange(el) || Telegram.onChange(el) || Buddy.onChange(el) || WorkHour.onChange(el) },
 };
 
 function openMoreSheet() {

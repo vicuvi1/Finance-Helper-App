@@ -7,6 +7,7 @@ import { evalAmount, formatMoney } from './money.js';
 import { suggestCategory, sortTx, monthSummary, totalBalance, quickPicks, budgetAlert, category, account, B } from './model.js';
 import { monthKey } from './dates.js';
 import { dueItems, upcomingItems } from './recurring.js';
+import { workText } from './workhours.js';
 
 const fold = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 const INCOME_WORDS = /^(\+|got|earned|income|salary|salariu|venit|primit|зарплата|получил|доход)$/;
@@ -71,7 +72,8 @@ export function loggedText(state, t) {
   const a = account(state, t.account)?.name || '';
   const sign = t.type === 'income' ? '+' : '−';
   const alert = budgetAlert(state, t);
-  return `✅ <b>${sign}${esc(formatMoney(t.amount, t.currency))}</b> · ${esc(t.note || c)}\n${esc(c)} · ${esc(a)}${alert ? `\n⚠️ ${esc(alert.text)}` : ''}`;
+  const work = t.type === 'expense' ? workText(state, B(t), t.date) : '';
+  return `✅ <b>${sign}${esc(formatMoney(t.amount, t.currency))}</b> · ${esc(t.note || c)}\n${esc(c)} · ${esc(a)}${work ? `\n⏱ ${esc(work)} of your work` : ''}${alert ? `\n⚠️ ${esc(alert.text)}` : ''}`;
 }
 
 export function todayText(state, today) {

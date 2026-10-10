@@ -1271,3 +1271,9 @@ table.grid tr.selected td { background: var(--gold-soft); }
 .ic-table td.num { white-space: nowrap; }
 .ic-why p, .ic-why li { overflow-wrap: anywhere; }
 @media (max-width: 520px) { .ic-table th, .ic-table td { padding: 9px 8px; } }
+
+/* Work time */
+.stat .work-time { display: block; font-size: 12px; color: var(--muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wh-rate { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
+.wh-rate b { font-size: 22px; font-weight: 650; font-feature-settings: "tnum"; color: var(--gold); }
+.wh-rate span { color: var(--muted); font-size: 13px; }

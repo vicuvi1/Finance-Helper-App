@@ -5,6 +5,7 @@ import { budgetAlert, category, B, monthSummary, savingsJar, account } from './m
 import { loggingStreak } from './review.js';
 import { addDays, monthKey } from './dates.js';
 import { formatMoney } from './money.js';
+import { workText } from './workhours.js';
 
 const pick = (list, rand) => list[Math.floor(rand() * list.length) % list.length];
 const STREAKS = [3, 7, 14, 21, 30, 50, 75, 100, 150, 200, 365];
@@ -42,7 +43,10 @@ export function reactToTx(state, t, today, rand = Math.random) {
   const alert = budgetAlert(state, t);
   if (alert?.level === 'over') return { mood: 'worried', text: `Hey, ${category(state, t.category)?.name || 'that'} is over budget now. Be more careful with money 😬` };
   const daily = usualDaily(state, today);
-  if (daily > 0 && B(t) >= Math.max(daily * 4, 30000)) return { mood: 'surprised', text: `Whoa, ${formatMoney(t.amount, t.currency)}! That's a big one. Was it planned?` };
+  if (daily > 0 && B(t) >= Math.max(daily * 4, 30000)) {
+    const work = workText(state, B(t), today);
+    return { mood: 'surprised', text: `Whoa, ${formatMoney(t.amount, t.currency)}!${work ? ` That's ${work} of your work.` : ' That\'s a big one.'} Was it planned?` };
+  }
   if (alert?.level === 'near') return { mood: 'thinking', text: `${category(state, t.category)?.name} is at ${alert.text.match(/(\d+)%/)?.[1] || 80}% of its budget. Easy for the rest of the month 🙏` };
   const todaySpent = state.tx.filter((x) => x.type === 'expense' && !x.loan && x.date === today).reduce((a, x) => a + B(x), 0);
   if (daily > 0 && todaySpent > daily * 3 && todaySpent - B(t) <= daily * 3) return { mood: 'worried', text: `Busy spending day: ${fmt(todaySpent)} today. Maybe a no-spend day tomorrow?` };
