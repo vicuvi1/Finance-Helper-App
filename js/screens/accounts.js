@@ -8,6 +8,7 @@ import { formatMoney, evalAmount, centsToPlain } from '../money.js';
 import { monthKey, addMonths, daysInMonth, monthLabel, todayISO } from '../dates.js';
 import { lineChart } from '../charts.js';
 import { cardHTML, CARD_THEMES, themeOf, readLogo } from '../cards.js';
+import { cashCheck } from '../review.js';
 
 export const BANKS = ['Cash', 'maib', 'Victoriabank', 'Moldindconbank', 'OTP Bank', 'MICB', 'FinComBank', 'Eximbank', 'Energbank', 'ProCredit Bank', 'Paynet', 'Revolut', 'Wise', 'Paysera', 'PayPal', 'Binance'];
 
@@ -124,15 +125,46 @@ function openAccount(id) {
     <div class="btns" style="margin-bottom:14px">
       <button class="btn primary" id="acc-add-rec">Add record</button>
       <button class="btn" id="acc-move">Move money</button>
+      ${a.kind === 'cash' ? '<button class="btn" id="acc-count">Count cash</button>' : ''}
       <button class="btn" id="acc-edit">Edit</button>
     </div>
     ${recent.length ? `<div class="list">${recent.map((t) => ctx.txRow(t, { showDate: true })).join('')}</div>` : '<p class="muted">No records in this account yet.</p>'}`, (sheet) => {
     sheet.querySelector('#acc-add-rec').addEventListener('click', () => { ctx.closeSheet(); ctx.openTxSheet(null, { account: id, from: id }); });
     sheet.querySelector('#acc-move').addEventListener('click', () => { ctx.closeSheet(); ctx.openTransferSheet(id); });
+    sheet.querySelector('#acc-count')?.addEventListener('click', () => countCash(id));
     sheet.querySelector('#acc-edit').addEventListener('click', () => editAccount(id));
     sheet.addEventListener('click', (e) => {
       const row = e.target.closest('[data-act="edit"]');
       if (row) { ctx.closeSheet(); ctx.openTxSheet(ctx.state.tx.find((t) => t.id === row.dataset.id)); }
+    });
+  });
+}
+
+// Count the real cash; the difference becomes one "untracked cash" record.
+function countCash(id) {
+  const { state } = ctx;
+  const a = M.account(state, id);
+  const expected = M.accountBalances(state)[id] || 0;
+  ctx.openSheet(`<h3>Count ${esc(a.name)} <button type="button" class="icon-btn" data-close aria-label="Close">✕</button></h3>
+    <form id="cash-form" novalidate>
+      <p class="muted" style="margin-top:0">The app thinks there's <b>${formatMoney(expected, a.currency)}</b>. Count what's really there:</p>
+      <div class="amount-input"><input id="cash-amt" type="text" inputmode="decimal" placeholder="0" aria-label="Cash counted"><span class="cur">${esc(a.currency)}</span></div>
+      <p class="muted small">Any difference is logged as "untracked cash" (or "found cash"), so your numbers stay true.</p>
+      <div class="btns"><button type="button" class="btn" data-close>Cancel</button><button type="submit" class="btn primary">Done</button></div>
+    </form>`, (sheet) => {
+    sheet.querySelector('#cash-amt').focus();
+    sheet.querySelector('#cash-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const counted = evalAmount(sheet.querySelector('#cash-amt').value);
+      if (counted == null) return;
+      const r = cashCheck(state, id, counted, { date: todayISO(), id: M.uid(), rate: a.currency === state.settings.currency ? 1 : ctx.suggestedRate(a.currency) || 1 });
+      if (r.tx) state.tx.push(r.tx);
+      state.meta.lastCashCheck = todayISO();
+      ctx.commit();
+      ctx.closeSheet();
+      if (!r.diff) ctx.buddy?.({ mood: 'proud', text: `${a.name} matches to the last ban. Perfect tracking! 🏆` });
+      else ctx.buddy?.({ mood: r.diff < 0 ? 'thinking' : 'happy', text: r.diff < 0 ? `${formatMoney(-r.diff, a.currency)} went untracked. Logged it. Let's log cash right away this week 😉` : `Found ${formatMoney(r.diff, a.currency)}! Added it.` });
+      ctx.toast(r.diff ? `Difference of ${formatMoney(Math.abs(r.diff), a.currency)} logged` : 'Matches exactly ✓');
     });
   });
 }
