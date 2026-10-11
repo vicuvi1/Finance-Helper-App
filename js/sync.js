@@ -62,6 +62,8 @@ export function mergeStates(local, remote) {
   for (const k of SCALARS(scalarsFrom)) settings[k] = scalarsFrom[k];
   settings.updatedAt = Math.max(local.settings.updatedAt || 0, r.settings.updatedAt || 0);
   settings.accounts = mergeList(local.settings.accounts, r.settings.accounts, deleted);
+  // The card order you set on one device is the order everywhere.
+  settings.accounts.sort((a, b) => (Number.isFinite(a.order) ? a.order : 1e6) - (Number.isFinite(b.order) ? b.order : 1e6));
   settings.categories = mergeList(local.settings.categories, r.settings.categories, deleted);
   settings.jars = mergeList(local.settings.jars, r.settings.jars, deleted);
 

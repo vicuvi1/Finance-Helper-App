@@ -1759,3 +1759,23 @@ body.locked .calc-fab, body.locked .calc, body.printing .calc-fab, body.printing
 .dp.light-dp span { text-shadow: none; }
 .photo-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .photo-row img { width: 78px; aspect-ratio: 1.586; object-fit: cover; border-radius: 8px; }
+
+/* Accounts: reorder the cards (drag, or Reorder → arrows). */
+.top-btns { flex-wrap: nowrap; }
+.top-btns .btn { flex: none; }
+.bcards [data-drag-id] { position: relative; }
+.bcards .bcard[draggable="true"] { cursor: grab; }
+.bcards .dragging { opacity: 0.35; transform: scale(0.97); }
+/* Where it will land: a gold bar on that side (a shadow, so the card's
+   rounded clipping doesn't hide it). */
+.bcards .drop-before, .bcards .drop-before .bcard { box-shadow: -8px 0 0 -2px var(--gold), -14px 0 18px -8px var(--gold) !important; }
+.bcards .drop-after, .bcards .drop-after .bcard { box-shadow: 8px 0 0 -2px var(--gold), 14px 0 18px -8px var(--gold) !important; }
+.reorder-hint { margin: -6px 0 12px; }
+.bc-slot { position: relative; cursor: grab; animation: slot-wiggle 0.5s ease-in-out; }
+.bc-slot .bcard { cursor: grab; }
+.bc-order { position: absolute; left: 50%; bottom: -14px; transform: translateX(-50%); display: flex; gap: 8px; z-index: 6; }
+.bc-order .icon-btn { width: 36px; height: 32px; min-width: 0; border-radius: 10px; background: var(--surface); border: 1px solid var(--line-strong); box-shadow: var(--shadow-pop); font-size: 16px; }
+.bc-order .icon-btn:hover:not(:disabled) { border-color: var(--gold); color: var(--gold); }
+.bcards.reordering { row-gap: 34px; }
+@keyframes slot-wiggle { 25% { transform: rotate(-0.6deg); } 75% { transform: rotate(0.6deg); } }
+@media (prefers-reduced-motion: reduce) { .bc-slot { animation: none; } }

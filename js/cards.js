@@ -87,7 +87,7 @@ const ICON = {
 };
 
 // `v` is an accountValues() entry; `money` formats main-currency cents.
-export function cardHTML(v, { money, act = 'acc-open', big = false, base = 'MDL' } = {}) {
+export function cardHTML(v, { money, act = 'acc-open', big = false, base = 'MDL', attrs = '' } = {}) {
   const a = v.account;
   const t = themeOf(a);
   const d = designOf(a);
@@ -102,7 +102,7 @@ export function cardHTML(v, { money, act = 'acc-open', big = false, base = 'MDL'
   const mark = a.logo
     ? `<img class="bc-logo" src="${esc(a.logo)}" alt="">`
     : `<span class="bc-mono" aria-hidden="true">${esc((bankName || '?').trim()[0]?.toUpperCase() || '?')}</span>`;
-  const tag = act ? `button type="button" data-act="${act}" data-id="${esc(a.id)}"` : 'div';
+  const tag = `${act ? `button type="button" data-act="${act}" data-id="${esc(a.id)}"` : 'div'}${attrs ? ` ${attrs}` : ''}`;
   const look = photo ? 'photo' : d ? `design design-${d.id}` : `theme-${custom ? 'custom' : t.id}`;
   const style = photo ? `background-image:url(&quot;${photo}&quot;)` : d ? '' : customStyle(custom);
   return `<${tag} class="bcard ${look}${light ? ' light' : ''}${big ? ' big' : ''}${a.archived ? ' archived' : ''}" style="${style}" aria-label="${esc(a.name)}: ${esc(shown)}">

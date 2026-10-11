@@ -159,7 +159,39 @@ export function sortTx(list) {
 export const category = (state, id) => state.settings.categories.find((c) => c.id === id);
 export const account = (state, id) => state.settings.accounts.find((a) => a.id === id);
 export const person = (state, id) => state.people.find((p) => p.id === id);
-export const activeAccounts = (state) => state.settings.accounts.filter((a) => !a.archived);
+// The order of your cards (Accounts screen: drag them, or the arrows).
+// Accounts you never moved keep the old order: by kind, then as added; ones
+// added after you set an order go last. `order` syncs like any field.
+export function orderedAccounts(state) {
+  const list = state.settings.accounts;
+  const kindIx = (k) => { const i = ACCOUNT_KINDS.findIndex((x) => x.id === k); return i < 0 ? 99 : i; };
+  const anyOrder = list.some((a) => Number.isFinite(a.order));
+  const key = (a, i) => (Number.isFinite(a.order) ? a.order : anyOrder ? 1e6 + i : kindIx(a.kind) * 1e4 + i);
+  return list.map((a, i) => ({ a, k: key(a, i) })).sort((x, y) => x.k - y.k).map((x) => x.a);
+}
+
+// Puts an account before another one (null: at the end) and numbers them all.
+export function moveAccountTo(state, id, beforeId = null, now = Date.now()) {
+  const list = orderedAccounts(state);
+  const moving = list.find((a) => a.id === id);
+  if (!moving || id === beforeId) return false;
+  const rest = list.filter((a) => a.id !== id);
+  const at = beforeId ? rest.findIndex((a) => a.id === beforeId) : -1;
+  rest.splice(at < 0 ? rest.length : at, 0, moving);
+  rest.forEach((a, i) => { if (a.order !== i) { a.order = i; a.updatedAt = now; } });
+  return true;
+}
+
+// One step left (-1) or right (+1) among the cards you see (not archived).
+export function moveAccountBy(state, id, dir, now = Date.now()) {
+  const shown = orderedAccounts(state).filter((a) => !a.archived);
+  const i = shown.findIndex((a) => a.id === id);
+  const j = i + dir;
+  if (i < 0 || j < 0 || j >= shown.length) return false;
+  return moveAccountTo(state, id, dir < 0 ? shown[j].id : shown[j + 1]?.id ?? null, now);
+}
+
+export const activeAccounts = (state) => orderedAccounts(state).filter((a) => !a.archived);
 export const jar = (state, id) => state.settings.jars.find((j) => j.id === id);
 export const savingsJar = (state) => state.settings.jars.find((j) => j.savings) || state.settings.jars[0];
 

@@ -350,3 +350,22 @@ test('switch an account to USD: balance converted, reports unchanged, history re
   assert.equal(state.tx.find((t) => t.type === 'income').amount, 352000);
   assert.equal(state.tx.find((t) => t.type === 'income').orig, undefined);
 });
+
+test('card order: by kind until you move one, then yours (and new ones last)', async () => {
+  const { orderedAccounts, moveAccountTo, moveAccountBy } = await import('../js/model.js');
+  const state = defaultState(); // wallet (cash), safe (savings), card
+  const ids = () => orderedAccounts(state).map((a) => a.id);
+  assert.deepEqual(ids(), ['wallet', 'card', 'safe']);
+  assert.ok(moveAccountTo(state, 'safe', 'wallet', 5));
+  assert.deepEqual(ids(), ['safe', 'wallet', 'card']);
+  assert.equal(state.settings.accounts.find((a) => a.id === 'safe').updatedAt, 5); // syncs
+  assert.ok(moveAccountBy(state, 'safe', 1, 6));
+  assert.deepEqual(ids(), ['wallet', 'safe', 'card']);
+  assert.ok(moveAccountBy(state, 'safe', 1, 7));
+  assert.deepEqual(ids(), ['wallet', 'card', 'safe']);
+  assert.equal(moveAccountBy(state, 'safe', 1, 8), false); // already last
+  state.settings.accounts.push({ id: 'new', name: 'New', kind: 'cash', currency: 'MDL' });
+  assert.deepEqual(ids(), ['wallet', 'card', 'safe', 'new']);
+  moveAccountTo(state, 'wallet', null, 9);
+  assert.deepEqual(ids(), ['card', 'safe', 'new', 'wallet']);
+});

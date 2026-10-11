@@ -57,18 +57,20 @@ const card = (v, opts = {}) => cardHTML(v, { money: ctx.money, base: ctx.state.s
 export function view() {
   const { state } = ctx;
   const vals = M.accountValues(state);
-  const active = vals.filter((v) => !v.account.archived);
+  // Your card order (drag them, or Reorder → arrows).
+  const pos = new Map(M.orderedAccounts(state).map((a, i) => [a.id, i]));
+  const active = vals.filter((v) => !v.account.archived).sort((x, y) => pos.get(x.account.id) - pos.get(y.account.id));
+  const reorder = !!ctx.ui.accReorder;
   const archived = vals.filter((v) => v.account.archived);
   const { total, missing } = M.totalBalance(state);
   const saving = active.filter((v) => isSaving(v.account));
   const savingTotal = saving.reduce((a, v) => a + (v.inBase || 0), 0);
   const byCur = new Map();
   for (const v of active) if (!(v.account.kind === 'crypto' && v.account.holdings?.length)) byCur.set(v.account.currency, (byCur.get(v.account.currency) || 0) + v.own);
-  const groups = M.ACCOUNT_KINDS.map((k) => ({ kind: k, items: active.filter((v) => v.account.kind === k.id) })).filter((g) => g.items.length);
   const hist = savingsHistory(state);
 
   return `<header class="top"><div><h1>Accounts</h1><div class="sub">${active.length} account${active.length === 1 ? '' : 's'} · ${[...byCur.keys()].join(', ')}</div></div>
-    <button class="btn primary" data-act="acc-new">+ Add account</button></header>
+    <div class="btns top-btns">${active.length > 1 ? `<button class="btn${reorder ? ' primary' : ''}" data-act="acc-reorder" aria-pressed="${reorder}">${reorder ? 'Done' : '⇄ Reorder'}</button>` : ''}<button class="btn primary" data-act="acc-new">+ Add account</button></div></header>
   <section class="hero">
     <div class="hero-main">
       <div class="label">All my money</div>
@@ -85,9 +87,14 @@ export function view() {
       <p class="muted small" style="margin:12px 0 0">${saving.length ? `Counted: ${saving.map((v) => esc(v.account.name)).join(', ')}.` : 'Mark an account as savings to track it here.'}</p>
     </div>
   </section>
-  <div class="bcards">
-    ${groups.flatMap((g) => g.items).map((v) => card(v)).join('')}
-    <button type="button" class="bcard-add" data-act="acc-new"><span>+</span>Add a card or account</button>
+  ${reorder ? '<p class="muted small reorder-hint">Drag the cards where you want them, or use the arrows. The order is the same everywhere (lists, record forms, your other devices).</p>' : ''}
+  <div class="bcards${reorder ? ' reordering' : ''}">
+    ${active.map((v, i) => (reorder
+    ? `<div class="bc-slot" draggable="true" data-drag-id="${esc(v.account.id)}">${card(v, { act: null })}<div class="bc-order">
+        <button type="button" class="icon-btn" data-act="acc-move" data-id="${esc(v.account.id)}" data-dir="-1" aria-label="Move ${esc(v.account.name)} earlier" ${i ? '' : 'disabled'}>←</button>
+        <button type="button" class="icon-btn" data-act="acc-move" data-id="${esc(v.account.id)}" data-dir="1" aria-label="Move ${esc(v.account.name)} later" ${i < active.length - 1 ? '' : 'disabled'}>→</button></div></div>`
+    : card(v, { attrs: `draggable="true" data-drag-id="${esc(v.account.id)}"` }))).join('')}
+    ${reorder ? '' : '<button type="button" class="bcard-add" data-act="acc-new"><span>+</span>Add a card or account</button>'}
   </div>
   ${archived.length ? `<details class="card"><summary>Archived (${archived.length})</summary><div class="bcards" style="margin:14px 0 0">${archived.map((v) => card(v)).join('')}</div></details>` : ''}
   <div class="acc-charts">
@@ -404,8 +411,60 @@ function editAccount(id) {
 export function onClick(act, el) {
   if (act === 'acc-new') { editAccount(null); return true; }
   if (act === 'acc-open') { openAccount(el.dataset.id); return true; }
+  if (act === 'acc-reorder') { ctx.ui.accReorder = !ctx.ui.accReorder; ctx.render(); return true; }
+  if (act === 'acc-move') {
+    const { id, dir } = el.dataset;
+    if (M.moveAccountBy(ctx.state, id, Number(dir))) {
+      ctx.commit();
+      // Keep the focus on the same arrow, so you can press it again.
+      const q = (extra) => document.querySelector(`[data-act="acc-move"][data-id="${CSS.escape(id)}"]${extra}:not(:disabled)`);
+      (q(`[data-dir="${dir}"]`) || q(''))?.focus();
+    }
+    return true;
+  }
   if (act === 'nw-range') { ctx.ui.nwRange = Number(el.dataset.n); ctx.render(); return true; }
   return false;
 }
 
 export { editAccount, openAccount };
+
+// Drag a card onto another to put it before (left half) or after (right half).
+if (typeof document !== 'undefined') {
+  let dragId = null;
+  const clear = () => document.querySelectorAll('.drop-before, .drop-after, .dragging').forEach((el) => el.classList.remove('drop-before', 'drop-after', 'dragging'));
+  const side = (el, e) => { const r = el.getBoundingClientRect(); return e.clientX < r.left + r.width / 2 ? 'before' : 'after'; };
+  document.addEventListener('dragstart', (e) => {
+    const el = e.target.closest?.('.bcards [data-drag-id]');
+    if (!el) return;
+    dragId = el.dataset.dragId;
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', dragId);
+    requestAnimationFrame(() => el.classList.add('dragging'));
+  });
+  document.addEventListener('dragover', (e) => {
+    if (!dragId) return;
+    const el = e.target.closest?.('.bcards [data-drag-id]');
+    if (!el || el.dataset.dragId === dragId) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    const s = side(el, e);
+    if (!el.classList.contains(`drop-${s}`)) {
+      document.querySelectorAll('.drop-before, .drop-after').forEach((x) => x.classList.remove('drop-before', 'drop-after'));
+      el.classList.add(`drop-${s}`);
+    }
+  });
+  document.addEventListener('drop', (e) => {
+    if (!dragId) return;
+    const el = e.target.closest?.('.bcards [data-drag-id]');
+    if (!el) return;
+    e.preventDefault();
+    const ids = [...document.querySelectorAll('.bcards:not(details .bcards) [data-drag-id]')].map((x) => x.dataset.dragId);
+    const i = ids.indexOf(el.dataset.dragId);
+    const before = side(el, e) === 'before' ? el.dataset.dragId : ids.slice(i + 1).find((x) => x !== dragId) || null;
+    const moved = M.moveAccountTo(ctx.state, dragId, before);
+    dragId = null;
+    clear();
+    if (moved) { ctx.commit(); ctx.toast('Card order saved'); }
+  });
+  document.addEventListener('dragend', () => { dragId = null; clear(); });
+}
