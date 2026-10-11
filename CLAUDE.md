@@ -66,6 +66,8 @@ tested); `js/app.js` only renders and handles taps.
   Buttons are blocks (`js/blocks.js`, `settings.tgBlocks`, editor `js/screens/tgblocks.js`).
   Messages older than 2 minutes when handled (PC was off) get one catch-up summary,
   not a reply each; `loadNow()` cuts the long poll short ("📥 From Telegram").
+- Calculator: math in `js/calc.js` (pure, no eval), floating panel `js/screens/calc.js`
+  (position, open state and tape in localStorage: device-only, never synced).
 - End-to-end: `npm run e2e` (`e2e/*.e2e.mjs`, Playwright; on Linux `xvfb-run -a npm run e2e`
   for the desktop test). CI runs it before every desktop build, so a broken app never
   ships. The desktop test uses `FH_USER_DATA` (unpackaged only) for a throwaway data folder.

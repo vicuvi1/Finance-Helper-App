@@ -31,6 +31,7 @@ import * as Goals from './screens/goals.js';
 import * as Telegram from './screens/telegram.js';
 import * as TgBlocks from './screens/tgblocks.js';
 import * as Motion from './motion.js';
+import * as Calc from './screens/calc.js';
 import * as Buddy from './screens/buddy.js';
 import * as ImportCheck from './screens/importcheck.js';
 import * as WorkHour from './screens/workhour.js';
@@ -1755,6 +1756,7 @@ document.addEventListener('click', (e) => {
   else if (act === 'person-open') PeopleScreen.openPerson(el.dataset.id);
   else if (act === 'more') openMoreSheet();
   else if (act === 'bd-toggle') Buddy.toggle();
+  else if (act === 'calc') Calc.toggle();
   else if (act === 'quick-pick') {
     const p = M.quickPicks(state, todayISO(), 8)[Number(el.dataset.i)];
     if (p) openTxSheet(null, { type: p.type, note: p.note, category: p.category, account: p.account, amountText: centsToPlain(p.amount) });
@@ -1890,6 +1892,8 @@ document.addEventListener('keydown', (e) => {
     undoRedo(z === 'y' || e.shiftKey ? 1 : -1);
     return;
   }
+  // "=" opens the calculator, also over an open sheet.
+  if (!e.ctrlKey && !e.metaKey && !e.altKey && !e.target.closest('input, select, textarea') && Calc.onKey(e)) return;
   if (e.ctrlKey || e.metaKey || e.altKey || sheetRoot.firstChild) return;
   if (e.target.closest('input, select, textarea')) return;
   if ((e.key === 'l' || e.key === 'L') && Security.hasLock()) { Security.lock(); return; }
@@ -2175,6 +2179,7 @@ Backups.initBackups();
 Plan.initPlan();
 Telegram.initTelegram();
 Motion.initMotion();
+Calc.initCalc();
 Buddy.initBuddy();
 
 // One net-worth snapshot a day (crypto and rates of that day included).
