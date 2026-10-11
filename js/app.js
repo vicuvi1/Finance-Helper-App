@@ -286,7 +286,8 @@ function txRow(t, { showDate = false } = {}) {
     av = `<span class="av" style="--c:${catColor(t.category)}" aria-hidden="true">${initial(c.name)}</span>`;
     title = t.note || c.name;
     sub = [c.name, who ? `${t.type === 'income' ? 'from' : 'to'} ${who}` : null, accOf(t.account).name].filter(Boolean).join(' · ');
-    amount = `<span class="amount ${t.type === 'income' ? 'income' : ''}">${t.loan ? '<span class="pill">loan</span> ' : ''}${t.type === 'income' ? fm(t.amount, { sign: true }) : fm(-t.amount)}</span>`;
+    const ty = M.typedAs(t);
+    amount = `<span class="amount ${t.type === 'income' ? 'income' : ''}">${t.loan ? '<span class="pill">loan</span> ' : ''}${t.type === 'income' ? fm(t.amount, { sign: true }) : fm(-t.amount)}${ty ? `<small class="typed-as">${formatMoney(ty.amount, ty.currency)}</small>` : ''}</span>`;
   }
   if (showDate) sub = `${dayLabel(t.date)} · ${sub}`;
   return `<button class="tx" data-act="edit" data-id="${esc(t.id)}">
@@ -968,6 +969,27 @@ function openTxSheet(existing = null, preset = {}) {
   const curOf = () => M.account(state, draft.type === 'transfer' ? draft.from : draft.account)?.currency || baseCur;
   const toCur = () => M.account(state, draft.to)?.currency || baseCur;
 
+  // Typed in another currency than the account's (10 USD from an MDL wallet):
+  // the record is converted into the account's currency and keeps what you typed.
+  const typed0 = existing ? M.typedAs(existing) : null;
+  const rateOf = (c) => (c === baseCur ? 1 : suggestedRate(c));
+  const defaultEntryRate = (c) => {
+    const a = rateOf(c);
+    const b = rateOf(curOf());
+    return a && b ? String(Math.round((a / b) * 10000) / 10000).replace('.', ',') : '';
+  };
+  let entryCur = typed0?.currency || null;
+  let entryRateText = typed0 ? String(Math.round((existing.amount / typed0.amount) * 10000) / 10000).replace('.', ',') : '';
+  if (typed0) amountText = centsToPlain(typed0.amount);
+  // A person who usually deals in USD (People → their currency): start in USD.
+  if (!existing && !entryCur && draft.personName) {
+    const p = state.people.find((x) => x.name.toLowerCase() === String(draft.personName).toLowerCase());
+    if (p?.currency && p.currency !== curOf()) { entryCur = p.currency; entryRateText = defaultEntryRate(entryCur); }
+  }
+  const entryOn = () => draft.type !== 'transfer' && !!entryCur && entryCur !== curOf();
+  const entryRate = () => Number(String(entryRateText).replace(',', '.'));
+  const curChoices = () => [...new Set([curOf(), baseCur, 'USD', 'EUR', ...state.settings.accounts.map((a) => a.currency), ...state.people.map((x) => x.currency)].filter(Boolean))];
+
   const accSelect = (field, label) => `<label class="field"><span>${label}</span><select id="tx-${field}">
     ${accounts.concat(existing && !accounts.some((a) => a.id === existing[field]) && M.account(state, existing[field]) ? [M.account(state, existing[field])] : [])
     .map((a) => `<option value="${esc(a.id)}" ${draft[field] === a.id ? 'selected' : ''}>${esc(accLabel(a))}</option>`).join('')}</select></label>`;
@@ -983,8 +1005,10 @@ function openTxSheet(existing = null, preset = {}) {
       <h3>${existing ? 'Edit record' : 'New record'} <button type="button" class="icon-btn" data-close aria-label="Close">✕</button></h3>
       ${picks.some((p) => p.type === draft.type) ? `<div class="picks" role="group" aria-label="Quick picks">${picks.map((p, i) => p.type !== draft.type ? '' : `<button type="button" class="pick" data-pick="${i}" title="${p.fav ? 'Favorite' : `Logged ${p.count} times lately`}">${p.fav ? '<span class="gold">★</span> ' : ''}${esc(p.note || catOf(p.category).name)} <b class="${p.type === 'income' ? 'income' : ''}">${formatMoney(p.type === 'income' ? p.amount : p.amount, p.currency, { compact: true })}</b></button>`).join('')}</div>` : ''}
       <div class="seg" role="group" aria-label="Type">${segBtn('expense', 'Spent')}${segBtn('income', 'Earned')}${segBtn('transfer', 'Move')}</div>
-      <div class="amount-input"><input id="tx-amount" type="text" inputmode="decimal" autocomplete="off" placeholder="0" value="${esc(amountText)}" aria-label="Amount in ${cur}"><span class="cur">${esc(cur)}</span></div>
+      <div class="amount-input"><input id="tx-amount" type="text" inputmode="decimal" autocomplete="off" placeholder="0" value="${esc(amountText)}" aria-label="Amount in ${entryOn() ? entryCur : cur}">${isT ? `<span class="cur">${esc(cur)}</span>`
+    : `<select id="tx-cur" class="cur cur-pick" aria-label="Currency of the amount" title="Type it in another currency">${curChoices().map((c) => `<option ${c === (entryOn() ? entryCur : cur) ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>`}</div>
       <div class="calc-hint" id="calc-hint">${isT ? 'Move money between your accounts' : 'Tip: type 120+45 and it adds up'}</div>
+      ${entryOn() ? `<label class="field fx-row"><span>Rate</span><span class="fx-line">1 ${esc(entryCur)} = <input id="tx-erate" type="text" inputmode="decimal" value="${esc(entryRateText)}" placeholder="?" aria-label="Rate from ${esc(entryCur)} to ${esc(cur)}"> ${esc(cur)}</span></label>` : ''}
       ${!isT && cur !== baseCur ? `<label class="field fx-row"><span>Rate</span><span class="fx-line">1 ${esc(cur)} = <input id="tx-rate" type="text" inputmode="decimal" value="${esc(rateText)}" placeholder="?" aria-label="Rate to ${esc(baseCur)}"> ${esc(baseCur)}</span></label>` : ''}
       ${cross ? `<label class="field"><span>Arrives as (${esc(toCur())})</span><input id="tx-to-amount" type="text" inputmode="decimal" value="${esc(toText)}" placeholder="0"></label>` : ''}
       <label class="field"><span>${isT ? 'Note (optional)' : 'What for?'}</span>
@@ -1017,6 +1041,7 @@ function openTxSheet(existing = null, preset = {}) {
     draft.note = v('#tx-note').value;
     draft.date = v('#tx-date').value || draft.date;
     if (v('#tx-rate')) rateText = v('#tx-rate').value;
+    if (v('#tx-erate')) entryRateText = v('#tx-erate').value;
     if (v('#tx-to-amount')) toText = v('#tx-to-amount').value;
     if (v('#tx-person')) draft.personName = v('#tx-person').value;
     if (v('#tx-loan')) draft.loan = v('#tx-loan').checked;
@@ -1031,10 +1056,14 @@ function openTxSheet(existing = null, preset = {}) {
   const updateHint = (sheet) => {
     const hint = sheet.querySelector('#calc-hint');
     const raw = sheet.querySelector('#tx-amount').value;
-    const v = evalAmount(raw);
+    const typed = evalAmount(raw);
     const cur = curOf();
     const parts = [];
-    if (/[+\-*/x×÷()]/i.test(raw.slice(1))) parts.push(v != null && v > 0 ? `= ${formatMoney(v, cur)}` : '…');
+    if (/[+\-*/x×÷()]/i.test(raw.slice(1))) parts.push(typed != null && typed > 0 ? `= ${formatMoney(typed, entryOn() ? entryCur : cur)}` : '…');
+    // Typed in USD from an MDL account: what leaves (or enters) the account.
+    const er = Number(String(sheet.querySelector('#tx-erate')?.value || '').replace(',', '.'));
+    const v = typed > 0 && entryOn() ? (er > 0 ? Math.round(typed * er) : null) : typed;
+    if (typed > 0 && entryOn()) parts.push(v ? `= ${formatMoney(v, cur)} ${draft.type === 'income' ? 'into' : 'from'} ${accOf(draft.account).name}` : 'Enter the rate');
     const rate = Number(String(sheet.querySelector('#tx-rate')?.value || '').replace(',', '.'));
     if (v > 0 && cur !== baseCur && draft.type !== 'transfer' && rate > 0) parts.push(`≈ ${money(Math.round(v * rate))}`);
     if (v > 0 && draft.type === 'expense') {
@@ -1055,6 +1084,15 @@ function openTxSheet(existing = null, preset = {}) {
     const amount = sheet.querySelector('#tx-amount');
     amount.addEventListener('input', () => updateHint(sheet));
     sheet.querySelector('#tx-rate')?.addEventListener('input', () => updateHint(sheet));
+    sheet.querySelector('#tx-erate')?.addEventListener('input', () => updateHint(sheet));
+    sheet.querySelector('#tx-cur')?.addEventListener('change', (e) => {
+      readInputs(sheet);
+      entryCur = e.target.value === curOf() ? null : e.target.value;
+      entryRateText = entryCur ? defaultEntryRate(entryCur) : '';
+      paint(sheet, false);
+      updateHint(sheet);
+      sheet.querySelector(entryRateText ? '#tx-amount' : '#tx-erate')?.focus();
+    });
     sheet.querySelector('#tx-to-amount')?.addEventListener('input', () => { toTouched = true; });
     for (const f of ['account', 'from', 'to']) {
       sheet.querySelector(`#tx-${f}`)?.addEventListener('change', () => {
@@ -1062,7 +1100,7 @@ function openTxSheet(existing = null, preset = {}) {
         const beforeTo = draft.type === 'transfer' ? toCur() : null;
         readInputs(sheet);
         // Currency changed: repaint so the currency label and rate line follow.
-        if (curOf() !== before || (beforeTo && toCur() !== beforeTo)) { rateText = ''; toTouched = false; paint(sheet, false); updateHint(sheet); }
+        if (curOf() !== before || (beforeTo && toCur() !== beforeTo)) { rateText = ''; toTouched = false; if (entryCur) entryRateText = defaultEntryRate(entryCur); paint(sheet, false); updateHint(sheet); }
       });
     }
     sheet.querySelector('#tx-note').addEventListener('input', (e) => {
@@ -1110,13 +1148,23 @@ function openTxSheet(existing = null, preset = {}) {
     } else {
       const rate = cur === baseCur ? 1 : Number(String(rateText).replace(',', '.'));
       if (!(rate > 0)) return fail(sheet, `Enter the rate: 1 ${cur} = ? ${baseCur}`, '#tx-rate');
+      // Typed in another currency: converted into the account's.
+      let entry = { amount, orig: null, debt: null };
+      if (entryOn()) {
+        const er = entryRate();
+        if (!(er > 0)) return fail(sheet, `Enter the rate: 1 ${entryCur} = ? ${cur}`, '#tx-erate');
+        entry = M.entryAmounts(amount, entryCur, cur, er, { loan: !!(draft.personName.trim() && draft.loan) });
+      }
       const personId = M.ensurePerson(state, draft.personName, now);
       tx = {
         ...common,
+        amount: entry.amount,
         account: draft.account,
         category: draft.category || (draft.type === 'income' ? 'other-in' : 'other'),
         rate,
-        base: Math.round(amount * rate),
+        base: Math.round(entry.amount * rate),
+        ...(entry.orig ? { orig: entry.orig } : {}),
+        ...(entry.debt ? { debt: entry.debt } : {}),
         ...(personId ? { person: personId } : {}),
         ...(personId && draft.loan ? { loan: true } : {}),
       };
@@ -1147,7 +1195,7 @@ function openTxSheet(existing = null, preset = {}) {
     const alert = !existing && M.budgetAlert(state, tx);
     if (alert) { toast(alert.text); return; }
     if (!existing && tx.type === 'income' && !tx.loan) openSplitSheet(tx);
-    else toast(existing ? 'Saved' : `${tx.type === 'expense' ? 'Spent' : tx.type === 'income' ? 'Earned' : 'Moved'} ${formatMoney(tx.amount, tx.currency)}`);
+    else toast(existing ? 'Saved' : `${tx.type === 'expense' ? 'Spent' : tx.type === 'income' ? 'Earned' : 'Moved'} ${tx.orig ? `${formatMoney(tx.orig.amount, tx.orig.currency)} (${formatMoney(tx.amount, tx.currency)})` : formatMoney(tx.amount, tx.currency)}`);
   };
 
   // paint() replaces the sheet's contents (fresh inputs each time); this click
@@ -1200,6 +1248,7 @@ function openTxSheet(existing = null, preset = {}) {
         if (M.account(state, p.account) && !M.account(state, p.account).archived) draft.account = p.account;
         amountText = centsToPlain(p.amount);
         rateText = '';
+        entryCur = null; // quick picks are in the account's currency
         catTouched = true;
         paint(sheet, false);
         const a = sheet.querySelector('#tx-amount');

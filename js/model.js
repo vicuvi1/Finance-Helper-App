@@ -859,6 +859,22 @@ export function peopleSummary(state, { from = null, to = null } = {}) {
   return [...rows.values()].sort((a, b) => (b.last || '').localeCompare(a.last || '') || a.person.name.localeCompare(b.person.name));
 }
 
+// An amount typed in another currency than the account's (10 USD paid from
+// an MDL wallet): the record is in the account's currency, so balances stay
+// right, and keeps what you typed in `orig`. A loan also owes it in that
+// currency (`debt`). `rate` is 1 typed unit in the account's currency.
+export function entryAmounts(typed, typedCur, accountCur, rate, { loan = false } = {}) {
+  if (!typedCur || typedCur === accountCur) return { amount: typed, orig: null, debt: null };
+  const amount = Math.round(typed * rate);
+  const orig = { amount: typed, currency: typedCur, rate };
+  return { amount, orig, debt: loan ? { amount: typed, currency: typedCur } : null };
+}
+
+// What a record was typed as: { amount, currency } in the typed currency, or
+// null when it was typed in the account's own currency.
+export const typedAs = (t) => (t.orig?.currency && t.orig.currency !== t.currency ? t.orig
+  : t.debt?.currency && t.debt.currency !== t.currency ? t.debt : null);
+
 // A loan record's debt: in its own currency unless it carries `debt`
 // (lent 100 USD out of an MDL card: the record is in MDL, the debt in USD).
 export const loanAmount = (t) => (t.debt && Number.isInteger(t.debt.amount) && t.debt.currency ? { amount: t.debt.amount, currency: t.debt.currency } : { amount: t.amount, currency: t.currency });

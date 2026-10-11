@@ -308,3 +308,17 @@ test('set an account balance: quietly via the start, or as a record today', asyn
   assert.equal(accountBalances(state).wallet, 90000);
   assert.equal(setBalance(state, 'wallet', 90000).diff, 0); // already right: nothing
 });
+
+test('an amount typed in USD from an MDL account: MDL record, USD kept (and owed, for a loan)', async () => {
+  const { entryAmounts, typedAs, loanAmount } = await import('../js/model.js');
+  assert.deepEqual(entryAmounts(5000, 'MDL', 'MDL', 1), { amount: 5000, orig: null, debt: null });
+  const e = entryAmounts(1000, 'USD', 'MDL', 17.6);
+  assert.equal(e.amount, 17600);
+  assert.deepEqual(e.orig, { amount: 1000, currency: 'USD', rate: 17.6 });
+  assert.equal(e.debt, null);
+  const l = entryAmounts(1000, 'USD', 'MDL', 17.6, { loan: true });
+  const t = { amount: l.amount, currency: 'MDL', orig: l.orig, debt: l.debt, loan: true };
+  assert.deepEqual(loanAmount(t), { amount: 1000, currency: 'USD' });
+  assert.equal(typedAs(t).currency, 'USD');
+  assert.equal(typedAs({ amount: 5, currency: 'MDL' }), null);
+});
