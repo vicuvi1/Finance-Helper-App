@@ -1676,3 +1676,86 @@ body.locked .calc-fab, body.locked .calc, body.printing .calc-fab, body.printing
 .cur-switch { margin: -2px 0 14px; padding: 12px 14px; border-radius: 12px; border: 1px solid color-mix(in srgb, var(--gold) 45%, var(--line)); background: var(--gold-soft); }
 .cur-switch .fx-line { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; }
 .cur-switch .fx-line input { width: 110px; min-height: 38px; text-align: right; font-feature-settings: "tnum"; }
+
+/* ---------- Bank card designs (js/cards.js BANK_CARDS) ----------
+   Drawn from each card's colors and look; the same classes paint the card
+   and its little swatch in the picker. */
+.bcard.design .bc-art { position: absolute; inset: 0; pointer-events: none; border-radius: inherit; }
+.bcard.design > :not(.bc-art):not(.bc-shine) { position: relative; z-index: 1; }
+.bc-product { font-size: 12px; font-weight: 600; opacity: 0.85; white-space: nowrap; letter-spacing: 0.01em; }
+.bc-net { font-style: italic; font-weight: 800; letter-spacing: 0.02em; text-transform: none; font-size: 13px; color: var(--ink); }
+/* A picture of your own card, with shade so the text stays readable. */
+.bcard.photo { background-size: cover; background-position: center; }
+.bcard.photo::before { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.45), transparent 32%, transparent 50%, rgba(0, 0, 0, 0.62)); }
+.bcard.photo > * { position: relative; z-index: 1; }
+
+/* maib */
+.design-maib-gama-orange { background: linear-gradient(135deg, #ffbf3a 0%, #f7931e 45%, #f05a24 100%); }
+.design-maib-gama-orange .bc-art { background: radial-gradient(60% 80% at 90% 10%, rgba(255, 236, 150, 0.55), transparent 60%), radial-gradient(50% 60% at 10% 110%, rgba(240, 70, 30, 0.45), transparent 70%); }
+.design-maib-gama-teal { background: linear-gradient(135deg, #3fd0bb 0%, #15a69b 50%, #0b7c7b 100%); }
+.design-maib-gama-teal .bc-art { background: radial-gradient(60% 80% at 90% 10%, rgba(190, 255, 240, 0.4), transparent 60%); }
+.design-maib-gama-pink { background: linear-gradient(135deg, #de7bd0 0%, #a94ca9 52%, #772e8f 100%); }
+.design-maib-gama-pink .bc-art { background: radial-gradient(60% 80% at 90% 10%, rgba(255, 210, 245, 0.4), transparent 60%); }
+.design-maib-gama-navy { background: linear-gradient(135deg, #17507f 0%, #0c2c4d 55%, #061a30 100%); }
+.design-maib-gama-navy .bc-art { background: radial-gradient(60% 80% at 90% 10%, rgba(120, 190, 255, 0.28), transparent 60%); }
+.design-maib-gama-premium { background: linear-gradient(135deg, #74777e 0%, #4a4d53 48%, #2b2d32 100%); }
+.design-maib-gama-premium .bc-art { background: repeating-linear-gradient(100deg, rgba(255, 255, 255, 0.035) 0 2px, transparent 2px 6px), radial-gradient(70% 90% at 85% 0%, rgba(255, 255, 255, 0.22), transparent 60%); }
+.design-maib-liber { background: linear-gradient(135deg, #2cc1ae 0%, #14998c 60%, #0d7d74 100%); }
+.design-maib-liber .bc-art { background:
+  linear-gradient(120deg, transparent 52%, rgba(239, 68, 68, 0.85) 52% 56%, transparent 56%),
+  linear-gradient(120deg, transparent 58%, rgba(250, 204, 21, 0.85) 58% 61%, transparent 61%),
+  linear-gradient(120deg, transparent 63%, rgba(59, 130, 246, 0.8) 63% 66%, transparent 66%),
+  linear-gradient(120deg, transparent 68%, rgba(255, 255, 255, 0.85) 68% 70%, transparent 70%); }
+.design-maib-business { background: linear-gradient(135deg, #22363c 0%, #121c20 55%, #0a1013 100%); }
+.design-maib-business .bc-art { background: radial-gradient(circle at 105% -10%, transparent 38%, rgba(45, 212, 191, 0.55) 38.4%, transparent 39.6%), radial-gradient(circle at 105% -10%, transparent 52%, rgba(45, 212, 191, 0.25) 52.4%, transparent 53.4%); }
+.design-maib-digital { background: linear-gradient(135deg, #15a093 0%, #0b5d64 100%); }
+.design-maib-digital .bc-art { background: radial-gradient(rgba(255, 255, 255, 0.18) 1px, transparent 1.6px) 0 0 / 14px 14px; -webkit-mask: linear-gradient(110deg, transparent 35%, #000 80%); mask: linear-gradient(110deg, transparent 35%, #000 80%); }
+.design-maib-classic { background: linear-gradient(135deg, #18b3a6 0%, #0c7473 100%); }
+
+/* Victoriabank */
+.design-vb-star { background: linear-gradient(160deg, #9ae6ff 0%, #2fa9e3 38%, #0b4f8a 100%); }
+.design-vb-star .bc-art { background: radial-gradient(120% 50% at 20% 105%, rgba(255, 255, 255, 0.35), transparent 60%), radial-gradient(90% 40% at 80% 85%, rgba(10, 60, 120, 0.45), transparent 70%); }
+.design-vb-star-platinum { background: linear-gradient(135deg, #34373f 0%, #15171b 55%, #07080a 100%); }
+.design-vb-star-platinum .bc-art { background: repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.04) 0 1px, transparent 1px 9px), radial-gradient(70% 80% at 90% 0%, rgba(255, 255, 255, 0.16), transparent 60%); }
+.design-vb-salut { background: linear-gradient(135deg, #3f80f2 0%, #8c6ce2 50%, #f08cab 100%); }
+.design-vb-salut .bc-art { background: linear-gradient(115deg, transparent 30%, rgba(255, 255, 255, 0.22) 45%, transparent 60%); }
+.design-vb-payroll { background: linear-gradient(135deg, #2e64df 0%, #9a4fd1 55%, #ee5c7d 100%); }
+.design-vb-payroll .bc-art { background: linear-gradient(115deg, transparent 35%, rgba(255, 255, 255, 0.18) 50%, transparent 65%); }
+.design-vb-social { background: linear-gradient(135deg, #3c72ea 0%, #b25cc8 60%, #f37b8f 100%); }
+.design-vb-social .bc-art { background: radial-gradient(70% 90% at 90% 0%, rgba(255, 255, 255, 0.2), transparent 60%); }
+.design-vb-gold { background: linear-gradient(135deg, #f4ead2 0%, #d9c393 50%, #b6995c 100%); }
+.design-vb-gold .bc-art { background: repeating-linear-gradient(95deg, rgba(255, 255, 255, 0.12) 0 2px, transparent 2px 7px); }
+.design-vb-platinum { background: linear-gradient(135deg, #f3f5f8 0%, #ccd1d9 50%, #9aa2ad 100%); }
+.design-vb-platinum .bc-art { background: repeating-linear-gradient(95deg, rgba(255, 255, 255, 0.16) 0 2px, transparent 2px 7px); }
+.design-vb-lunch { background: linear-gradient(160deg, #4a3be0 0%, #2a1f9e 50%, #160f5c 100%); }
+.design-vb-lunch .bc-art { background:
+  radial-gradient(circle at 78% 30%, rgba(56, 189, 248, 0.7) 0 6%, transparent 6.5%),
+  radial-gradient(circle at 88% 58%, rgba(244, 114, 182, 0.65) 0 4%, transparent 4.5%),
+  radial-gradient(circle at 68% 70%, rgba(250, 204, 21, 0.6) 0 3%, transparent 3.5%),
+  radial-gradient(circle at 92% 18%, rgba(255, 255, 255, 0.5) 0 2%, transparent 2.5%); }
+.design-vb-business { background: linear-gradient(135deg, #12357a 0%, #0a1d48 60%, #050f2a 100%); }
+
+/* Other banks */
+.design-micb { background: linear-gradient(135deg, #1aa35a 0%, #0b6b3a 60%, #063f22 100%); }
+.design-otp { background: linear-gradient(135deg, #5cb83a 0%, #2f7d25 60%, #194d16 100%); }
+.design-mobias { background: linear-gradient(135deg, #1868c9 0%, #0b3f86 60%, #062652 100%); }
+.design-revolut { background: linear-gradient(135deg, #2a2a33 0%, #121217 100%); }
+.design-revolut .bc-art { background: linear-gradient(120deg, transparent 40%, rgba(129, 140, 248, 0.35) 55%, rgba(236, 72, 153, 0.3) 70%, transparent 85%); }
+.design-wise { background: linear-gradient(135deg, #b5f08d 0%, #9fe870 55%, #7dd352 100%); }
+.design-paynet { background: linear-gradient(135deg, #ffb21e 0%, #f37a12 60%, #df4f0c 100%); }
+
+/* The design picker in Edit account. */
+.design-picks { display: grid; gap: 10px; }
+.dp-group > small { display: block; margin: 0 0 6px; font-size: 11px; font-weight: 650; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.dp-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.dp { position: relative; width: 78px; aspect-ratio: 1.586; border-radius: 8px; border: 2px solid transparent; padding: 0 6px 4px; cursor: pointer; overflow: hidden;
+  display: flex; align-items: flex-end; color: #fff; font-size: 9.5px; font-weight: 700; text-align: left; line-height: 1.1; box-shadow: 0 4px 12px -6px rgba(0, 0, 0, 0.6);
+  transition: transform 0.15s var(--ease-out), border-color 0.15s; }
+.dp.light-dp { color: #15171c; }
+.dp:hover { transform: translateY(-2px); }
+.dp[aria-pressed="true"] { border-color: var(--gold); box-shadow: 0 0 0 2px var(--bg), 0 6px 16px -6px rgba(0, 0, 0, 0.6); }
+.dp span { text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35); }
+.dp.light-dp span { text-shadow: none; }
+.photo-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.photo-row img { width: 78px; aspect-ratio: 1.586; object-fit: cover; border-radius: 8px; }

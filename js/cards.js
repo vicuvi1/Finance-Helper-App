@@ -20,6 +20,46 @@ export const CARD_THEMES = [
   { id: 'forest', name: 'Forest' },
 ];
 
+// Card designs in the style of the cards Moldovan banks issue (and a few
+// others), so an account looks like the card in your wallet. They are drawn
+// here from each card's colors and look, not copied from the banks' artwork
+// (this code is public). For the exact look: "A picture of my card".
+// `dot` is the list color that goes with the design.
+export const BANK_CARDS = [
+  { id: 'maib-gama-orange', bank: 'maib', product: 'gama', name: 'gama universal, orange', network: 'Mastercard', dot: 2 },
+  { id: 'maib-gama-teal', bank: 'maib', product: 'gama', name: 'gama universal, turquoise', network: 'Mastercard', dot: 3 },
+  { id: 'maib-gama-pink', bank: 'maib', product: 'gama', name: 'gama universal, pink', network: 'Mastercard', dot: 5 },
+  { id: 'maib-gama-navy', bank: 'maib', product: 'gama', name: 'gama universal, navy', network: 'Mastercard', dot: 1 },
+  { id: 'maib-gama-premium', bank: 'maib', product: 'gama premium', name: 'gama premium', network: 'Mastercard', dot: 7 },
+  { id: 'maib-liber', bank: 'maib', product: 'liber', name: 'maib liber', network: 'Visa', dot: 3 },
+  { id: 'maib-business', bank: 'maib', product: 'business', name: 'maib Business', network: 'Visa Business', dot: 1 },
+  { id: 'maib-digital', bank: 'maib', product: 'digital', name: 'maib virtual / digital', network: 'Visa', dot: 3 },
+  { id: 'maib-classic', bank: 'maib', product: '', name: 'maib debit (classic)', network: 'Visa', dot: 3 },
+  { id: 'vb-star', bank: 'Victoriabank', product: 'STAR', name: 'STAR Card', network: 'Visa', dot: 1 },
+  { id: 'vb-star-platinum', bank: 'Victoriabank', product: 'STAR Platinum', name: 'STAR Platinum Card', network: 'Visa', dot: 7 },
+  { id: 'vb-salut', bank: 'Victoriabank', product: 'salut', name: 'Salut', network: 'Visa', dot: 5 },
+  { id: 'vb-payroll', bank: 'Victoriabank', product: 'payroll', name: 'Public sector payroll card', network: 'Visa', dot: 8 },
+  { id: 'vb-social', bank: 'Victoriabank', product: 'social', name: 'Social Card', network: 'Visa', dot: 5 },
+  { id: 'vb-gold', bank: 'Victoriabank', product: 'gold', name: 'Mastercard Gold', network: 'Mastercard', dot: 4, light: true },
+  { id: 'vb-platinum', bank: 'Victoriabank', product: 'platinum', name: 'Mastercard Platinum', network: 'Mastercard', dot: 7, light: true },
+  { id: 'vb-lunch', bank: 'Victoriabank', product: 'VB Lunch', name: 'VB Lunch', network: 'Visa', dot: 7 },
+  { id: 'vb-business', bank: 'Victoriabank', product: 'business', name: 'Business card', network: 'Visa Business', dot: 1 },
+  { id: 'micb', bank: 'MICB', product: '', name: 'MICB card', network: 'Visa', dot: 6 },
+  { id: 'otp', bank: 'OTP Bank', product: '', name: 'OTP Bank card', network: 'Mastercard', dot: 6 },
+  { id: 'mobias', bank: 'Moldindconbank', product: '', name: 'Moldindconbank card', network: 'Visa', dot: 1 },
+  { id: 'revolut', bank: 'Revolut', product: '', name: 'Revolut', network: 'Visa', dot: 7 },
+  { id: 'wise', bank: 'Wise', product: '', name: 'Wise', network: 'Visa', dot: 3, light: true },
+  { id: 'paynet', bank: 'Paynet', product: '', name: 'Paynet', network: 'Visa', dot: 2 },
+];
+export const designOf = (a) => (String(a.cardTheme || '').startsWith('card:') ? BANK_CARDS.find((d) => d.id === a.cardTheme.slice(5)) || null : null);
+// Designs grouped by bank, the account's own bank first.
+export function designGroups(bank) {
+  const groups = new Map();
+  for (const d of BANK_CARDS) groups.set(d.bank, [...(groups.get(d.bank) || []), d]);
+  const b = String(bank || '').toLowerCase();
+  return [...groups.entries()].sort(([x], [y]) => (y.toLowerCase() === b) - (x.toLowerCase() === b));
+}
+
 const BY_KIND = { cash: 'emerald', card: 'ocean', virtual: 'plum', business: 'graphite', savings: 'gold', crypto: 'midnight', other: 'teal' };
 const KIND_LABEL = { cash: 'Cash', card: 'Debit', virtual: 'Virtual', business: 'Business', savings: 'Savings', crypto: 'Crypto', other: 'Account' };
 
@@ -50,20 +90,25 @@ const ICON = {
 export function cardHTML(v, { money, act = 'acc-open', big = false, base = 'MDL' } = {}) {
   const a = v.account;
   const t = themeOf(a);
+  const d = designOf(a);
+  const photo = /^data:image\/(png|jpe?g|webp);base64,[a-z0-9+/=]+$/i.test(a.cardImage || '') ? a.cardImage : null;
   const custom = a.cardTheme === 'custom' ? a.cardColor : null;
-  const light = custom ? isLightHex(custom) : t.light;
+  const light = photo ? false : d ? !!d.light : custom ? isLightHex(custom) : t.light;
   const physical = a.kind === 'card' || a.kind === 'business';
   const holdings = a.kind === 'crypto' && (a.holdings || []).length;
   const shown = holdings ? money(Math.round((v.inBase || 0) / 100) * 100) : formatMoney(v.own, a.currency);
   const sub = (a.currency !== base || holdings) && v.inBase != null && !holdings ? `≈ ${money(Math.round(v.inBase / 100) * 100)}` : holdings ? `${a.holdings.length} coin${a.holdings.length === 1 ? '' : 's'}` : '';
-  const bankName = a.bank && a.bank !== 'Cash' ? a.bank : a.kind === 'cash' ? 'Cash' : a.name;
+  const bankName = d ? d.bank : a.bank && a.bank !== 'Cash' ? a.bank : a.kind === 'cash' ? 'Cash' : a.name;
   const mark = a.logo
     ? `<img class="bc-logo" src="${esc(a.logo)}" alt="">`
     : `<span class="bc-mono" aria-hidden="true">${esc((bankName || '?').trim()[0]?.toUpperCase() || '?')}</span>`;
   const tag = act ? `button type="button" data-act="${act}" data-id="${esc(a.id)}"` : 'div';
-  return `<${tag} class="bcard theme-${custom ? 'custom' : t.id}${light ? ' light' : ''}${big ? ' big' : ''}${a.archived ? ' archived' : ''}" style="${customStyle(custom)}" aria-label="${esc(a.name)}: ${esc(shown)}">
+  const look = photo ? 'photo' : d ? `design design-${d.id}` : `theme-${custom ? 'custom' : t.id}`;
+  const style = photo ? `background-image:url(&quot;${photo}&quot;)` : d ? '' : customStyle(custom);
+  return `<${tag} class="bcard ${look}${light ? ' light' : ''}${big ? ' big' : ''}${a.archived ? ' archived' : ''}" style="${style}" aria-label="${esc(a.name)}: ${esc(shown)}">
+    ${d ? '<span class="bc-art" aria-hidden="true"></span>' : ''}
     <span class="bc-shine" aria-hidden="true"></span>
-    <span class="bc-top"><span class="bc-bank">${mark}<b>${esc(bankName)}</b></span><span class="bc-kind">${esc(a.savings && a.kind !== 'savings' ? 'Savings' : KIND_LABEL[a.kind] || '')}${a.currency !== base ? ` · ${esc(a.currency)}` : ''}</span></span>
+    <span class="bc-top"><span class="bc-bank">${mark}<b>${esc(bankName)}</b>${d?.product ? `<small class="bc-product">${esc(d.product)}</small>` : ''}</span><span class="bc-kind">${d ? `<span class="bc-net">${esc(d.network)}</span>` : esc(a.savings && a.kind !== 'savings' ? 'Savings' : KIND_LABEL[a.kind] || '')}${a.currency !== base ? ` · ${esc(a.currency)}` : ''}</span></span>
     <span class="bc-mid">${physical ? CHIP + WAVES : ICON[a.kind] || ICON[a.savings ? 'savings' : ''] || ''}</span>
     <span class="bc-bal"><b class="${v.own < 0 ? 'neg' : ''}">${shown}</b>${sub ? `<span>${esc(sub)}</span>` : ''}</span>
     <span class="bc-bottom"><span class="bc-name">${esc(a.name)}</span><span class="bc-num">${a.last4 ? `•••• ${esc(a.last4)}` : ''}</span></span>
@@ -86,6 +131,26 @@ export function bindTilt(root) {
   root.addEventListener('pointerout', (e) => {
     const c = e.target.closest?.('.bcard');
     if (c && !c.contains(e.relatedTarget)) { c.style.removeProperty('--rx'); c.style.removeProperty('--ry'); }
+  });
+}
+
+// A picture of your card: resized to a light JPEG (about 60 KB) kept in your data.
+export function readCardPhoto(file, maxW = 640) {
+  return new Promise((resolve, reject) => {
+    if (!/^image\//.test(file.type)) { reject(new Error('Pick an image file (PNG, JPG).')); return; }
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const s = Math.min(1, maxW / img.width);
+      const c = document.createElement('canvas');
+      c.width = Math.max(1, Math.round(img.width * s));
+      c.height = Math.max(1, Math.round(img.height * s));
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      resolve(c.toDataURL('image/jpeg', 0.82));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Could not read that image.')); };
+    img.src = url;
   });
 }
 

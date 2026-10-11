@@ -7,7 +7,7 @@ import { FIAT, CRYPTO, formatQty, coinValue, convert } from '../fx.js';
 import { formatMoney, evalAmount, centsToPlain } from '../money.js';
 import { monthKey, addMonths, daysInMonth, monthLabel, todayISO } from '../dates.js';
 import { lineChart } from '../charts.js';
-import { cardHTML, CARD_THEMES, themeOf, readLogo } from '../cards.js';
+import { cardHTML, CARD_THEMES, themeOf, readLogo, readCardPhoto, BANK_CARDS, designGroups } from '../cards.js';
 
 export const BANKS = ['Cash', 'maib', 'Victoriabank', 'Moldindconbank', 'OTP Bank', 'MICB', 'FinComBank', 'Eximbank', 'Energbank', 'ProCredit Bank', 'Paynet', 'Revolut', 'Wise', 'Paysera', 'PayPal', 'Binance'];
 
@@ -234,7 +234,12 @@ function editAccount(id) {
       ${switching() ? `<div class="cur-switch"><p class="small" style="margin:0 0 8px">${recordCount ? `Its <b>${recordCount}</b> record${recordCount === 1 ? '' : 's'} and balance` : 'Its balance'} will be converted from ${esc(existing.currency)} to ${esc(a.currency)}. What each record was worth in ${esc(base)} stays the same, so reports don't change.</p>
         <label class="fx-line">1 ${esc(a.currency)} = <input id="a-conv-rate" type="text" inputmode="decimal" value="${esc(convText)}" placeholder="?" aria-label="Rate from ${esc(a.currency)} to ${esc(existing.currency)}"> ${esc(existing.currency)}</label></div>` : ''}
       ${existing && used ? `<label class="field check"><input id="a-bal-record" type="checkbox" ${balRecord ? 'checked' : ''}><span>If I change the balance, log the difference as a record today <span class="muted small">(otherwise the starting balance is corrected and reports stay as they are)</span></span></label>` : ''}
-      <div class="field"><span class="lbl">Card color</span><div class="theme-picks">${CARD_THEMES.map((t) => `<button type="button" class="theme-pick theme-${t.id}" data-theme="${t.id}" title="${t.name}" aria-label="${t.name}" aria-pressed="${(a.cardTheme || themeOf(a).id) === t.id}"></button>`).join('')}<label class="theme-pick custom-pick" title="Your own color" aria-pressed="${a.cardTheme === 'custom'}" ${a.cardTheme === 'custom' ? `style="background:${esc(a.cardColor)}"` : ''}>+<input type="color" id="a-color" value="${esc(a.cardColor || '#2a6fd1')}" aria-label="Your own color"></label></div></div>
+      <div class="field"><span class="lbl">Card design</span><div class="design-picks">
+        ${designGroups(a.bank).map(([bank, list]) => `<div class="dp-group"><small>${esc(bank)}</small><div class="dp-row">${list.map((d) => `<button type="button" class="dp design-${d.id}${d.light ? ' light-dp' : ''}" data-design="${d.id}" title="${esc(d.bank)} ${esc(d.name)}" aria-label="${esc(d.bank)} ${esc(d.name)}" aria-pressed="${a.cardTheme === `card:${d.id}` && !a.cardImage}"><span>${esc(d.product || d.bank)}</span></button>`).join('')}</div></div>`).join('')}
+        <div class="dp-group"><small>Colors</small><div class="theme-picks">${CARD_THEMES.map((t) => `<button type="button" class="theme-pick theme-${t.id}" data-theme="${t.id}" title="${t.name}" aria-label="${t.name}" aria-pressed="${(a.cardTheme || themeOf(a).id) === t.id}"></button>`).join('')}<label class="theme-pick custom-pick" title="Your own color" aria-pressed="${a.cardTheme === 'custom'}" ${a.cardTheme === 'custom' ? `style="background:${esc(a.cardColor)}"` : ''}>+<input type="color" id="a-color" value="${esc(a.cardColor || '#2a6fd1')}" aria-label="Your own color"></label></div></div>
+        <div class="dp-group"><small>A picture of my card</small><div class="photo-row">${a.cardImage ? `<img src="${esc(a.cardImage)}" alt="Your card picture">` : ''}<label class="btn">${a.cardImage ? 'Change picture' : 'Add a picture'}<input type="file" id="a-photo" accept="image/*" hidden></label>${a.cardImage ? '<button type="button" class="btn" id="a-photo-del">Remove</button>' : ''}</div>
+          <p class="muted small" style="margin:6px 0 0">For the exact look: e.g. your card's picture saved from your bank's website. Not a photo showing your card number: it is saved in your data and backups.</p></div>
+      </div></div>
       <div class="field"><span class="lbl">Bank logo (optional)</span><div class="logo-row">${a.logo ? `<img src="${esc(a.logo)}" alt="Logo">` : ''}<label class="btn">${a.logo ? 'Change logo' : 'Upload logo'}<input type="file" id="a-logo" accept="image/*" hidden></label>${a.logo ? '<button type="button" class="btn" id="a-logo-del">Remove</button>' : ''}</div>
         <p class="muted small" style="margin:6px 0 0">Any image, e.g. your bank's logo saved from its website. It stays in your own data.</p></div>
       <label class="field check"><input id="a-savings" type="checkbox" ${a.savings || a.kind === 'savings' ? 'checked' : ''}><span>Counts as savings (shown in Savings and the goal)</span></label>
@@ -282,9 +287,10 @@ function editAccount(id) {
       if (e.target.id === 'a-color') {
         a.cardTheme = 'custom';
         a.cardColor = e.target.value;
+        a.cardImage = null;
         const lbl = e.target.closest('.custom-pick');
         lbl.style.background = a.cardColor;
-        for (const b of sheet.querySelectorAll('.theme-pick')) b.setAttribute('aria-pressed', String(b === lbl));
+        for (const b of sheet.querySelectorAll('.theme-pick, .dp')) b.setAttribute('aria-pressed', String(b === lbl));
       }
       if (e.target.id === 'a-currency') {
         // Another currency: convert the balance at today's rate (editable).
@@ -306,6 +312,13 @@ function editAccount(id) {
       }
       read(sheet);
       refreshPreview(sheet);
+    });
+    sheet.querySelector('#a-photo').addEventListener('change', async (e) => {
+      const f = e.target.files?.[0];
+      if (!f) return;
+      read(sheet);
+      try { a.cardImage = await readCardPhoto(f); } catch (err) { ctx.toast(err.message); return; }
+      paint(sheet);
     });
     sheet.querySelector('#a-logo').addEventListener('change', async (e) => {
       const f = e.target.files?.[0];
@@ -347,15 +360,29 @@ function editAccount(id) {
 
   ctx.openSheet('', (sheet) => {
     sheet.addEventListener('click', (e) => {
+      const dp = e.target.closest('.dp[data-design]');
+      if (dp) {
+        read(sheet);
+        const d = BANK_CARDS.find((x) => x.id === dp.dataset.design);
+        a.cardTheme = `card:${d.id}`;
+        a.color = d.dot || a.color;
+        if (!a.bank) a.bank = d.bank;
+        if (a.cardImage) { a.cardImage = null; paint(sheet); return; }
+        for (const b of sheet.querySelectorAll('.dp, .theme-pick')) b.setAttribute('aria-pressed', String(b === dp));
+        refreshPreview(sheet);
+        return;
+      }
       const pick = e.target.closest('.theme-pick[data-theme]');
       if (pick) {
         read(sheet);
         a.cardTheme = pick.dataset.theme;
+        if (a.cardImage) { a.cardImage = null; a.color = THEME_DOT[a.cardTheme] || a.color; paint(sheet); return; }
         a.color = THEME_DOT[a.cardTheme] || a.color;
-        for (const b of sheet.querySelectorAll('.theme-pick')) b.setAttribute('aria-pressed', String(b === pick));
+        for (const b of sheet.querySelectorAll('.theme-pick, .dp')) b.setAttribute('aria-pressed', String(b === pick));
         refreshPreview(sheet);
         return;
       }
+      if (e.target.closest('#a-photo-del')) { read(sheet); a.cardImage = null; paint(sheet); return; }
       if (e.target.closest('#a-logo-del')) { read(sheet); a.logo = null; paint(sheet); return; }
       if (e.target.closest('#coin-add')) { read(sheet); a.holdings.push({ asset: 'BTC', qty: '' }); paint(sheet); return; }
       const del = e.target.closest('[data-coin-del]');
