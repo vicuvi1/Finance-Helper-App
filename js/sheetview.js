@@ -42,7 +42,7 @@ function dataCells(t, side, key, base) {
   const cur = t && t.currency && t.currency !== base ? ` <span class="gs-cur">${esc(t.currency)}</span>` : '';
   const id = esc(t?.id || '');
   const title = t ? ` title="${esc(t.categoryName || '')}"` : '';
-  return `<td class="gs-num ${side}"${title}><span class="gs-flex"><input type="text" inputmode="decimal" autocomplete="off" data-sh="${key}|amount" data-id="${id}" value="${t ? plain(t.amount) : ''}" aria-label="${side === 'in' ? 'Amount earned' : 'Amount invested'}">${cur}</span></td>
+  return `<td class="gs-num ${side}"${title}><span class="gs-flex"><input type="text" inputmode="decimal" autocomplete="off" data-sh="${key}|amount" data-id="${id}" value="${t ? plain(t.amount) : ''}" placeholder="0" aria-label="${side === 'in' ? 'Amount earned' : 'Amount invested'}">${cur}</span></td>
     <td class="gs-text"><input type="text" autocomplete="off" data-sh="${key}|note" data-id="${id}" value="${esc(t?.note || '')}" aria-label="${side === 'in' ? 'Description' : 'Description2'}"></td>`;
 }
 

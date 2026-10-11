@@ -1387,6 +1387,9 @@ table.grid tr.selected td { background: var(--gold-soft); }
 .gs-num input, .gs-num { text-align: right; font-feature-settings: "tnum"; }
 .gs-num.in input { color: var(--income); font-weight: 600; }
 .gs-num.out input { color: var(--text); font-weight: 600; }
+/* Empty amount cells show a soft 0, like the old sheet (only a placeholder, not a record). */
+.gs-num input::placeholder { color: var(--faint); font-weight: 500; opacity: 0.55; }
+.gs-num input:focus::placeholder { opacity: 0.3; }
 .gs-flex { display: flex; align-items: center; height: 100%; }
 .gs-cur { font-size: 10px; font-weight: 700; color: var(--muted); padding-right: 6px; }
 .gs-grid .gs-date { padding: 0 6px 0 8px !important; position: sticky; left: 44px; z-index: 1; }
