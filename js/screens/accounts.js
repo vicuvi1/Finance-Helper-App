@@ -3,7 +3,7 @@
 
 import { ctx, esc } from '../ctx.js';
 import * as M from '../model.js';
-import { FIAT, CRYPTO, formatQty, coinValue } from '../fx.js';
+import { FIAT, CRYPTO, formatQty, coinValue, convert } from '../fx.js';
 import { formatMoney, evalAmount, centsToPlain } from '../money.js';
 import { monthKey, addMonths, daysInMonth, monthLabel, todayISO } from '../dates.js';
 import { lineChart } from '../charts.js';
@@ -196,11 +196,25 @@ function editAccount(id) {
 
   const balance = existing ? M.accountBalances(state)[id] || 0 : 0;
   // What the records add up to, without the starting balance.
-  const moved = balance - (existing?.start || 0);
   let target = balance;
   let balRecord = false;
   const nowBal = () => target;
-  const preview = () => card({ account: a, own: target, inBase: null }, { act: null, big: true });
+  // Switching an existing account to another currency: everything in it is
+  // converted at this rate (1 new = rate old), shown and editable.
+  const base = state.settings.currency;
+  const rateOf = (c) => (c === base ? 1 : ctx.suggestedRate(c));
+  const switching = () => existing && a.currency !== existing.currency;
+  const defaultRate = () => {
+    const n = rateOf(a.currency);
+    const o = rateOf(existing.currency);
+    return n && o ? String(Math.round((n / o) * 10000) / 10000).replace('.', ',') : '';
+  };
+  let convText = '';
+  let targetOld = balance; // the balance in the account's current currency
+  const convRate = () => Number(String(convText).replace(',', '.'));
+  const recordCount = existing ? state.tx.filter((t) => t.account === id || t.from === id || t.to === id).length : 0;
+  // The card shows the account in its own currency, with the MDL value under it.
+  const preview = () => card({ account: a, own: target, inBase: a.currency === base ? target : convert(target, a.currency, base, state.rates) }, { act: null, big: true });
   const html = () => `<h3>${existing ? 'Edit account' : 'New account'} <button type="button" class="icon-btn" data-close aria-label="Close">✕</button></h3>
     <div id="acc-preview">${preview()}</div>
     <form id="acc-form" novalidate>
@@ -211,12 +225,14 @@ function editAccount(id) {
       <datalist id="bank-list">${BANKS.map((b) => `<option value="${esc(b)}">`).join('')}</datalist>
       <div class="row2">
         <label class="field"><span>Type</span><select id="a-kind">${M.ACCOUNT_KINDS.map((k) => `<option value="${k.id}" ${a.kind === k.id ? 'selected' : ''}>${k.name}</option>`).join('')}</select></label>
-        <label class="field"><span>Currency</span><select id="a-currency" ${used && existing.currency ? 'disabled title="Has records in this currency"' : ''}>${FIAT.map((c) => `<option value="${c.code}" ${a.currency === c.code ? 'selected' : ''}>${c.code} · ${esc(c.name)}</option>`).join('')}</select></label>
+        <label class="field"><span>Currency</span><select id="a-currency">${FIAT.map((c) => `<option value="${c.code}" ${a.currency === c.code ? 'selected' : ''}>${c.code} · ${esc(c.name)}</option>`).join('')}</select></label>
       </div>
       <div class="row2">
         <label class="field"><span>Card's last 4 digits (optional)</span><input id="a-last4" type="text" inputmode="numeric" maxlength="4" value="${esc(a.last4)}" placeholder="1234"></label>
         <label class="field"><span>Balance now</span><input id="a-now" type="text" inputmode="decimal" value="${centsToPlain(nowBal())}"></label>
       </div>
+      ${switching() ? `<div class="cur-switch"><p class="small" style="margin:0 0 8px">${recordCount ? `Its <b>${recordCount}</b> record${recordCount === 1 ? '' : 's'} and balance` : 'Its balance'} will be converted from ${esc(existing.currency)} to ${esc(a.currency)}. What each record was worth in ${esc(base)} stays the same, so reports don't change.</p>
+        <label class="fx-line">1 ${esc(a.currency)} = <input id="a-conv-rate" type="text" inputmode="decimal" value="${esc(convText)}" placeholder="?" aria-label="Rate from ${esc(a.currency)} to ${esc(existing.currency)}"> ${esc(existing.currency)}</label></div>` : ''}
       ${existing && used ? `<label class="field check"><input id="a-bal-record" type="checkbox" ${balRecord ? 'checked' : ''}><span>If I change the balance, log the difference as a record today <span class="muted small">(otherwise the starting balance is corrected and reports stay as they are)</span></span></label>` : ''}
       <div class="field"><span class="lbl">Card color</span><div class="theme-picks">${CARD_THEMES.map((t) => `<button type="button" class="theme-pick theme-${t.id}" data-theme="${t.id}" title="${t.name}" aria-label="${t.name}" aria-pressed="${(a.cardTheme || themeOf(a).id) === t.id}"></button>`).join('')}<label class="theme-pick custom-pick" title="Your own color" aria-pressed="${a.cardTheme === 'custom'}" ${a.cardTheme === 'custom' ? `style="background:${esc(a.cardColor)}"` : ''}>+<input type="color" id="a-color" value="${esc(a.cardColor || '#2a6fd1')}" aria-label="Your own color"></label></div></div>
       <div class="field"><span class="lbl">Bank logo (optional)</span><div class="logo-row">${a.logo ? `<img src="${esc(a.logo)}" alt="Logo">` : ''}<label class="btn">${a.logo ? 'Change logo' : 'Upload logo'}<input type="file" id="a-logo" accept="image/*" hidden></label>${a.logo ? '<button type="button" class="btn" id="a-logo-del">Remove</button>' : ''}</div>
@@ -242,10 +258,14 @@ function editAccount(id) {
     a.name = v('#a-name').value.trim();
     a.bank = v('#a-bank').value.trim();
     a.kind = v('#a-kind').value;
-    if (!v('#a-currency').disabled) a.currency = v('#a-currency').value;
+    a.currency = v('#a-currency').value;
+    if (v('#a-conv-rate')) convText = v('#a-conv-rate').value;
     a.last4 = v('#a-last4').value.replace(/\D/g, '').slice(0, 4);
     const t = evalAmount(v('#a-now').value);
-    if (t != null) target = t;
+    if (t != null && t !== target) {
+      target = t;
+      targetOld = switching() && convRate() > 0 ? Math.round(t * convRate()) : t;
+    }
     if (v('#a-bal-record')) balRecord = v('#a-bal-record').checked;
     a.savings = v('#a-savings').checked;
     if (v('#a-archived')) a.archived = v('#a-archived').checked;
@@ -265,6 +285,24 @@ function editAccount(id) {
         const lbl = e.target.closest('.custom-pick');
         lbl.style.background = a.cardColor;
         for (const b of sheet.querySelectorAll('.theme-pick')) b.setAttribute('aria-pressed', String(b === lbl));
+      }
+      if (e.target.id === 'a-currency') {
+        // Another currency: convert the balance at today's rate (editable).
+        read(sheet);
+        convText = switching() ? defaultRate() : '';
+        if (existing) target = switching() && convRate() > 0 ? Math.round(targetOld / convRate()) : targetOld;
+        paint(sheet);
+        sheet.querySelector(convText || !switching() ? '#a-currency' : '#a-conv-rate')?.focus();
+        return;
+      }
+      if (e.target.id === 'a-conv-rate') {
+        convText = e.target.value;
+        if (convRate() > 0) {
+          target = Math.round(targetOld / convRate());
+          sheet.querySelector('#a-now').value = centsToPlain(target);
+        }
+        refreshPreview(sheet);
+        return;
       }
       read(sheet);
       refreshPreview(sheet);
@@ -286,13 +324,21 @@ function editAccount(id) {
       read(sheet);
       if (!a.name) { sheet.querySelector('#acc-error').textContent = 'Give the account a name.'; sheet.querySelector('#a-name').focus(); return; }
       a.holdings = a.holdings.filter((h) => h.asset && Number(h.qty) > 0).map((h) => ({ asset: h.asset, qty: Number(h.qty) }));
+      // Another currency: convert its records, start and recurring items first.
+      if (switching()) {
+        if (!(convRate() > 0)) { sheet.querySelector('#acc-error').textContent = `Enter the rate: 1 ${a.currency} = ? ${existing.currency}`; sheet.querySelector('#a-conv-rate')?.focus(); return; }
+        M.changeAccountCurrency(ctx.state, id, a.currency, convRate());
+        a.start = existing.start;
+      }
       // Balance now: the starting balance that gives it, or (if asked) the
       // old start plus a record today for the difference.
+      const balNow = existing ? M.accountBalances(ctx.state)[id] || 0 : 0;
+      const moved = balNow - (existing ? a.start || 0 : 0);
       if (!existing || !balRecord) a.start = target - moved;
       M.touch(a);
       if (existing) Object.assign(existing, a);
       else ctx.state.settings.accounts.push(a);
-      if (existing && balRecord && target !== balance) M.setBalance(ctx.state, id, target, { mode: 'record', date: todayISO(), rate: a.currency === ctx.state.settings.currency ? 1 : ctx.suggestedRate(a.currency) || 1 });
+      if (existing && balRecord && target !== balNow) M.setBalance(ctx.state, id, target, { mode: 'record', date: todayISO(), rate: a.currency === ctx.state.settings.currency ? 1 : ctx.suggestedRate(a.currency) || 1 });
       ctx.commit();
       ctx.closeSheet();
       ctx.toast(existing ? 'Account saved' : `${a.name} added`);

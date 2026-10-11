@@ -166,6 +166,63 @@ export const savingsJar = (state) => state.settings.jars.find((j) => j.savings) 
 // Set an account to the amount it really has. "start" corrects the opening
 // balance quietly (history and reports stay as they are); "record" logs the
 // difference today as income or spending (e.g. cash that went untracked).
+// Switch an account to another currency (an MDL "Binance" that is really
+// USD). Its records, starting balance and recurring items are converted at
+// `rate` (1 new = rate old). Each record keeps its value in the main currency
+// (`base`), so reports don't move, and remembers what it was before (`orig`).
+export function changeAccountCurrency(state, accountId, newCur, rate, now = Date.now()) {
+  const acc = state.settings.accounts.find((a) => a.id === accountId);
+  if (!acc || !newCur || acc.currency === newCur || !(rate > 0)) return 0;
+  const oldCur = acc.currency || state.settings.currency;
+  const baseCur = state.settings.currency;
+  const conv = (c) => Math.round(c / rate);
+  let n = 0;
+  for (const t of state.tx) {
+    if (t.type === 'transfer') {
+      if (t.from === accountId) {
+        const old = t.amount;
+        if (!Number.isInteger(t.base)) t.base = oldCur === baseCur ? old : Math.round(old * (t.rate || 1));
+        t.amount = conv(old);
+        if (!Number.isInteger(t.toAmount)) t.toAmount = old; // it arrived as it left
+        t.currency = newCur;
+        if (Number.isInteger(t.base) && t.amount) t.rate = t.base / t.amount;
+        t.updatedAt = now; n++;
+      }
+      if (t.to === accountId) {
+        const incoming = Number.isInteger(t.toAmount) ? t.toAmount : t.amount;
+        t.toAmount = conv(incoming);
+        t.updatedAt = now; n++;
+      }
+      continue;
+    }
+    if (t.account !== accountId) continue;
+    const old = t.amount;
+    // Its value in the main currency stays what it was.
+    if (!Number.isInteger(t.base)) t.base = oldCur === baseCur ? old : Math.round(old * (t.rate || 1));
+    if (t.orig?.currency === newCur) {
+      // Typed in the new currency to begin with: back to exactly that.
+      t.amount = t.orig.amount;
+      delete t.orig;
+    } else {
+      t.amount = conv(old);
+      if (!t.orig) t.orig = { amount: old, currency: oldCur, rate };
+    }
+    t.currency = newCur;
+    if (newCur === baseCur) { t.rate = 1; t.base = t.amount; } else if (t.amount) t.rate = t.base / t.amount;
+    t.updatedAt = now; n++;
+  }
+  for (const r of state.recurring || []) {
+    if (r.account !== accountId) continue;
+    r.amount = conv(r.amount);
+    r.currency = newCur;
+    r.updatedAt = now;
+  }
+  acc.start = conv(acc.start || 0);
+  acc.currency = newCur;
+  acc.updatedAt = now;
+  return n;
+}
+
 export function setBalance(state, accountId, target, { mode = 'start', date, id = uid(), rate = 1, now = Date.now() } = {}) {
   const acc = state.settings.accounts.find((a) => a.id === accountId);
   const current = accountBalances(state)[accountId] || 0;

@@ -322,3 +322,31 @@ test('an amount typed in USD from an MDL account: MDL record, USD kept (and owed
   assert.equal(typedAs(t).currency, 'USD');
   assert.equal(typedAs({ amount: 5, currency: 'MDL' }), null);
 });
+
+test('switch an account to USD: balance converted, reports unchanged, history remembered', async () => {
+  const { changeAccountCurrency, accountBalances } = await import('../js/model.js');
+  const state = defaultState();
+  const w = state.settings.accounts.find((a) => a.id === 'wallet');
+  w.start = 176000; // 1 760 MDL
+  state.tx.push(tx('income', 3520, '2026-10-01'), tx('expense', 352, '2026-10-02'));
+  state.tx.push({ id: 'mv', type: 'transfer', amount: 17600, currency: 'MDL', from: 'wallet', to: 'safe', date: '2026-10-03', rate: 1, base: 17600, createdAt: 1, updatedAt: 1 });
+  state.recurring.push({ id: 'r1', type: 'expense', amount: 1760, currency: 'MDL', account: 'wallet', every: 'month', start: '2026-10-01', updatedAt: 0 });
+  const before = monthSummary(state, '2026-10');
+  const safeBefore = accountBalances(state).safe;
+  assert.equal(changeAccountCurrency(state, 'wallet', 'USD', 17.6, 9), 3);
+  assert.equal(w.currency, 'USD');
+  assert.equal(w.start, 10000); // 100 USD
+  assert.equal(accountBalances(state).wallet, 10000 + 20000 - 2000 - 1000); // 270 USD
+  assert.equal(accountBalances(state).safe, safeBefore); // the safe got its 176 MDL as before
+  const after = monthSummary(state, '2026-10');
+  assert.equal(after.income, before.income);
+  assert.equal(after.expense, before.expense);
+  const inc = state.tx.find((t) => t.type === 'income');
+  assert.deepEqual([inc.currency, inc.amount, inc.orig.currency, inc.orig.amount], ['USD', 20000, 'MDL', 352000]);
+  assert.equal(state.recurring[0].amount, 100);
+  assert.equal(state.recurring[0].currency, 'USD');
+  // And back: records typed in MDL return to exactly what they were.
+  changeAccountCurrency(state, 'wallet', 'MDL', 1 / 17.6, 10);
+  assert.equal(state.tx.find((t) => t.type === 'income').amount, 352000);
+  assert.equal(state.tx.find((t) => t.type === 'income').orig, undefined);
+});
