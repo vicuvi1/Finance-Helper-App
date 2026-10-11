@@ -93,9 +93,12 @@ test('sheet view: type an amount in a day row, edit it, clear it', async () => {
   await page.waitForFunction(() => JSON.parse(localStorage.getItem('finance-helper.state')).tx.some((t) => t.note === 'sheet bread'));
   assert.equal((await find()).amount, 1500);
   assert.equal((await find()).date, day);
+  // The sheet redraws right after a save: edit the redrawn cell, not the old one.
+  await page.waitForSelector(`${key('amount')}[value="15"]:not([data-id=""])`);
   await page.fill(key('amount'), '20');
   await page.keyboard.press('Enter');
   await page.waitForFunction(() => JSON.parse(localStorage.getItem('finance-helper.state')).tx.find((t) => t.note === 'sheet bread')?.amount === 2000);
+  await page.waitForSelector(`${key('amount')}[value="20"]`);
   await page.fill(key('amount'), '');
   await page.keyboard.press('Tab');
   await page.waitForFunction(() => !JSON.parse(localStorage.getItem('finance-helper.state')).tx.some((t) => t.note === 'sheet bread'));
