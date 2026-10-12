@@ -1957,3 +1957,27 @@ input:checked + .style-preview .style-check { opacity: 1; transform: scale(1); }
 @media (prefers-reduced-motion: reduce) { .theme-atmosphere { display: none; } .style-choice:hover { transform: none; } }
 body.locked .theme-atmosphere, body.printing .theme-atmosphere { display: none; }
 @media print { .theme-atmosphere { display: none; } }
+
+/* Safe to spend today (Home) */
+.ss { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px 32px; align-items: center; margin-bottom: 14px; padding: 20px 24px;
+  border-radius: var(--radius); border: 1px solid color-mix(in srgb, var(--gold) 35%, var(--line));
+  background: radial-gradient(120% 140% at 0% 0%, var(--gold-soft), transparent 60%), var(--surface); }
+.ss .k { display: block; color: var(--gold); font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; font-weight: 600; }
+.ss-fig { display: block; font-family: var(--display); font-weight: 500; font-size: 44px; line-height: 1.1; margin: 4px 0 2px; color: var(--text); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ss-sub { display: block; color: var(--muted); font-size: 13px; }
+.ss-sub b { color: var(--text); }
+.ss-bar { height: 4px; border-radius: 99px; background: var(--surface-3); margin-top: 12px; overflow: hidden; }
+.ss-bar i { display: block; height: 100%; border-radius: inherit; background: var(--gold); transition: width 0.6s var(--ease-out); }
+.ss-why { display: grid; gap: 6px; font-size: 13px; color: var(--muted); justify-self: end; text-align: right; }
+.ss-why b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; margin-left: 4px; }
+.ss.low .ss-bar i { background: var(--warn); }
+.ss.over { border-color: color-mix(in srgb, var(--warn) 45%, var(--line)); background: radial-gradient(120% 140% at 0% 0%, var(--warn-soft), transparent 60%), var(--surface); }
+.ss.over .k, .ss.over .ss-fig { color: var(--warn); }
+.ss.over .ss-bar i { background: var(--warn); }
+.ss.bad { border-color: color-mix(in srgb, var(--expense) 45%, var(--line)); background: radial-gradient(120% 140% at 0% 0%, var(--expense-soft), transparent 60%), var(--surface); }
+.ss.bad .k, .ss.bad .ss-fig { color: var(--expense); }
+@media (max-width: 719px) {
+  .ss { grid-template-columns: minmax(0, 1fr); padding: 16px 18px; }
+  .ss-fig { font-size: 36px; }
+  .ss-why { justify-self: stretch; text-align: left; }
+}

@@ -41,6 +41,7 @@ import { planSplit, splitTransfers, splitPrefs, isSplit } from './split.js';
 import { openBankImport, rowsFromFile, decodeText } from './screens/bankimport.js';
 import { guessMapping } from './bank.js';
 import { forecast } from './forecast.js';
+import { safeToSpend } from './safespend.js';
 import { bindTilt } from './cards.js';
 import { FREQS, markDone, dueItems } from './recurring.js';
 import { invoiceStatus } from './invoices.js';
@@ -419,6 +420,29 @@ function accountTiles(values) {
   }).join('')}${values.length > shown.length ? `<button type="button" class="acc-tile more" data-go="accounts">+${values.length - shown.length} more accounts →</button>` : ''}</section>`;
 }
 
+// Safe to spend today: what you can spend without touching bills or savings.
+function safeCard(today) {
+  if (!state.tx.length) return '';
+  const r = safeToSpend(state, today);
+  const until = `${dayLabel(r.payday)}${r.paydayFrom ? ` · ${esc(r.paydayFrom)}` : ' · end of month'}`;
+  const why = `<div class="ss-why">
+      <span>Cards &amp; cash <b>${money(r.liquid + r.spentToday)}</b></span>
+      ${r.billsTotal ? `<span>− bills before then <b>${money(r.billsTotal)}</b></span>` : ''}
+      ${r.savingsLeft ? `<span>− still to save this month <b>${money(r.savingsLeft)}</b></span>` : ''}
+      <span>= <b>${money(Math.max(0, r.pool))}</b> for ${r.days} day${r.days === 1 ? '' : 's'}</span></div>`;
+  if (r.pool <= 0) {
+    return `<section class="ss bad" aria-label="Safe to spend today"><div class="ss-main"><span class="k">Safe to spend today</span><b class="ss-fig">0 ${esc(state.settings.currency)}</b>
+      <span class="ss-sub">Bills and savings need ${money(r.short)} more than you have until ${until}.</span></div>${why}</section>`;
+  }
+  const over = r.leftToday < 0;
+  const used = r.perDay ? Math.min(1, r.spentToday / r.perDay) : 1;
+  return `<section class="ss ${over ? 'over' : r.leftToday < r.perDay / 4 ? 'low' : ''}" aria-label="Safe to spend today">
+    <div class="ss-main"><span class="k">Safe to spend today</span><b class="ss-fig">${countUp(Math.max(0, r.leftToday), 'safe')}</b>
+      <span class="ss-sub">${over ? `${money(-r.leftToday)} over today's ${money(r.perDay)}. From tomorrow: <b>${money(r.tomorrow)}</b> a day` : `${r.spentToday ? `${money(r.spentToday)} spent of ` : ''}${money(r.perDay)} a day`} until ${until}</span>
+      <div class="ss-bar" aria-hidden="true"><i style="width:${(used * 100).toFixed(1)}%"></i></div></div>
+    ${why}</section>`;
+}
+
 // The page title on Home says how the month is going.
 function homeHeadline(s, hello) {
   if (s.income > 0 && s.net >= 0) return `You kept ${pct(s.savingsRate)} this month`;
@@ -484,6 +508,7 @@ function viewHome() {
       ${missing.length ? `<p class="muted small" style="margin:10px 0 0">Not counted yet (no exchange rate): ${missing.map((v) => esc(v.account.name)).join(', ')}.</p>` : ''}
     </div>
   </section>
+  ${safeCard(today)}
   ${homeStrip(s, key)}
   ${accountTiles(values)}
   ${quickRow()}

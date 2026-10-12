@@ -162,8 +162,8 @@ async function handle(updates) {
     // Sent while the app was closed: one summary at the end instead.
     if (late) caughtUp.push(t);
     // Just a number ("70"): offer your categories to file it in one tap.
-    else if (!t.note) send(`${T.loggedText(state, t)}\n\nWhat was it? 👇`, { reply_markup: { inline_keyboard: categoryButtons(t) } });
-    else send(T.loggedText(state, t), { reply_markup: { inline_keyboard: [[{ text: '↩️ Undo', callback_data: `undo:${t.id}` }]] } });
+    else if (!t.note) send(`${T.loggedText(state, t, todayISO())}\n\nWhat was it? 👇`, { reply_markup: { inline_keyboard: categoryButtons(t) } });
+    else send(T.loggedText(state, t, todayISO()), { reply_markup: { inline_keyboard: [[{ text: '↩️ Undo', callback_data: `undo:${t.id}` }]] } });
   };
   for (const u of updates) {
     current = u;
