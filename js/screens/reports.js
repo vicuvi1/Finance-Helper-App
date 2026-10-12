@@ -62,7 +62,7 @@ function table(head, rows) {
 export function view() {
   const { state } = ctx;
   const r0 = range();
-  const r = M.report(state, r0.from, r0.to);
+  const r = M.report(state, r0.from, r0.to, { today: todayISO() });
   const p = r.prev;
   const money = ctx.money;
   const cat = (id) => M.category(state, id)?.name || 'Unknown';
@@ -90,8 +90,8 @@ export function view() {
     ${kpi('Spent', ctx.countUp(r.expense, 'r-out'), delta(r.expense, p.expense, { goodWhenUp: false }), 'expense')}
     ${kpi('Kept', ctx.countUp(r.net, 'r-net'), delta(r.net, p.net))}
     ${kpi('Saved', r.savingsRate == null ? '–' : `${Math.round(r.savingsRate * 100)}%`, `<span class="delta muted">target ${M.savingsJar(state)?.pct ?? 0}%</span>`)}
-    ${kpi('Spent per day', money(Math.round(r.perDay / 100) * 100), delta(r.perDay, p.perDay, { goodWhenUp: false }))}
-    ${kpi('No-spend days', String(r.noSpendDays), `<span class="delta muted">of ${r.days}</span>`)}
+    ${kpi(r.counted < r.days ? 'Spent per day so far' : 'Spent per day', money(Math.round(r.perDay / 100) * 100), delta(r.perDay, p.perDay, { goodWhenUp: false }))}
+    ${kpi('No-spend days', String(r.noSpendDays), `<span class="delta muted">of ${r.counted}${r.counted < r.days ? ' so far' : ''}</span>`)}
     ${r.loansOut || r.loansIn ? kpi('Loans', `${money(r.loansOut)} out`, `<span class="delta muted">${money(r.loansIn)} back in</span>`) : ''}
   </section>
   <section class="card"><h2>${series.unit === 'day' ? 'Spending per day' : 'Earned and spent per month'}</h2>${chart}
@@ -119,7 +119,7 @@ export function view() {
 function exportReport() {
   const { state } = ctx;
   const r0 = range();
-  const r = M.report(state, r0.from, r0.to);
+  const r = M.report(state, r0.from, r0.to, { today: todayISO() });
   const b = state.settings.currency;
   const v = (c) => ({ v: c / 100, t: 'money' });
   const cat = (id) => M.category(state, id)?.name || 'Unknown';

@@ -220,7 +220,7 @@ function renderSidebar() {
     <span class="sc-label">All my money</span>
     <span class="sc-total">${formatMoney(Math.round(total / 100) * 100, '')}<small>${esc(state.settings.currency)}</small></span>
     ${sparkline(series)}
-    <span class="sc-row"><span>This month</span><b class="${s.net >= 0 ? 'income' : 'expense'}">${money(Math.round(s.net / 100) * 100, { sign: true, compact: true })}</b></span>
+    <span class="sc-row"><span>This month</span><b class="${s.net >= 0 ? 'income' : 'expense'}">${money(Math.round(s.net / 100) * 100, { sign: true })}</b></span>
   </button>`;
   // The balance moved (a record, an undo, a sync): show by how much.
   if (before != null && before !== shown) {

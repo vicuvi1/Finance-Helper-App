@@ -203,6 +203,11 @@ test('report for any period, with the period before for comparison', async () =>
   assert.equal(r.loansOut, 20000);
   assert.equal(r.perDay, Math.round(50000 / 31));
   assert.equal(r.noSpendDays, 30);
+  // While the month runs, per day and no-spend days count only the days so far.
+  const now = report(s, '2026-10-01', '2026-10-31', { today: '2026-10-10' });
+  assert.equal(now.counted, 10);
+  assert.equal(now.perDay, 5000);
+  assert.equal(now.noSpendDays, 9);
   assert.deepEqual(r.byCurrency.find((c) => c.id === 'USD'), { id: 'USD', income: 100000, expense: 0 });
   assert.equal(r.byPerson[0].expense, 20000);
   assert.equal(r.prev.expense, 40000);

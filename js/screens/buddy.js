@@ -111,6 +111,9 @@ export function initBuddy() {
     if (el.classList.contains('talking')) { el.classList.remove('talking'); return; }
     say(greeting(ctx.state, todayISO(), new Date().getHours()), { force: true });
   });
+  // Working somewhere else on the page: the bubble steps aside right away.
+  const hush = (e) => { if (el.classList.contains('talking') && !el.contains(e.target)) { el.classList.remove('talking'); el.dataset.mood = 'idle'; } };
+  for (const ev of ['pointerdown', 'keydown', 'wheel']) document.addEventListener(ev, hush, { passive: true, capture: true });
   scheduleFlight();
   setTimeout(() => {
     if (greeted) return;

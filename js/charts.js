@@ -54,7 +54,7 @@ export function dailyChart(days, fmt) {
     .map((d) => `<text x="${(left + slot * (d.day - 1) + slot / 2).toFixed(1)}" y="${H - 5}" text-anchor="middle">${d.day}</text>`).join('');
   const avgY = y(avg).toFixed(1);
   const avgLine = avg ? `<line x1="${left}" x2="${W}" y1="${avgY}" y2="${avgY}" style="stroke:var(--muted);stroke-dasharray:3 4;opacity:.7"/>
-    <text x="${W}" y="${(Number(avgY) - 5).toFixed(1)}" text-anchor="end">avg ${fmt(Math.round(avg))}</text>` : '';
+    <text x="${W}" y="${(Number(avgY) - 5).toFixed(1)}" text-anchor="end">avg ${fmt(Math.round(avg / 100) * 100)}</text>` : '';
   const base = `<line x1="0" x2="${W}" y1="${top + plotH + 0.5}" y2="${top + plotH + 0.5}" style="stroke:var(--line)"/>`;
   return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Spending per day this month">${base}${bars}${avgLine}${labels}</svg>`;
 }

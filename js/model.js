@@ -746,8 +746,9 @@ export function insights(state, key, today) {
     const day = Number(today.slice(8, 10));
     const dim = daysInMonth(key);
     if (day < dim) {
-      const projected = Math.round((s.expense / day) * dim);
-      out.push({ level: 'info', icon: '📅', title: `On pace to spend ${fmt(projected)}`, text: `${fmt(Math.round(s.expense / day))} per day so far. ${dim - day} days left in ${monthLabel(key)}.` });
+      const lei = (c) => Math.round(c / 100) * 100; // whole lei for estimates
+      const projected = lei((s.expense / day) * dim);
+      out.push({ level: 'info', icon: '📅', title: `On pace to spend ${fmt(projected)}`, text: `${fmt(lei(s.expense / day))} per day so far. ${dim - day} days left in ${monthLabel(key)}.` });
     }
   }
 
@@ -1081,12 +1082,15 @@ function group(list, key) {
 
 // Everything a report shows for [from, to], in the base currency unless
 // noted. `prev` holds the same numbers for the period just before.
-export function report(state, from, to, { withPrev = true } = {}) {
+export function report(state, from, to, { withPrev = true, today = null } = {}) {
   const inRange = state.tx.filter((t) => t.date >= from && t.date <= to);
   const real = inRange.filter((t) => t.type !== 'transfer' && !t.loan);
   const income = real.filter((t) => t.type === 'income').reduce((a, t) => a + B(t), 0);
   const expense = real.filter((t) => t.type === 'expense').reduce((a, t) => a + B(t), 0);
   const days = isoDays(from, to);
+  // A period still running counts only the days that have passed so far.
+  const end = today && today >= from && today < to ? today : to;
+  const counted = isoDays(from, end);
   const spending = totalsByCategory(state, from, to, 'expense');
   const sources = totalsByCategory(state, from, to, 'income');
   const byAccount = group(real, (t) => t.account).sort((a, b) => b.expense + b.income - a.expense - a.income);
@@ -1100,13 +1104,13 @@ export function report(state, from, to, { withPrev = true } = {}) {
   }
   const loans = inRange.filter((t) => t.loan);
   const biggest = real.filter((t) => t.type === 'expense').sort((a, b) => B(b) - B(a)).slice(0, 10);
-  const spendDays = new Set(real.filter((t) => t.type === 'expense').map((t) => t.date)).size;
+  const spendDays = new Set(real.filter((t) => t.type === 'expense' && t.date <= end).map((t) => t.date)).size;
   const out = {
-    from, to, days,
+    from, to, days, counted,
     income, expense, net: income - expense,
     savingsRate: income > 0 ? (income - expense) / income : null,
-    perDay: days ? Math.round(expense / days) : 0,
-    noSpendDays: Math.max(0, days - spendDays),
+    perDay: counted ? Math.round(expense / counted) : 0,
+    noSpendDays: Math.max(0, counted - spendDays),
     count: inRange.length,
     spending, sources, byAccount, byPerson,
     byCurrency: [...cur.values()],

@@ -217,7 +217,8 @@ h1, h2, h3 { text-wrap: balance; }
 .jar { margin-bottom: 16px; }
 .jar:last-child { margin-bottom: 0; }
 .jar .row { display: flex; justify-content: space-between; gap: 8px; font-size: 14px; margin-bottom: 7px; align-items: baseline; }
-.jar .row > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.jar .row > span:first-child { min-width: 0; overflow-wrap: anywhere; }
+.jar .row > span:last-child { flex: none; }
 .jar .foot { font-size: 12px; color: var(--muted); margin-top: 5px; }
 .jar .foot.bad { color: var(--expense); }
 
