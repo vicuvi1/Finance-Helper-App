@@ -1874,3 +1874,33 @@ body.locked .calc-fab, body.locked .calc, body.printing .calc-fab, body.printing
   .ms-cell { padding: 12px 14px; } .ms-cell b { font-size: 21px; }
   .ms-cell:nth-child(3), .ms-rate { grid-column: 1 / -1; } .ms-rate .bar { margin-top: 12px; }
 }
+/* Selectable whole-app styles, layered over the corresponding light/dark mode. */
+:root[data-design="ocean"] {
+  --bg: #08131f; --surface: #101f30; --surface-2: #14283c; --surface-3: #1c354b;
+  --side-bg: #0b1927; --line: #24374b; --line-strong: #37536c;
+  --text: #eef6ff; --muted: #a0b7cd; --faint: #829cb4;
+  --gold: #82caff; --gold-soft: rgb(130 202 255 / 12%);
+  --btn-bg: #82caff; --btn-ink: #071929; --chart-bar: #5da8dd;
+  --spot: rgb(130 202 255 / 7%); --ambient: rgb(55 147 225 / 8%);
+  --display: "Geist", system-ui, sans-serif; --radius: 12px; --radius-sm: 8px;
+}
+:root[data-design="forest"] {
+  --bg: #0b1712; --surface: #12231b; --surface-2: #1a2e24; --surface-3: #233d30;
+  --side-bg: #0e1d16; --line: #2a3d32; --line-strong: #415b4b;
+  --text: #edf4ec; --muted: #a4b9a8; --faint: #879e8e;
+  --gold: #b8d88d; --gold-soft: rgb(184 216 141 / 12%);
+  --btn-bg: #b8d88d; --btn-ink: #14220d; --chart-bar: #84ac76;
+  --spot: rgb(184 216 141 / 7%); --ambient: rgb(109 166 112 / 7%);
+  --radius: 22px; --radius-sm: 12px;
+}
+:root[data-design="paper"] {
+  --bg: #f5f0e6; --surface: #fffcf6; --surface-2: #f1eadc; --surface-3: #e9dfcf;
+  --side-bg: #eee6d8; --line: #ded4c3; --line-strong: #c5b69f;
+  --text: #302b23; --muted: #706452; --faint: #83745f;
+  --gold: #875523; --gold-soft: rgb(135 85 35 / 10%);
+  --btn-bg: #875523; --btn-ink: #ffffff; --chart-bar: #b18c62;
+  --spot: rgb(135 85 35 / 5%); --ambient: rgb(176 139 87 / 6%);
+  --radius: 8px; --radius-sm: 6px;
+}
+:root[data-design="forest"] .card { box-shadow: 0 8px 24px -16px rgb(0 0 0 / 45%); }
+:root[data-design="paper"] .card { box-shadow: 0 3px 12px -8px rgb(80 60 30 / 20%); }
