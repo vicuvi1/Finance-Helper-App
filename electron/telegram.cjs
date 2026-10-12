@@ -53,6 +53,7 @@ function createTelegram({ app, net, safeStorage, onUpdates = () => {}, onEvent =
   let waiters = []; // "load now" calls waiting for the next check
   let lastCheck = 0;
   let menuSet = false;
+  let lastCode = ''; // why it isn't working: token, conflict, network, telegram
 
   async function call(method, params = {}, token = cfg?.token, signal) {
     const r = await net.fetch(`${API}/bot${token}/${method}`, {
@@ -141,13 +142,17 @@ function createTelegram({ app, net, safeStorage, onUpdates = () => {}, onEvent =
         } finally { poll = null; }
         if (my !== gen) break;
         lastError = '';
+        lastCode = '';
         lastCheck = Date.now();
         backoff = 2000;
         if (updates.length) await handle(updates);
         settle(updates.length);
       } catch (e) {
         if (!running || my !== gen) break;
-        lastError = e.code === 409 ? 'Another program is reading this bot. Close it, or use a new bot just for Finance Helper.' : e.code === 401 ? 'The bot token is no longer valid.' : e.message;
+        lastCode = e.code === 401 || e.code === 404 ? 'token' : e.code === 409 ? 'conflict' : e.code ? 'telegram' : 'network';
+        lastError = lastCode === 'token' ? 'Telegram doesn\'t accept the bot token any more (it was revoked or changed in @BotFather). Paste the new token in Settings → Telegram.'
+          : lastCode === 'conflict' ? 'Another program (or a second copy of this app) is reading this bot. Close it; only one app can read a bot.'
+            : lastCode === 'network' ? 'No connection to Telegram (internet?). Trying again…' : e.message;
         onEvent({ type: 'error', message: lastError });
         settle(-1);
         await sleep(backoff);
@@ -170,7 +175,7 @@ function createTelegram({ app, net, safeStorage, onUpdates = () => {}, onEvent =
   return {
     start,
     stop,
-    status: () => ({ connected: !!cfg?.token, botName: cfg?.botName || '', linked: !!cfg?.chatId, userName: cfg?.userName || '', error: lastError, pairing: pairCode, lastCheck }),
+    status: () => ({ connected: !!cfg?.token, botName: cfg?.botName || '', linked: !!cfg?.chatId, userName: cfg?.userName || '', error: lastError, errorCode: lastCode, running, pairing: pairCode, lastCheck }),
     // "Load from Telegram": check right now. Resolves with how many messages
     // came (or are waiting for the app), -1 on an error.
     loadNow() {
@@ -189,15 +194,20 @@ function createTelegram({ app, net, safeStorage, onUpdates = () => {}, onEvent =
       if (!/^\d{5,}:[\w-]{30,}$/.test(t)) throw new Error('That doesn\'t look like a bot token. It looks like 123456789:AA… (from @BotFather).');
       const me = await call('getMe', {}, t);
       await call('deleteWebhook', {}, t).catch(() => {});
-      const next = { token: t, botName: me.username, chatId: null };
+      // A new token for the same bot (after revoking the old one): keep the
+      // linked chat, nothing to link again.
+      const same = cfg?.chatId && cfg.token && t.split(':')[0] === cfg.token.split(':')[0];
+      const next = { token: t, botName: me.username, chatId: same ? cfg.chatId : null, ...(same ? { userName: cfg.userName || '' } : {}) };
       store.write(next); // throws when the computer can't store it safely
       stop();
       cfg = next;
       inbox.clear();
       offset = 0;
       menuSet = false;
+      lastError = '';
+      lastCode = '';
       start();
-      return { botName: me.username };
+      return { botName: me.username, kept: !!same };
     },
     // A fresh one-time code to link your Telegram account.
     pair() {

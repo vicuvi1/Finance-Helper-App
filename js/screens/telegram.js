@@ -37,6 +37,30 @@ function askCash() {
   send(T.cashQuestion(acc.name), { reply_markup: { force_reply: true, input_field_placeholder: 'e.g. 1240' } });
 }
 
+// A block without a fixed amount asked "how much?": the next number logs it.
+function amountReply(text, u, logIt) {
+  const w = ctx.state.meta.tgAwait;
+  if (w?.kind !== 'amount' || Date.now() > w.until || !/^\s*[\d\s.,+\-*/()x×]+\s*(lei|mdl)?\s*$/i.test(text)) return false;
+  const amount = evalAmount(text.replace(/lei|mdl/i, '').replace(/\s+/g, ''));
+  const b = Blocks.blocks(ctx.state).find((x) => x.id === w.block);
+  ctx.state.meta.tgAwait = null;
+  if (!b || !amount || amount <= 0) return false;
+  logIt({ ...Blocks.blockFields(ctx.state, b), amount });
+  return true;
+}
+
+// The categories to offer under a record logged with no description.
+function categoryButtons(t) {
+  const used = {};
+  for (const x of ctx.state.tx) if (x.type === t.type) used[x.category] = (used[x.category] || 0) + 1;
+  const cats = ctx.state.settings.categories.filter((c) => c.type === t.type && c.id !== 'other' && c.id !== 'other-in')
+    .sort((a, b) => (used[b.id] || 0) - (used[a.id] || 0)).slice(0, 6);
+  const rows = [];
+  for (let i = 0; i < cats.length; i += 3) rows.push(cats.slice(i, i + 3).map((c) => ({ text: `${c.emoji || ''} ${c.name}`.trim(), callback_data: `cat:${t.id}:${c.id}` })));
+  rows.push([{ text: '↩️ Undo', callback_data: `undo:${t.id}` }]);
+  return rows;
+}
+
 // A plain number while a cash check is open settles it.
 function cashReply(text, u) {
   const w = ctx.state.meta.tgAwait;
@@ -57,11 +81,46 @@ function refresh() {
   if (el) el.outerHTML = settingsCard();
 }
 
-async function loadStatus() {
+// Why the bot can't work right now, in words (null when it's fine).
+export function alertText() {
+  const s = st.status;
+  if (!s?.connected) return null;
+  if (s.errorCode === 'token') return 'Telegram bot stopped: its token was revoked or changed. Paste the new token.';
+  if (s.errorCode === 'conflict') return 'Telegram bot: another program or a second copy of the app is reading it. Close it.';
+  if (s.errorCode === 'network' && Date.now() - (s.lastCheck || 0) > 10 * 60000) return 'Telegram bot: no connection to Telegram for a while (internet?).';
+  if (!s.linked) return 'Telegram bot: link your account to finish (Settings → Telegram).';
+  return null;
+}
+
+function paintAlert() {
+  const el = document.getElementById('tg-alert');
+  if (!el) return;
+  const t = alertText();
+  el.hidden = !t;
+  if (t) el.querySelector('span').textContent = t;
+}
+
+// The same warning on Home (phones don't show the sidebar).
+export function alertBanner() {
+  const t = alertText();
+  return t ? `<div class="banner warn"><p>⚠️ ${esc(t)}</p><button class="btn primary" data-act="tg-fix">Fix it</button></div>` : '';
+}
+
+export function openFix() {
+  ctx.ui.settingsTab = 'connect';
+  if (location.hash === '#settings') ctx.render(); else location.hash = '#settings';
+}
+
+async function loadStatus({ quiet = false } = {}) {
   const was = !!st.status?.linked;
+  const before = JSON.stringify({ ...st.status, lastCheck: 0 });
   st.status = await bot()?.status().catch(() => null);
   st.bg = await bg()?.get().catch(() => null);
-  refresh();
+  paintAlert();
+  // A background check redraws the card only when something changed, and
+  // never while you are typing in it.
+  const typing = document.activeElement?.closest?.('#tg-card');
+  if (!quiet || (before !== JSON.stringify({ ...st.status, lastCheck: 0 }) && !typing)) refresh();
   // The Log screen shows "From Telegram" once we know the bot is linked.
   if (was !== !!st.status?.linked && /^#log/.test(location.hash)) ctx.render();
 }
@@ -87,7 +146,24 @@ async function handle(updates) {
   const logged = [];
   const caughtUp = [];
   let changed = false;
+  let current = null; // the update being handled, for records made from it
+  // Log a record from a message: reply with what it was (or one summary later).
+  const logFields = (f, u = current, late = isLate(u)) => {
+    const cur = M.account(state, f.account)?.currency || state.settings.currency;
+    const rate = cur === state.settings.currency ? 1 : ctx.suggestedRate(cur) || 1;
+    const t = T.recordFromMessage(f, { updateId: u.update_id, date: T.recordDay(localDay(u.message.date), f), rate, currency: cur });
+    state.tx.push(t);
+    changed = true;
+    logged.push(t);
+    ctx.ui.flashId = t.id;
+    // Sent while the app was closed: one summary at the end instead.
+    if (late) caughtUp.push(t);
+    // Just a number ("70"): offer your categories to file it in one tap.
+    else if (!t.note) send(`${T.loggedText(state, t)}\n\nWhat was it? 👇`, { reply_markup: { inline_keyboard: categoryButtons(t) } });
+    else send(T.loggedText(state, t), { reply_markup: { inline_keyboard: [[{ text: '↩️ Undo', callback_data: `undo:${t.id}` }]] } });
+  };
   for (const u of updates) {
+    current = u;
     try {
       if (u.callback_query) {
         const cq = u.callback_query;
@@ -101,7 +177,7 @@ async function handle(updates) {
             M.touch(t);
             changed = true;
             bot().answer(cq.id, `Filed as ${c.name}`);
-            bot().edit(cq.message.message_id, `✅ <b>${esc(t.note)}</b> → ${esc(c.name)}`).catch(() => {});
+            bot().edit(cq.message.message_id, `✅ <b>${t.type === 'income' ? '+' : '−'}${esc((t.amount / 100).toString().replace('.', ','))} ${esc(t.currency)}</b>${t.note ? ` · ${esc(t.note)}` : ''} → ${esc(c.name)}`).catch(() => {});
           } else bot().answer(cq.id, 'Not found');
         }
                 if (what === 'undo') {
@@ -117,6 +193,7 @@ async function handle(updates) {
       const cmd = text.toLowerCase().replace(/@\w+$/, '');
       if (!text) { done.push(u.update_id); continue; }
       if (cashReply(text, u)) { changed = true; done.push(u.update_id); continue; }
+      if (amountReply(text, u, (f) => logFields(f))) { done.push(u.update_id); continue; }
       const late = isLate(u);
       if (cmd.startsWith('/start') || cmd === '/help' || text === '❓ Help') { if (!late) send(`👋 Ready.\n\n${T.HELP}\n/review: your week · /cash: count your wallet`, keyboard()); }
       else if (cmd === '/review') { if (!late) sendWeekly(); }
@@ -145,20 +222,23 @@ async function handle(updates) {
         const id = `tg-${u.update_id}`;
         if (state.tx.some((t) => t.id === id) || state.deleted[id]) { done.push(u.update_id); continue; } // seen before
         const block = Blocks.matchBlock(state, text);
-        const f = block ? Blocks.blockFields(state, block) : T.parseQuick(text, state);
-        if (!f) send('I didn\'t catch an amount. Tap a block, or try <code>coffee 35</code> or <code>+500 salary</code>.');
-        else {
-          const cur = M.account(state, f.account)?.currency || state.settings.currency;
-          const rate = cur === state.settings.currency ? 1 : ctx.suggestedRate(cur) || 1;
-          const t = T.recordFromMessage(f, { updateId: u.update_id, date: T.recordDay(localDay(u.message.date), f), rate, currency: cur });
-          state.tx.push(t);
-          changed = true;
-          logged.push(t);
-          ctx.ui.flashId = t.id;
-          // Sent while the app was closed: one summary at the end instead.
-          if (late) caughtUp.push(t);
-          else send(T.loggedText(state, t), { reply_markup: { inline_keyboard: [[{ text: '↩️ Undo', callback_data: `undo:${t.id}` }]] } });
+        let f = block && block.amount > 0 ? Blocks.blockFields(state, block) : null;
+        if (block && !(block.amount > 0)) {
+          // A block with no fixed amount: ask how much.
+          state.meta.tgAwait = { kind: 'amount', block: block.id, until: Date.now() + 30 * 60000 };
+          ctx.persist();
+          if (!late) send(`How much for <b>${esc(`${block.emoji ? `${block.emoji} ` : ''}${block.name}`)}</b>? Send the number, e.g. <code>45</code>.`, { reply_markup: { force_reply: true, input_field_placeholder: 'e.g. 45' } });
+          done.push(u.update_id);
+          continue;
         }
+        if (!f) {
+          f = T.parseQuick(text, state);
+          // "coffee 45": your Coffee block's category and account, with this amount.
+          const named = f?.note && Blocks.matchBlock(state, f.note);
+          if (named) f = { ...Blocks.blockFields(state, named), amount: f.amount, ...(f.daysAgo ? { daysAgo: f.daysAgo } : {}) };
+        }
+        if (!f) send('I didn\'t catch an amount. Tap a block, or try <code>coffee 35</code>, <code>70</code> or <code>+500 salary</code>.');
+        else logFields(f, u, late);
       }
       done.push(u.update_id);
     } catch (e) {
@@ -232,9 +312,16 @@ export function initTelegram() {
       ctx.toast(`Telegram linked${ev.name ? ` with ${ev.name}` : ''}`);
       st.pair = null;
       loadStatus().then(() => send(`👋 Hi${ev.name ? ` ${esc(ev.name)}` : ''}! Finance Helper is linked.\n\n${T.HELP}`, keyboard()));
-    } else if (ev.type === 'error') { st.error = ev.message; refresh(); }
+    } else if (ev.type === 'error') loadStatus({ quiet: true }); // shows the warning right away
   });
+  // A warning under "All my money" when the bot can't work.
+  const top = document.getElementById('side-top');
+  if (top && !document.getElementById('tg-alert')) {
+    top.insertAdjacentHTML('afterend', '<button type="button" class="side-alert" id="tg-alert" hidden><b aria-hidden="true">⚠</b><span></span></button>');
+    document.getElementById('tg-alert').addEventListener('click', openFix);
+  }
   loadStatus();
+  setInterval(() => loadStatus({ quiet: true }), 30000);
   setInterval(tick, 60000);
   setTimeout(tick, 8000);
 }
@@ -273,10 +360,17 @@ export function settingsCard() {
         : '<button class="btn primary block" data-act="tg-pair">Show my link code</button>'}
       <div class="btns" style="margin-top:8px"><button class="btn danger" data-act="tg-off">Disconnect</button></div></section>`;
   }
-  return `<section class="card" id="tg-card"><h2>Telegram bot <span class="right income">● linked</span></h2>
+  const fixToken = s.errorCode === 'token' ? `<form id="tg-form" autocomplete="off" class="tg-fix">
+      <p class="lock-msg" style="margin-top:0">${esc(s.error)}</p>
+      <p class="muted small" style="margin:0 0 8px">In Telegram: <b>@BotFather</b> → /mybots → your bot → API Token. Paste it here; your chat stays linked.</p>
+      <label class="field"><span>New bot token</span><input id="tg-token" type="password" placeholder="123456789:AA…" spellcheck="false"></label>
+      ${st.error ? `<p class="lock-msg">${esc(st.error)}</p>` : ''}
+      <button class="btn primary block" type="submit" ${st.busy ? 'disabled' : ''}>${st.busy ? 'Checking…' : 'Reconnect the bot'}</button></form>` : '';
+  return `<section class="card" id="tg-card"><h2>Telegram bot <span class="right ${s.errorCode ? 'expense' : 'income'}">● ${s.errorCode ? 'not working' : 'linked'}</span></h2>
+    ${fixToken}
     <div class="kv"><span>Bot</span><b>@${esc(s.botName)}</b></div>
     ${s.userName ? `<div class="kv"><span>Listens to</span><b>${esc(s.userName)}</b></div>` : ''}
-    ${s.error || st.error ? `<p class="lock-msg">${esc(s.error || st.error)}</p>` : ''}
+    ${!fixToken && (s.error || st.error) ? `<p class="lock-msg">${esc(s.error || st.error)}</p>` : ''}
     ${s.lastCheck ? `<div class="kv"><span>Last checked</span><b>${esc(new Date(s.lastCheck).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))}</b></div>` : ''}
     <p class="muted small">Send <code>coffee 35</code>, <code>taxi 45 cash</code>, <code>coffee 35 yesterday</code>, <code>+500 salary</code>, or tap a button below the chat. /today, /month, /balance, /last, /undo.</p>
     <p class="muted small"><b>PC off?</b> Keep logging on your phone: Telegram keeps the messages for 24 hours and the app logs them, on the day you sent them, as soon as it opens. You get one summary message.</p>
@@ -300,9 +394,9 @@ export async function onSubmit(form) {
   st.error = '';
   refresh();
   try {
-    await bot().connect(form.querySelector('#tg-token').value);
+    const r = await bot().connect(form.querySelector('#tg-token').value);
     form.querySelector('#tg-token').value = '';
-    st.pair = await bot().pair();
+    if (r?.kept) { st.pair = null; ctx.toast('Bot reconnected. Your Telegram is still linked ✓'); } else st.pair = await bot().pair();
   } catch (e) {
     st.error = String(e?.message || e).replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
   }
@@ -312,6 +406,7 @@ export async function onSubmit(form) {
 }
 
 export function onClick(act) {
+  if (act === 'tg-fix') { openFix(); return true; }
   if (act === 'tg-load') { loadNow().then(loadStatus); return true; }
   if (act === 'tg-pair') { bot().pair().then((p) => { st.pair = p; refresh(); }); return true; }
   if (act === 'tg-open') { if (st.pair?.link) bot().openLink(st.pair.link); return true; }

@@ -18,7 +18,7 @@ export function settingsCard() {
       <button type="button" class="tgb-main" data-act="tgb-edit" data-id="${esc(b.id)}" title="Edit">
         <span class="tgb-emoji" aria-hidden="true">${esc(b.emoji || '•')}</span>
         <span class="tgb-name">${esc(b.name)}</span>
-        <b class="${b.type === 'income' ? 'income' : ''}">${b.type === 'income' ? '+' : ''}${esc(formatMoney(b.amount, ctx.state.settings.currency, { compact: true }))}</b>
+        <b class="${b.type === 'income' ? 'income' : ''}">${b.amount > 0 ? `${b.type === 'income' ? '+' : ''}${esc(formatMoney(b.amount, ctx.state.settings.currency, { compact: true }))}` : '<span class="muted">asks the amount</span>'}</b>
         <small class="muted">${esc(M.category(ctx.state, b.category)?.name || 'Other')}</small>
       </button>
       <span class="tgb-move">
@@ -51,11 +51,11 @@ function openBlock(id) {
       : '<p class="muted small" style="margin:6px 0">No sticker for that word. Paste any emoji in the box on the right.</p>';
   };
   const html = () => `<h3>${existing ? 'Edit button' : 'New button'} <button type="button" class="icon-btn" data-close aria-label="Close">✕</button></h3>
-    <div class="tgb-preview"><span>${esc(B.blockLabel({ ...b, name: b.name || 'Name', amount: b.amount || 0 }))}</span><small class="muted">how it looks in Telegram</small></div>
+    <div class="tgb-preview"><span>${esc(B.blockLabel({ ...b, name: b.name || 'Name', amount: b.amount || 0 }))}</span><small class="muted">how it looks in Telegram${b.amount ? '' : ' · no amount: the bot asks how much'}</small></div>
     <div class="seg" role="group" aria-label="Type"><button type="button" data-type="expense" aria-pressed="${b.type === 'expense'}">Spent</button><button type="button" data-type="income" aria-pressed="${b.type === 'income'}">Earned</button></div>
     <div class="row2">
       <label class="field"><span>Name</span><input id="tgb-name" type="text" value="${esc(b.name)}" placeholder="e.g. Internet" autocomplete="off"></label>
-      <label class="field"><span>Amount (${esc(state.settings.currency)})</span><input id="tgb-amount" type="text" inputmode="decimal" value="${b.amount ? plain(b.amount) : ''}" placeholder="20"></label>
+      <label class="field"><span>Amount (${esc(state.settings.currency)})</span><input id="tgb-amount" type="text" inputmode="decimal" value="${b.amount ? plain(b.amount) : ''}" placeholder="empty: ask me"></label>
     </div>
     <div class="field tgb-pick"><span>Sticker</span>
       <div class="tgb-pick-top"><span class="tgb-cur" id="tgb-cur" aria-hidden="true">${esc(b.emoji || '•')}</span>
@@ -116,7 +116,7 @@ function openBlock(id) {
       if (act === 'save') {
         read();
         const err = sheet.querySelector('#tgb-err');
-        if (!b.name || !b.amount) { err.hidden = false; err.textContent = 'Give it a name and an amount.'; return; }
+        if (!b.name) { err.hidden = false; err.textContent = 'Give it a name.'; return; }
         B.upsertBlock(state, b);
         ctx.closeSheet();
         changed();

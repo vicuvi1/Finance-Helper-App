@@ -1779,3 +1779,15 @@ body.locked .calc-fab, body.locked .calc, body.printing .calc-fab, body.printing
 .bcards.reordering { row-gap: 34px; }
 @keyframes slot-wiggle { 25% { transform: rotate(-0.6deg); } 75% { transform: rotate(0.6deg); } }
 @media (prefers-reduced-motion: reduce) { .bc-slot { animation: none; } }
+
+/* Telegram bot not working: a warning under "All my money" (desktop) and on Home. */
+.side-alert { display: none; }
+@media (min-width: 720px) {
+  .side-alert:not([hidden]) { display: flex; gap: 8px; align-items: flex-start; margin: 0 0 12px; padding: 10px 12px; border-radius: 12px; text-align: left; cursor: pointer;
+    border: 1px solid color-mix(in srgb, var(--expense) 55%, var(--line)); background: var(--expense-soft); color: var(--text); font: inherit; font-size: 12px; line-height: 1.35;
+    animation: alert-in 0.4s var(--ease-out); }
+  .side-alert b { color: var(--expense); }
+  .side-alert:hover { border-color: var(--expense); }
+}
+@keyframes alert-in { from { opacity: 0; transform: translateY(-4px); } }
+.banner.warn { border-color: color-mix(in srgb, var(--expense) 50%, var(--line)); background: var(--expense-soft); }

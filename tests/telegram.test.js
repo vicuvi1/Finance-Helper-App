@@ -72,7 +72,11 @@ test('blocks: tap logs the block, editable list, add from the chat', () => {
   const pizza = blockFromText(s, '/addblock 🍕 pizza 120,50', 11);
   assert.deepEqual([pizza.emoji, pizza.name, pizza.amount, pizza.type], ['🍕', 'Pizza', 12050, 'expense']);
   assert.equal(blockFromText(s, '+ Tips 100', 12).type, 'income');
-  assert.equal(blockFromText(s, '/addblock pizza', 12), null);
+  // No amount: a block that asks how much each time.
+  const ask = blockFromText(s, '/addblock 🥤 Drinks', 12);
+  assert.deepEqual([ask.name, ask.amount], ['Drinks', 0]);
+  assert.equal(blockLabel(ask), '🥤 Drinks …');
+  assert.equal(blockFromText(s, '/addblock', 12), null);
   upsertBlock(s, pizza, 13);
   assert.equal(blocks(s).at(-1).id, pizza.id);
   moveBlock(s, pizza.id, -1, 14);

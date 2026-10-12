@@ -394,6 +394,7 @@ function viewHome() {
   return `<header class="top"><div><h1>${hello}</h1><div class="sub">${dayLabel(today)}</div></div></header>
   ${Updates.updateBanner()}
   ${DEMO ? '<div class="banner"><p>Live preview with <b>example data</b> (a made-up month). What you add here stays in this browser only.</p></div>' : ''}
+  ${Telegram.alertBanner()}
   ${!DEMO && needsBackup ? `<div class="banner"><p>Your data lives only on this device. Make a backup.</p><button class="btn primary" data-act="export-json">Back up</button></div>` : ''}
   ${welcome}
   <section class="hero">
@@ -1861,6 +1862,7 @@ document.addEventListener('click', (e) => {
   else if (act === 'day') openDaySheet(el.dataset.date);
   else if (act === 'copy-table') copyTable();
   else if (act === 'tg-load') Telegram.loadNow();
+  else if (act === 'tg-fix') Telegram.openFix();
   else if (act === 'export-month') exportMonthExcel();
   else if (act === 'export-xlsx') exportExcel();
   else if (act === 'export-json') exportJSON();

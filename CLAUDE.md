@@ -66,6 +66,9 @@ tested); `js/app.js` only renders and handles taps.
   Buttons are blocks (`js/blocks.js`, `settings.tgBlocks`, editor `js/screens/tgblocks.js`).
   Messages older than 2 minutes when handled (PC was off) get one catch-up summary,
   not a reply each; `loadNow()` cuts the long poll short ("📥 From Telegram").
+  `e2e/faketelegram.mjs` is a fake Bot API (FH_TG_API) for the desktop e2e bot test.
+  When the bot can't work (token revoked, another reader, offline) the app warns on the
+  sidebar and Home; a new token for the same bot keeps the linked chat.
 - Calculator: math in `js/calc.js` (pure, no eval), floating panel `js/screens/calc.js`
   (position, open state and tape in localStorage: device-only, never synced).
 - End-to-end: `npm run e2e` (`e2e/*.e2e.mjs`, Playwright; on Linux `xvfb-run -a npm run e2e`

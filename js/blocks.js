@@ -91,7 +91,8 @@ export function starterBlocks(state) {
 export const blocks = (state) => (Array.isArray(state.settings.tgBlocks) ? state.settings.tgBlocks : starterBlocks(state));
 
 const plain = (cents) => String(cents / 100).replace('.', ',');
-export const blockLabel = (b) => `${b.emoji ? `${b.emoji} ` : ''}${b.type === 'income' ? '+' : ''}${b.name} ${plain(b.amount)}`;
+// A block with no fixed amount ("ask me each time") ends in "…".
+export const blockLabel = (b) => `${b.emoji ? `${b.emoji} ` : ''}${b.type === 'income' ? '+' : ''}${b.name} ${b.amount > 0 ? plain(b.amount) : '…'}`;
 
 const fold = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
   .replace(/[\p{Extended_Pictographic}\u{FE0F}\u{200D}]/gu, '').replace(/\s+/g, ' ').trim();
@@ -124,11 +125,11 @@ export function blockFromText(state, text, now = Date.now()) {
   t = t.slice(emoji.length).trim();
   let type = 'expense';
   if (t.startsWith('+')) { type = 'income'; t = t.slice(1).trim(); }
+  // No amount: a block that asks how much each time.
   const m = t.match(/(\d[\d.,]*)\s*(lei|mdl)?\s*$/i);
-  if (!m) return null;
-  const amount = evalAmount(m[1]);
-  const name = t.slice(0, m.index).trim();
-  if (!amount || amount <= 0 || !name) return null;
+  const amount = m ? evalAmount(m[1]) : 0;
+  const name = (m ? t.slice(0, m.index) : t).trim();
+  if (!name || (m && !(amount > 0))) return null;
   const category = suggestCategory(state, name, type) || (type === 'income' ? 'other-in' : 'other');
   return { id: `b-${now.toString(36)}${Math.random().toString(36).slice(2, 6)}`, emoji, name: name[0].toUpperCase() + name.slice(1), amount, type, category, account: null, updatedAt: now };
 }
@@ -165,7 +166,7 @@ export function moveBlock(state, id, dir, now = Date.now()) {
 export const HELPER_ROWS = [['📊 Today', '📅 Month', '💰 Balance'], ['🧾 Last', '↩️ Undo', '❓ Help']];
 
 export function blockKeyboard(state, perRow = 3) {
-  const list = blocks(state).filter((b) => b.amount > 0 && b.name);
+  const list = blocks(state).filter((b) => b.name);
   const rows = [];
   for (let i = 0; i < list.length; i += perRow) rows.push(list.slice(i, i + perRow).map((b) => ({ text: blockLabel(b) })));
   for (const r of HELPER_ROWS) rows.push(r.map((text) => ({ text })));

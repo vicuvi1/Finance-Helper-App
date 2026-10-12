@@ -96,3 +96,67 @@ test('desktop: sync through the Google Drive folder in one click', { skip: !canR
     rmSync(home, { recursive: true, force: true });
   }
 });
+
+test('desktop: the Telegram bot logs what you send, custom amounts too, and says when its token stops working', { skip: !canRun && 'needs a display (xvfb-run)' }, async () => {
+  const { fakeTelegram } = await import('./faketelegram.mjs');
+  const tg = fakeTelegram();
+  await new Promise((r) => tg.server.listen(0, '127.0.0.1', r));
+  const userData = mkdtempSync(join(tmpdir(), 'fh-e2e-'));
+  const app = await electron.launch({
+    args: [ROOT, '--no-sandbox', '--password-store=basic'],
+    env: { ...process.env, FH_USER_DATA: userData, FH_TG_TEST_MEMORY: '1', FH_TG_API: tg.url() },
+  });
+  try {
+    const win = await app.firstWindow();
+    const errors = [];
+    win.on('pageerror', (e) => errors.push(e.message));
+    await win.waitForSelector('#app header.top', { timeout: 20000 });
+    const TOKEN = '123456789:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
+    const { code } = await win.evaluate(async (t) => { await window.desktop.telegram.connect(t); return window.desktop.telegram.pair(); }, TOKEN);
+    tg.say(`/start ${code}`);
+    await win.waitForFunction(async () => (await window.desktop.telegram.status()).linked, null, { timeout: 15000 });
+    const tx = () => win.evaluate(() => JSON.parse(localStorage.getItem('finance-helper.state')).tx.filter((t) => t.source === 'telegram'));
+    const until = (fn) => win.waitForFunction(fn, null, { timeout: 15000 });
+
+    // Just a number: logged, with category buttons to file it.
+    tg.say('70 mdl');
+    await until(() => JSON.parse(localStorage.getItem('finance-helper.state')).tx.some((t) => t.source === 'telegram' && t.amount === 7000));
+    const seventy = (await tx()).find((t) => t.amount === 7000);
+    const asked = tg.sent.at(-1);
+    assert.match(asked.text, /What was it\?/);
+    const food = asked.reply_markup.inline_keyboard.flat().find((b) => /Food/.test(b.text));
+    tg.tap(food.callback_data);
+    await until(() => JSON.parse(localStorage.getItem('finance-helper.state')).tx.some((t) => t.source === 'telegram' && t.amount === 7000 && t.category === 'food'));
+
+    // "coffee 45": the Coffee block's category with this amount.
+    tg.say('coffee 45');
+    await until(() => JSON.parse(localStorage.getItem('finance-helper.state')).tx.some((t) => t.source === 'telegram' && t.amount === 4500));
+    assert.equal((await tx()).find((t) => t.amount === 4500).category, 'food');
+
+    // A block without an amount asks how much.
+    tg.say('/addblock 🥤 Drinks');
+    await new Promise((r) => setTimeout(r, 800));
+    tg.say('🥤 Drinks …');
+    await new Promise((r) => setTimeout(r, 800));
+    assert.match(tg.sent.at(-1).text, /How much for/);
+    tg.say('55');
+    await until(() => JSON.parse(localStorage.getItem('finance-helper.state')).tx.some((t) => t.source === 'telegram' && t.amount === 5500 && t.note === 'Drinks'));
+    assert.ok(seventy);
+
+    // The token is revoked: the app says so; a new token for the same bot keeps the link.
+    tg.revoke(TOKEN);
+    await win.waitForFunction(async () => (await window.desktop.telegram.status()).errorCode === 'token', null, { timeout: 20000 });
+    await win.evaluate(() => { location.hash = 'home'; });
+    await win.waitForSelector('#tg-alert:not([hidden])', { timeout: 40000 });
+    const r = await win.evaluate(() => window.desktop.telegram.connect('123456789:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB'));
+    assert.equal(r.kept, true);
+    tg.say('taxi 50');
+    await until(() => JSON.parse(localStorage.getItem('finance-helper.state')).tx.some((t) => t.source === 'telegram' && t.amount === 5000));
+    assert.deepEqual(errors, []);
+  } finally {
+    await app.evaluate(({ app: a }) => { a.quit(); }).catch(() => {});
+    await app.close().catch(() => {});
+    tg.server.close();
+    rmSync(userData, { recursive: true, force: true });
+  }
+});

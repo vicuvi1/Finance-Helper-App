@@ -90,3 +90,27 @@ test('load now checks right away and says what came; the command menu is set', a
   assert.ok(bot.status().lastCheck > 0);
   await bot.disconnect();
 });
+
+test('a new token for the same bot keeps the linked chat; a revoked token says so', async () => {
+  const tg = fakeTelegram();
+  let revoked = false;
+  const net = { fetch: async (url, opts) => (revoked && url.includes(TOKEN) && !url.endsWith('getMe') ? { status: 401, json: async () => ({ ok: false, error_code: 401, description: 'Unauthorized' }) } : tg.net.fetch(url, opts)) };
+  const events = [];
+  const bot = createTelegram({ app: {}, net, storage: memory(), onUpdates: () => {}, onEvent: (e) => events.push(e) });
+  await bot.connect(TOKEN);
+  const { code } = bot.pair();
+  tg.queue.push(msg(1, 222, `/start ${code}`));
+  await until(() => bot.status().linked);
+  revoked = true;
+  await until(() => bot.status().errorCode === 'token');
+  assert.match(bot.status().error, /doesn't accept the bot token/);
+  const fresh = '123456789:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB'; // same bot, new token
+  const r = await bot.connect(fresh);
+  assert.equal(r.kept, true);
+  assert.equal(bot.status().linked, true);
+  assert.equal(bot.status().error, '');
+  const other = await bot.connect('987654321:CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC'); // another bot: link again
+  assert.equal(other.kept, false);
+  assert.equal(bot.status().linked, false);
+  await bot.disconnect();
+});
