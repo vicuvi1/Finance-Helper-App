@@ -30,6 +30,8 @@ tested); `js/app.js` only renders and handles taps.
   GitHub Release automatically (`.github/workflows/desktop.yml`). Installed
   desktop apps offer it under Settings → About & updates. Bump the version
   whenever a change should reach the owner's installed app.
+  Others (the owner, other tools) also push here: pull first and bump from the version that is
+  actually in `package.json` (an already-released number publishes nothing).
 
 ## Conventions
 - Money is integer bani (1 MDL = 100). Format with `formatMoney`, parse user
@@ -39,6 +41,7 @@ tested); `js/app.js` only renders and handles taps.
 - Look B "Midnight premium" (the owner's pick): dark by default (light in Settings), champagne
   gold accent, Fraunces (`--display`, bundled in `fonts/`) for page titles and big figures,
   Geist for text. Home's top: month headline, `homeStrip`, `accountTiles`.
+  Extra themes Ocean / Forest / Paper (`settings.theme`) set `data-design` and override tokens.
 - Safe to spend today: `js/safespend.js` (pure, tested): cards+cash (`isLiquid`) minus bills
   before the next recurring income (else the 1st) minus this month's savings plan not yet moved
   to savings, over the days left. Home `safeCard`, bot `safeLine` in expense replies and /today.
