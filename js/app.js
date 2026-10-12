@@ -135,7 +135,45 @@ function undoRedo(dir) {
   toast(`${dir < 0 ? 'Undone' : 'Redone'}: ${e.label}`, dir < 0 ? 'Redo' : 'Undo', () => undoRedo(-dir));
 }
 
+const THEME_STYLES = [
+  ['dark', 'Midnight', 'Golden stars in a midnight sky', '#0b0d12', '#e3b95f'],
+  ['ocean', 'Ocean', 'Blue tides and drifting bubbles', '#08131f', '#82caff'],
+  ['forest', 'Forest', 'Soft greens and falling leaves', '#0b1712', '#b8d88d'],
+  ['paper', 'Paper', 'Warm pages and floating flecks', '#f5f0e6', '#875523'],
+  ['light', 'Classic light', 'Clean whites and a soft shimmer', '#f3f4f7', '#8a6a22'],
+  ['system', 'Follow system', 'Matches your device appearance', '#303b4b', '#c6d3e2'],
+];
+function themePicker(st) {
+  return '<fieldset class="style-picker"><legend>Choose your atmosphere</legend><div class="style-grid">' + THEME_STYLES.map(([id, name, detail, bg, accent]) =>
+    `<label class="style-choice"><input type="radio" name="app-theme" data-set="theme" value="${id}" ${st.theme === id ? 'checked' : ''}><span class="style-preview style-${id}" style="--preview-bg:${bg};--preview-accent:${accent}"><span class="preview-sidebar"></span><span class="preview-heading"></span><span class="preview-panel"></span><span class="preview-panel second"></span><span class="preview-motif"></span><span class="style-check" aria-hidden="true">✓</span></span><span class="style-name">${name}</span><span class="style-detail">${detail}</span></label>`
+  ).join('') + '</div></fieldset>';
+}
+let ambientKey = '';
+function applyAtmosphere() {
+  const active = state.settings.themeMotion !== false && !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const key = active ? state.settings.theme || 'system' : '';
+  if (key === ambientKey) return;
+  ambientKey = key;
+  document.getElementById('theme-atmosphere')?.remove();
+  if (!key) return;
+  const layer = document.createElement('div');
+  layer.id = 'theme-atmosphere';
+  layer.className = 'theme-atmosphere atmosphere-' + key;
+  layer.setAttribute('aria-hidden', 'true');
+  for (let i = 0; i < 12; i++) {
+    const particle = document.createElement('span');
+    particle.className = 'atmosphere-particle';
+    particle.style.cssText = `--x:${(i * 37 + 9) % 100}%;--delay:-${i * 2.7}s;--duration:${18 + i % 5 * 3}s;--size:${9 + i % 4 * 4}px;--drift:${i % 2 ? -70 : 70}px;`;
+    layer.append(particle);
+  }
+  document.body.prepend(layer);
+  layer.classList.toggle('paused', document.hidden);
+}
+document.addEventListener('visibilitychange', () => document.getElementById('theme-atmosphere')?.classList.toggle('paused', document.hidden));
+window.matchMedia('(prefers-reduced-motion: reduce)').addEventListener('change', applyAtmosphere);
+
 function applyTheme() {
+  applyAtmosphere();
   const choice = state.settings.theme;
   const design = ['ocean', 'forest', 'paper'].includes(choice) ? choice : '';
   document.documentElement.dataset.design = design;
@@ -814,13 +852,10 @@ function viewSettings() {
     </div>
     <p class="muted small" style="margin-bottom:0">From Google Sheets: File → Download → <b>Microsoft Excel (.xlsx)</b> and import the whole file: every month tab at once, you pick which. Bank statements: export CSV or Excel from maib / Victoriabank online banking. Importing the same thing twice is safe.</p>
   </section>`,
-    look: `<section class="card"><h2>Look</h2>
-    <div class="row2">
-      <label class="field"><span>Theme</span><select data-set="theme">
-        ${[['system', 'Follow system'], ['dark', 'Midnight premium'], ['light', 'Classic light'], ['ocean', 'Ocean'], ['forest', 'Forest'], ['paper', 'Paper']].map(([t, name]) => `<option value="${t}" ${st.theme === t ? 'selected' : ''}>${name}</option>`).join('')}
-      </select></label>
-      <label class="field"><span>Currency</span><input type="text" data-set="currency" value="${esc(st.currency)}" maxlength="5"></label>
-    </div>
+    look: `<section class="card look-card"><h2>Look</h2>
+    ${themePicker(st)}
+    <label class="motion-setting"><span><b>Living atmosphere</b><small>Leaves, bubbles and starlight. Follows your device’s reduced-motion preference.</small></span><input type="checkbox" data-set="themeMotion" ${st.themeMotion !== false ? 'checked' : ''} aria-label="Living atmosphere"></label>
+    <label class="field"><span>Currency</span><input type="text" data-set="currency" value="${esc(st.currency)}" maxlength="5"></label>
   </section>`,
     danger: `<section class="card"><h2>Danger zone</h2>
     <button class="btn danger block" data-act="wipe">Erase everything on this device</button>
@@ -1809,8 +1844,9 @@ function onSettingsChange(el) {
     else if (key === 'goal.account') st.goal.account = v;
     else if (key === 'savingsAccount') st.savingsAccount = v;
     else if (key === 'theme') { st.theme = v; applyTheme(); }
+    else if (key === 'themeMotion') { st.themeMotion = el.checked; applyAtmosphere(); }
     else if (key === 'currency') st.currency = v.trim().toUpperCase() || 'MDL';
-    if (key !== 'theme') st.updatedAt = Date.now();
+    if (!['theme', 'themeMotion'].includes(key)) st.updatedAt = Date.now();
   } else if (el.dataset.jar) {
     const j = M.touch(M.jar(state, el.dataset.jar));
     if (el.dataset.field === 'pct') j.pct = Math.max(0, Math.min(100, Math.round(Number(v) || 0)));

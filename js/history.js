@@ -7,7 +7,7 @@
 
 const LISTS = ['tx', 'people', 'recurring', 'invoices', 'netWorth', 'goals'];
 const SETTING_LISTS = ['accounts', 'categories', 'jars'];
-const NOT_UNDONE = new Set(['theme', 'logView', 'updatedAt', ...SETTING_LISTS]);
+const NOT_UNDONE = new Set(['theme', 'themeMotion', 'logView', 'updatedAt', ...SETTING_LISTS]);
 
 const WORDS = {
   tx: ['record', 'records'],

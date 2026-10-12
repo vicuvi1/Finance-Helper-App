@@ -106,3 +106,36 @@ test('sheet view: type an amount in a day row, edit it, clear it', async () => {
   assert.deepEqual(errors, []);
   await context.close();
 });
+
+test('theme gallery persists choices and respects motion preferences', async () => {
+  for (const width of [1440, 390]) {
+    const { page, errors, context } = await openPage(browser, server.url, { width, height: 900 });
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+    await page.goto(`${server.url}#settings`);
+    await page.waitForSelector('.style-picker');
+    for (const theme of ['forest', 'ocean', 'paper', 'dark', 'light', 'system']) {
+      await page.locator(`.style-choice:has(input[value="${theme}"])`).click();
+      await page.reload();
+      await page.waitForSelector('.style-picker');
+      assert.equal(await page.locator('[data-set="theme"]:checked').inputValue(), theme);
+      assert.equal(await page.locator('#theme-atmosphere .atmosphere-particle').count(), 12);
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+    }
+    await page.locator('.style-choice:has(input[value="forest"])').click();
+    await page.locator('input[value="forest"]').focus();
+    await page.keyboard.press('ArrowRight');
+    assert.equal(await page.locator('[data-set="theme"]:checked').inputValue(), 'paper', 'radio gallery supports arrow keys');
+    await page.locator('[data-set="themeMotion"]').uncheck();
+    await page.reload();
+    await page.waitForSelector('.style-picker');
+    assert.equal(await page.locator('#theme-atmosphere').count(), 0);
+    assert.equal(await page.locator('[data-set="themeMotion"]').isChecked(), false);
+    await page.locator('[data-set="themeMotion"]').check();
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.waitForFunction(() => !document.getElementById('theme-atmosphere'));
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+    await page.waitForSelector('#theme-atmosphere');
+    assert.deepEqual(errors, []);
+    await context.close();
+  }
+});
