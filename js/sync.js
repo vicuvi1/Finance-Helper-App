@@ -6,7 +6,7 @@
 
 import { normalizeState, SCHEMA_VERSION } from './model.js';
 
-const LOCAL_SETTINGS = ['theme', 'logView'];
+const LOCAL_SETTINGS = ['theme', 'themeMotion', 'logView'];
 const SCALARS = (s) => Object.keys(s).filter((k) => !['jars', 'accounts', 'categories', 'updatedAt', ...LOCAL_SETTINGS].includes(k));
 
 // What goes to Drive.
