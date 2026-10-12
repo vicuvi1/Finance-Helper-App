@@ -9,6 +9,7 @@ import { monthKey, addMonths, addDays, MONTHS, DOW_SHORT, dowIndex } from './dat
 import { blockKeyboard } from './blocks.js';
 import { dueItems, upcomingItems } from './recurring.js';
 import { workText } from './workhours.js';
+import { safeLine } from './safespend.js';
 
 const fold = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 const INCOME_WORDS = /^(\+|got|earned|income|salary|salariu|venit|primit|зарплата|получил|доход)$/;
@@ -80,7 +81,7 @@ const catName = (state, id) => { const c = category(state, id); return c ? `${c.
 
 // The reply to a logged record: what it was, then where you stand today and
 // this month, and how its category is doing.
-export function loggedText(state, t) {
+export function loggedText(state, t, today = null) {
   const c = category(state, t.category)?.name || '';
   const a = account(state, t.account)?.name || '';
   const sign = t.type === 'income' ? '+' : '−';
@@ -95,6 +96,7 @@ export function loggedText(state, t) {
     lines.push(`${esc(c || 'This category')} this month: ${fm(state, catMonth)}`);
   }
   if (alert) lines.push(`⚠️ ${esc(alert.text)}`);
+  if (today && t.type === 'expense' && (state.recurring?.length || state.tx.length > 10)) lines.push(safeLine(state, today, (c) => fm(state, c)));
   return lines.join('\n');
 }
 
@@ -107,7 +109,7 @@ export function todayText(state, today) {
   const s = monthSummary(state, monthKey(today));
   const cur = state.settings.currency;
   const lines = list.slice(-8).map((t) => `${t.type === 'income' ? '+' : '−'}${formatMoney(t.amount, t.currency)} · ${esc(t.note || category(state, t.category)?.name || '')}`);
-  return `📊 <b>Today</b>: spent ${esc(formatMoney(out, cur))}${inc ? `, earned ${esc(formatMoney(inc, cur))}` : ''}\n${lines.join('\n') || 'Nothing logged yet.'}\n\nThis month: +${esc(formatMoney(s.income, cur))} / −${esc(formatMoney(s.expense, cur))}`;
+  return `📊 <b>Today</b>: spent ${esc(formatMoney(out, cur))}${inc ? `, earned ${esc(formatMoney(inc, cur))}` : ''}\n${lines.join('\n') || 'Nothing logged yet.'}\n\nThis month: +${esc(formatMoney(s.income, cur))} / −${esc(formatMoney(s.expense, cur))}${state.tx.length ? `\n${safeLine(state, today, (c) => fm(state, c))}` : ''}`;
 }
 
 // All your money, then each account in its own currency.

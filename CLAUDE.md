@@ -39,6 +39,9 @@ tested); `js/app.js` only renders and handles taps.
 - Look B "Midnight premium" (the owner's pick): dark by default (light in Settings), champagne
   gold accent, Fraunces (`--display`, bundled in `fonts/`) for page titles and big figures,
   Geist for text. Home's top: month headline, `homeStrip`, `accountTiles`.
+- Safe to spend today: `js/safespend.js` (pure, tested): cards+cash (`isLiquid`) minus bills
+  before the next recurring income (else the 1st) minus this month's savings plan not yet moved
+  to savings, over the days left. Home `safeCard`, bot `safeLine` in expense replies and /today.
 - No `alert`/`confirm`/`prompt`: confirmations are bottom sheets.
 - New app files go in `sw.js` `SHELL` (offline), `build.files` in
   `package.json` (desktop) and `scripts/build-preview.mjs` if outside css/js/icons.
