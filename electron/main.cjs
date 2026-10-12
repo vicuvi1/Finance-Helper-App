@@ -43,7 +43,7 @@ function createWindow() {
     minWidth: 380,
     minHeight: 560,
     title: 'Finance Helper',
-    backgroundColor: '#0b0d10',
+    backgroundColor: '#0b0d12',
     autoHideMenuBar: true,
     show: false,
     icon: path.join(ROOT, 'icons', 'icon-512.png'),

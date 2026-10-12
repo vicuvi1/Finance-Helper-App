@@ -351,6 +351,41 @@ function jarsCard(key) {
 }
 
 
+// Home's month strip (look B): earned, spent, kept, and the savings rate.
+function homeStrip(s, key) {
+  const target = M.savingsJar(state)?.pct ?? 0;
+  const w = s.expense ? workText(state, s.expense, todayISO()) : '';
+  const r = Math.max(0, Math.min(1, s.savingsRate || 0));
+  const diff = Math.round((s.savingsRate || 0) * 100) - target;
+  const rate = s.income > 0 ? `<div class="ms-cell ms-rate"><span class="k"><span>Savings rate</span><span>goal ${target}%</span></span>
+      <div class="bar ${diff < 0 ? 'over' : ''}"><i style="width:${(r * 100).toFixed(1)}%"></i><span class="mark" style="left:${target}%"></span></div>
+      <p class="${diff < 0 ? 'bad' : ''}">${s.net < 0 ? `${money(-s.net)} more spent than earned` : diff >= 0 ? `${diff} points above your goal` : `${-diff} points below your goal`}</p></div>` : '';
+  return `<section class="m-strip" aria-label="${esc(monthLabel(key))}">
+    <div class="ms-cell"><span class="k">Earned</span><b class="${s.income ? 'income' : ''}">${countUp(s.income, 'm-in')}</b></div>
+    <div class="ms-cell"><span class="k">Spent</span><b class="${s.expense ? 'expense' : ''}">${countUp(s.expense, 'm-out')}</b>${w ? `<span class="work-time" title="What it cost in your work time (Settings → Your hour)">≈ ${w} of your work</span>` : ''}</div>
+    <div class="ms-cell"><span class="k">Kept</span><b>${countUp(s.net, 'm-net')}</b></div>
+    ${rate}
+  </section>`;
+}
+
+// Your accounts as tiles under the strip (wide screens; phones show the list).
+function accountTiles(values) {
+  if (!values.length) return '';
+  const shown = values.slice(0, values.length > 4 ? 3 : 4);
+  return `<section class="acc-tiles" aria-label="Accounts">${shown.map(({ account: a, own, coins }) => {
+    const v = a.kind === 'crypto' && (a.holdings || []).length ? money(coins + (convert(own, a.currency, state.settings.currency, state.rates) || 0)) : formatMoney(own, a.currency);
+    return `<button type="button" class="acc-tile" style="--tc:var(--c${a.color || 1})" data-act="acc-open" data-id="${esc(a.id)}" title="Open ${esc(a.name)}"><span>${esc(a.name)}${a.currency !== state.settings.currency ? ` · ${esc(a.currency)}` : ''}</span><b class="${own < 0 ? 'neg' : ''}">${v}</b></button>`;
+  }).join('')}${values.length > shown.length ? `<button type="button" class="acc-tile more" data-go="accounts">+${values.length - shown.length} more accounts →</button>` : ''}</section>`;
+}
+
+// The page title on Home says how the month is going.
+function homeHeadline(s, hello) {
+  if (s.income > 0 && s.net >= 0) return `You kept ${pct(s.savingsRate)} this month`;
+  if (s.income > 0) return 'You spent more than you earned';
+  if (s.expense > 0) return `${money(s.expense)} spent this month`;
+  return hello;
+}
+
 // ---------- Screens ----------
 
 // Home: one tap opens a record already filled in; Enter adds it.
@@ -376,6 +411,7 @@ function viewHome() {
   const tips = [...fcTip, ...fxTip, ...M.insights(state, key, today).filter((t) => t.level !== 'info')].slice(0, 2);
   const hour = new Date().getHours();
   const hello = hour < 5 ? 'Good night' : hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+  const headline = homeHeadline(s, hello);
 
   // Automatic backups and sync count too: no nagging when they already run.
   const lastSafe = Math.max(state.meta.lastBackup || 0, state.meta.lastAutoBackup || 0, state.meta.lastSync || 0);
@@ -391,7 +427,7 @@ function viewHome() {
     <p class="muted small" style="margin-bottom:0">Already have money in the wallet or safe? Set it under Settings → Accounts.</p>
   </section>`;
 
-  return `<header class="top"><div><h1>${hello}</h1><div class="sub">${dayLabel(today)}</div></div></header>
+  return `<header class="top"><div><div class="eyebrow">${esc(monthLabel(key))}</div><h1>${esc(headline)}</h1></div><div class="sub">${headline === hello ? '' : `${hello} · `}${dayLabel(today)}</div></header>
   ${Updates.updateBanner()}
   ${DEMO ? '<div class="banner"><p>Live preview with <b>example data</b> (a made-up month). What you add here stays in this browser only.</p></div>' : ''}
   ${Telegram.alertBanner()}
@@ -406,11 +442,9 @@ function viewHome() {
       </div>
       ${missing.length ? `<p class="muted small" style="margin:10px 0 0">Not counted yet (no exchange rate): ${missing.map((v) => esc(v.account.name)).join(', ')}.</p>` : ''}
     </div>
-    <div class="hero-month">
-      <div class="label">${monthLabel(key)}</div>
-      ${stats(s)}${rateBar(s)}
-    </div>
   </section>
+  ${homeStrip(s, key)}
+  ${accountTiles(values)}
   ${quickRow()}
   <div class="dash">
     <div class="dash-main">
@@ -861,6 +895,12 @@ function runCounters(entering) {
 }
 
 function render({ enter = false } = {}) {
+  // Once: the owner chose look B (Midnight, dark). "Light" stays in Settings.
+  if (!state._sealed && !state.meta.lookB) {
+    state.meta.lookB = 1;
+    if (!state.settings.theme || state.settings.theme === 'system') state.settings.theme = 'dark';
+    persist({ quiet: true });
+  }
   applyTheme();
   // Today's weekday color, used to mark today everywhere.
   document.documentElement.style.setProperty('--today-c', `var(--dow${dowIndex(todayISO())})`);

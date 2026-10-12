@@ -36,6 +36,9 @@ tested); `js/app.js` only renders and handles taps.
   input with `evalAmount` (supports `120+45`).
 - Dates are `YYYY-MM-DD` strings, months `YYYY-MM`. No `Date` math in local time.
 - Colors only through the CSS tokens in `css/app.css`, defined for light and dark.
+- Look B "Midnight premium" (the owner's pick): dark by default (light in Settings), champagne
+  gold accent, Fraunces (`--display`, bundled in `fonts/`) for page titles and big figures,
+  Geist for text. Home's top: month headline, `homeStrip`, `accountTiles`.
 - No `alert`/`confirm`/`prompt`: confirmations are bottom sheets.
 - New app files go in `sw.js` `SHELL` (offline), `build.files` in
   `package.json` (desktop) and `scripts/build-preview.mjs` if outside css/js/icons.

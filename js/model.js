@@ -64,7 +64,7 @@ export function defaultState() {
       ],
       goal: { name: 'Safe goal', target: 10000000, account: 'savings' },
       savingsAccount: 'safe', // where the "move to safe" button sends your deposit
-      theme: 'system',
+      theme: 'dark',
       smallPurchase: 10000, // under 100 MDL counts as a "small" purchase
     },
     tx: [],
