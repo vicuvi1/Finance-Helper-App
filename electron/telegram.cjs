@@ -8,6 +8,11 @@
 // (ack), so nothing is lost while the app is locked or busy; Telegram keeps
 // unconfirmed messages for 24 hours, so ones sent while the PC was off are
 // logged at the next start.
+//
+// "Always on" (optional): a small Google Apps Script in the user's own Google
+// account (relay.gs) reads the bot every minute while this app is closed,
+// answers, and keeps the messages; this app collects them from it ("pull")
+// and confirms them ("ack"). Every call carries a key only this app knows.
 
 const fs = require('node:fs');
 const path = require('node:path');
@@ -25,7 +30,9 @@ const COMMANDS = [
   ['blocks', 'Your quick buttons'],
   ['help', 'How to log'],
 ];
-const ABOUT = 'Your Finance Helper. Tap a block or type "coffee 35". Sent while your PC is off? It is saved for 24 hours and logged when the app opens.';
+const ABOUT = 'Your Finance Helper. Tap a block or type "coffee 35". Sent while your PC is off? It is saved and logged when the app opens.';
+const RELAY_URL = /^https:\/\/script\.google\.com\/(a\/[\w.-]+\/)?macros\/s\/[\w-]+\/exec$/;
+const RELAY_EVERY = 15000; // how often an open app collects from the relay
 
 function createTelegram({ app, net, safeStorage, onUpdates = () => {}, onEvent = () => {}, storage }) {
   const file = () => path.join(app.getPath('userData'), 'telegram.bin');
@@ -54,6 +61,52 @@ function createTelegram({ app, net, safeStorage, onUpdates = () => {}, onEvent =
   let lastCheck = 0;
   let menuSet = false;
   let lastCode = ''; // why it isn't working: token, conflict, network, telegram
+  let relayInfo = {}; // what the relay said last: lastRun, waiting, trigger, lastError
+  let relayError = '';
+  let lastPull = 0;
+  const relayIds = new Set(); // updates that came from the relay (ack them there)
+  let relayAcks = new Set(); // handled, still to confirm to the relay
+  let relayOkAt = 0;
+  const handled = new Set(); // recently handled ids, so the relay can't hand one over twice
+
+  // The relay is a Google web app: answers JSON, after a redirect.
+  async function relayCall(params, { post = false, url = cfg?.relay?.url } = {}) {
+    const q = new URLSearchParams(post ? {} : params).toString();
+    const r = await net.fetch(post ? url : `${url}?${q}`, post
+      ? { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(params) }
+      : { method: 'GET' });
+    let j = null;
+    try { j = JSON.parse(await r.text()); } catch { /* not JSON */ }
+    if (!j) throw new Error('The Google script didn\'t answer. Check it is deployed as a Web app with access "Anyone".');
+    if (!j.ok) throw new Error(j.error || 'The Google script said no.');
+    return j;
+  }
+
+  const relayFields = (j) => ({ lastTick: j.lastTick || 0, lastRun: j.lastRun || 0, waiting: j.waiting || 0, trigger: !!j.trigger, lastError: j.lastError || '' });
+
+  // Collect what the relay kept while this app was closed.
+  async function pullRelay(force = false) {
+    if (!cfg?.relay || !cfg.chatId || (!force && Date.now() - lastPull < RELAY_EVERY)) return 0;
+    lastPull = Date.now();
+    try {
+      if (relayAcks.size) {
+        const ids = [...relayAcks];
+        await relayCall({ k: cfg.relay.key, a: 'ack', ids: ids.join(',') });
+        relayAcks = new Set([...relayAcks].filter((x) => !ids.includes(x)));
+      }
+      const j = await relayCall({ k: cfg.relay.key, a: 'pull', from: offset });
+      relayInfo = relayFields(j);
+      relayError = '';
+      relayOkAt = Date.now();
+      const fresh = (j.updates || []).filter((u) => Number.isInteger(u.update_id) && !inbox.has(u.update_id) && !relayAcks.has(u.update_id) && !handled.has(u.update_id));
+      for (const u of fresh) relayIds.add(u.update_id);
+      if (fresh.length) await handle(fresh);
+      return fresh.length;
+    } catch (e) {
+      relayError = e.message;
+      return 0;
+    }
+  }
 
   async function call(method, params = {}, token = cfg?.token, signal) {
     const r = await net.fetch(`${API}/bot${token}/${method}`, {
@@ -125,17 +178,23 @@ function createTelegram({ app, net, safeStorage, onUpdates = () => {}, onEvent =
           // Waiting for the app to handle what it has; hand it over again
           // now and then (e.g. after the app is unlocked).
           settle(inbox.size);
+          // Keep telling the relay the app is open (e.g. while it is locked),
+          // so it doesn't start answering in its place.
+          await pullRelay();
           await sleep(15000);
           if (inbox.size) onUpdates([...inbox.values()]);
           continue;
         }
         if (cfg?.chatId) setMenu();
+        const fromRelay = await pullRelay(waiters.length > 0);
+        if (inbox.size && fromRelay) { settle(fromRelay); continue; }
         // A "load now" while waiting cuts the long wait short.
         const ac = typeof AbortController === 'function' ? new AbortController() : null;
         poll = ac;
         let updates;
         try {
-          updates = await call('getUpdates', { offset, timeout: waiters.length ? 0 : 25, allowed_updates: ['message', 'callback_query'] }, undefined, ac?.signal);
+          // With the relay on, wait less so it is collected from every ~15 s.
+          updates = await call('getUpdates', { offset, timeout: waiters.length ? 0 : cfg?.relay ? 14 : 25, allowed_updates: ['message', 'callback_query'] }, undefined, ac?.signal);
         } catch (e) {
           if (ac?.signal.aborted) continue;
           throw e;
@@ -149,6 +208,9 @@ function createTelegram({ app, net, safeStorage, onUpdates = () => {}, onEvent =
         settle(updates.length);
       } catch (e) {
         if (!running || my !== gen) break;
+        // The relay read Telegram at the same moment (right after the app
+        // opened): not a problem, it keeps those messages for the app.
+        if (e.code === 409 && cfg?.relay) { await sleep(1500); continue; }
         lastCode = e.code === 401 || e.code === 404 ? 'token' : e.code === 409 ? 'conflict' : e.code ? 'telegram' : 'network';
         lastError = lastCode === 'token' ? 'Telegram doesn\'t accept the bot token any more (it was revoked or changed in @BotFather). Paste the new token in Settings → Telegram.'
           : lastCode === 'conflict' ? 'Another program (or a second copy of this app) is reading this bot. Close it; only one app can read a bot.'
@@ -175,7 +237,8 @@ function createTelegram({ app, net, safeStorage, onUpdates = () => {}, onEvent =
   return {
     start,
     stop,
-    status: () => ({ connected: !!cfg?.token, botName: cfg?.botName || '', linked: !!cfg?.chatId, userName: cfg?.userName || '', error: lastError, errorCode: lastCode, running, pairing: pairCode, lastCheck }),
+    status: () => ({ connected: !!cfg?.token, botName: cfg?.botName || '', linked: !!cfg?.chatId, userName: cfg?.userName || '', error: lastError, errorCode: lastCode, running, pairing: pairCode, lastCheck,
+      relay: cfg?.relay ? { on: true, lastPull, okAt: relayOkAt, error: relayError, ...relayInfo } : { on: false } }),
     // "Load from Telegram": check right now. Resolves with how many messages
     // came (or are waiting for the app), -1 on an error.
     loadNow() {
@@ -197,7 +260,7 @@ function createTelegram({ app, net, safeStorage, onUpdates = () => {}, onEvent =
       // A new token for the same bot (after revoking the old one): keep the
       // linked chat, nothing to link again.
       const same = cfg?.chatId && cfg.token && t.split(':')[0] === cfg.token.split(':')[0];
-      const next = { token: t, botName: me.username, chatId: same ? cfg.chatId : null, ...(same ? { userName: cfg.userName || '' } : {}) };
+      const next = { token: t, botName: me.username, chatId: same ? cfg.chatId : null, ...(same ? { userName: cfg.userName || '', relay: cfg.relay, relayKey: cfg.relayKey } : {}) };
       store.write(next); // throws when the computer can't store it safely
       stop();
       cfg = next;
@@ -207,6 +270,8 @@ function createTelegram({ app, net, safeStorage, onUpdates = () => {}, onEvent =
       lastError = '';
       lastCode = '';
       start();
+      // The always-on script needs the new token too.
+      if (same && cfg.relay) await relayCall({ k: cfg.relay.key, a: 'setup', token: t, chat: cfg.chatId, from: offset }, { post: true }).catch((e) => { relayError = e.message; });
       return { botName: me.username, kept: !!same };
     },
     // A fresh one-time code to link your Telegram account.
@@ -218,8 +283,15 @@ function createTelegram({ app, net, safeStorage, onUpdates = () => {}, onEvent =
     ack(ids) {
       for (const id of ids || []) {
         inbox.delete(id);
-        offset = Math.max(offset, id + 1);
+        handled.add(id);
+        if (relayIds.delete(id)) relayAcks.add(id); // kept by the relay: confirm it there
+        else {
+          offset = Math.max(offset, id + 1);
+          if (cfg?.relay) relayAcks.add(id); // in case the relay kept a copy too
+        }
       }
+      if (handled.size > 500) for (const id of [...handled].slice(0, handled.size - 500)) handled.delete(id);
+      if (relayAcks.size) { lastPull = 0; wake?.(); }
       if (!inbox.size) wake?.();
       return true;
     },
@@ -233,7 +305,45 @@ function createTelegram({ app, net, safeStorage, onUpdates = () => {}, onEvent =
     async answer(callbackId, text = '') {
       return call('answerCallbackQuery', { callback_query_id: callbackId, text }).catch(() => {});
     },
+    // Always on: the Google script, with this app's key written into it.
+    relayScript() {
+      if (!cfg?.token) throw new Error('Connect the bot first.');
+      if (!cfg.relayKey) {
+        cfg = { ...cfg, relayKey: crypto.randomBytes(24).toString('base64url') };
+        store.write(cfg);
+      }
+      const src = fs.readFileSync(path.join(__dirname, 'relay.gs'), 'utf8');
+      return src.replace("'__KEY__'", `'${cfg.relayKey}'`);
+    },
+    async relayConnect(url) {
+      const u = String(url || '').trim();
+      if (!cfg?.chatId) throw new Error('Link your Telegram first.');
+      if (!RELAY_URL.test(u) && !(process.env.FH_RELAY_ANY_URL === '1' && /^http:\/\/127\.0\.0\.1:\d+\//.test(u))) {
+        throw new Error('Paste the Web app URL: it looks like https://script.google.com/macros/s/…/exec');
+      }
+      if (!cfg.relayKey) throw new Error('Copy the script first (it carries this app\'s key).');
+      const j = await relayCall({ k: cfg.relayKey, a: 'setup', token: cfg.token, chat: cfg.chatId, from: offset }, { post: true, url: u });
+      cfg = { ...cfg, relay: { url: u, key: cfg.relayKey } };
+      store.write(cfg);
+      relayInfo = relayFields(j);
+      relayError = '';
+      relayOkAt = Date.now();
+      lastPull = 0;
+      wake?.();
+      return { trigger: !!j.trigger, triggerError: j.triggerError || '' };
+    },
+    async relayOff() {
+      if (!cfg?.relay) return true;
+      await relayCall({ k: cfg.relay.key, a: 'off' }).catch(() => {});
+      const { relay, ...rest } = cfg;
+      cfg = rest;
+      store.write(cfg);
+      relayInfo = {};
+      relayError = '';
+      return true;
+    },
     async disconnect() {
+      if (cfg?.relay) await relayCall({ k: cfg.relay.key, a: 'off' }).catch(() => {});
       stop();
       store.remove();
       cfg = null;

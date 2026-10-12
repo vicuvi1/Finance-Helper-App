@@ -69,6 +69,11 @@ tested); `js/app.js` only renders and handles taps.
   `e2e/faketelegram.mjs` is a fake Bot API (FH_TG_API) for the desktop e2e bot test.
   When the bot can't work (token revoked, another reader, offline) the app warns on the
   sidebar and Home; a new token for the same bot keeps the linked chat.
+  Always on: `electron/relay.gs` is a Google Apps Script the user deploys as a web app in
+  their own account (the app writes its random key into the copy). A 1-minute trigger reads
+  the bot only while the app hasn't pulled for 90 s, answers and keeps messages (`u_<id>`
+  Script Properties); the app pulls/acks every 15 s and sends its offset (`from`) so the
+  script never answers what the app handled. Tests run it in a vm (`e2e/appscript.mjs`).
 - Calculator: math in `js/calc.js` (pure, no eval), floating panel `js/screens/calc.js`
   (position, open state and tape in localStorage: device-only, never synced).
 - End-to-end: `npm run e2e` (`e2e/*.e2e.mjs`, Playwright; on Linux `xvfb-run -a npm run e2e`

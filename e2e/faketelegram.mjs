@@ -38,6 +38,17 @@ export function fakeTelegram() {
     sent, calls,
     url: () => `http://127.0.0.1:${server.address().port}`,
     revoke(token) { revoked.add(token); },
+    // The same bot, answered right away: for the Google script (always on).
+    direct(method, p = {}) {
+      calls.push(method);
+      if (method === 'getMe') return { id: 1, is_bot: true, username: 'test_money_bot' };
+      if (method === 'getUpdates') {
+        for (let i = queue.length - 1; i >= 0; i--) if (queue[i].update_id < (p.offset || 0)) queue.splice(i, 1);
+        return queue.slice(0, p.limit || 100);
+      }
+      if (method === 'sendMessage') { sent.push(p); return { message_id: sent.length }; }
+      return true;
+    },
     // Tap an inline button under one of the bot's messages.
     tap(data, chat = 4242) {
       const id = nextId++;

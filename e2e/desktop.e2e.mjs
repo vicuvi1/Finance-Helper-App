@@ -104,8 +104,11 @@ test('desktop: the Telegram bot logs what you send, custom amounts too, and says
   const userData = mkdtempSync(join(tmpdir(), 'fh-e2e-'));
   const app = await electron.launch({
     args: [ROOT, '--no-sandbox', '--password-store=basic'],
-    env: { ...process.env, FH_USER_DATA: userData, FH_TG_TEST_MEMORY: '1', FH_TG_API: tg.url() },
+    env: { ...process.env, FH_USER_DATA: userData, FH_TG_TEST_MEMORY: '1', FH_TG_API: tg.url(), FH_RELAY_ANY_URL: '1' },
   });
+  const { relayServer } = await import('./appscript.mjs');
+  const google = relayServer({ telegram: { call: (m, p) => tg.direct(m, p) } });
+  await new Promise((r) => google.server.listen(0, '127.0.0.1', r));
   try {
     const win = await app.firstWindow();
     const errors = [];
@@ -143,6 +146,27 @@ test('desktop: the Telegram bot logs what you send, custom amounts too, and says
     await until(() => JSON.parse(localStorage.getItem('finance-helper.state')).tx.some((t) => t.source === 'telegram' && t.amount === 5500 && t.note === 'Drinks'));
     assert.ok(seventy);
 
+    // Always on: set up from Settings → Telegram, then a message the Google
+    // script kept while the PC was off is logged when the app collects it.
+    await win.evaluate(() => { location.hash = 'settings'; });
+    await win.click('[data-act="set-tab"][data-sec="connect"]');
+    await win.click('[data-act="tg-relay-start"]');
+    await win.click('[data-act="tg-relay-copy"]');
+    await win.waitForSelector('[data-act="tg-relay-copy"]:has-text("Copied"), .tg-script', { timeout: 10000 });
+    await win.fill('#tg-relay-url', google.url());
+    await win.click('#tg-relay-form button[type="submit"]');
+    await win.waitForSelector('.tg-relay.on', { timeout: 15000 });
+    assert.equal(google.relay().triggers.length, 1);
+    const kept = { update_id: 900, message: { message_id: 900, date: Math.floor(Date.now() / 1000) - 3600, text: 'tea 15', chat: { id: 4242, type: 'private' }, from: { first_name: 'Owner' } } };
+    google.relay().store.set('u_900', JSON.stringify(kept));
+    await win.evaluate(() => window.desktop.telegram.loadNow());
+    await until(() => JSON.parse(localStorage.getItem('finance-helper.state')).tx.some((t) => t.source === 'telegram' && t.amount === 1500));
+    await new Promise((r) => setTimeout(r, 1500));
+    assert.equal(google.relay().store.has('u_900'), false); // confirmed to Google
+    await win.click('[data-act="tg-relay-off"]');
+    await win.waitForSelector('[data-act="tg-relay-start"]', { timeout: 10000 });
+    assert.equal(google.relay().triggers.length, 0);
+
     // The token is revoked: the app says so; a new token for the same bot keeps the link.
     tg.revoke(TOKEN);
     await win.waitForFunction(async () => (await window.desktop.telegram.status()).errorCode === 'token', null, { timeout: 20000 });
@@ -157,6 +181,7 @@ test('desktop: the Telegram bot logs what you send, custom amounts too, and says
     await app.evaluate(({ app: a }) => { a.quit(); }).catch(() => {});
     await app.close().catch(() => {});
     tg.server.close();
+    google.server.close();
     rmSync(userData, { recursive: true, force: true });
   }
 });

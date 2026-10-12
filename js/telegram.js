@@ -179,7 +179,7 @@ export const HELP = `Tap a block below to log it for today, or type: <code>coffe
 📊 /today · 📅 /month · 💰 /balance · 🧾 /last · ↩️ /undo
 🧱 /blocks: your buttons · <code>/addblock 🍕 Pizza 120</code> · <code>/delblock pizza</code>
 
-PC off? Keep sending: Telegram holds messages for 24 hours and the app logs them, with the right day, when it opens.`;
+PC off? Keep sending: your messages are kept and the app logs them, with the right day, when it opens.`;
 
 // ---------- Weekly ritual ----------
 

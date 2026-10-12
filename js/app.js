@@ -2258,7 +2258,7 @@ document.addEventListener('submit', (e) => {
   if (e.target.closest('.sheet') || !e.target.id) return;
   if (e.target.id === 'bn-form') { e.preventDefault(); Binance.onSubmit(e.target); }
   if (e.target.id === 'sync-form') { e.preventDefault(); Sync.onSubmit(e.target); }
-  if (e.target.id === 'tg-form') { e.preventDefault(); Telegram.onSubmit(e.target); }
+  if (e.target.id === 'tg-form' || e.target.id === 'tg-relay-form') { e.preventDefault(); Telegram.onSubmit(e.target); }
 });
 seedDemo();
 updateRates();

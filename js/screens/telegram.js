@@ -13,7 +13,7 @@ import * as Blocks from '../blocks.js';
 
 const bot = () => window.desktop?.telegram;
 const bg = () => window.desktop?.background;
-const st = { status: null, pair: null, busy: false, error: '', bg: null };
+const st = { status: null, pair: null, busy: false, error: '', bg: null, relay: { busy: false, error: '', copied: false, script: '', open: false } };
 const prefs = () => ({ daily: true, at: '21:00', bills: true, weekly: true, weeklyDay: 0, weeklyAt: '19:00', cash: true, ...(ctx.state.meta.tg || {}) });
 
 // The Sunday ritual: the week, records to file, then the cash check.
@@ -89,6 +89,9 @@ export function alertText() {
   if (s.errorCode === 'conflict') return 'Telegram bot: another program or a second copy of the app is reading it. Close it.';
   if (s.errorCode === 'network' && Date.now() - (s.lastCheck || 0) > 10 * 60000) return 'Telegram bot: no connection to Telegram for a while (internet?).';
   if (!s.linked) return 'Telegram bot: link your account to finish (Settings → Telegram).';
+  const r = s.relay;
+  if (r?.on && r.error && Date.now() - (r.okAt || 0) > 10 * 60000) return 'Telegram always-on: the Google script doesn\'t answer. Check it in Settings → Telegram.';
+  if (r?.on && r.okAt && !r.trigger) return 'Telegram always-on is paused: Google isn\'t checking your bot. See Settings → Telegram.';
   return null;
 }
 
@@ -331,6 +334,56 @@ export const resume = () => loadStatus();
 
 // ---------- Settings ----------
 
+const ago = (t) => {
+  const m = Math.round((Date.now() - t) / 60000);
+  return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} days ago`;
+};
+
+// "Always on": a free Google script in the user's own account answers the
+// bot and keeps the messages while this PC is off (electron/relay.gs).
+function relaySection(s) {
+  const r = s.relay || { on: false };
+  const rs = st.relay;
+  if (r.on) {
+    const problem = r.error ? `The app can't reach your Google script: ${r.error}`
+      : r.okAt && !r.trigger ? 'Google isn\'t checking your bot yet. In the script editor pick <b>install</b> in the list next to ▶ Run, press ▶ Run and allow it.'
+      : r.lastError && !/conflict|terminated by other/i.test(r.lastError) ? `Google's last check said: ${r.lastError}` : '';
+    return `<div class="tg-relay on">
+      <h3>🌙 Always on <span class="right ${problem ? 'expense' : 'income'}">● ${problem ? 'needs a look' : 'on'}</span></h3>
+      <p class="muted small" style="margin-top:0">While this PC is off, your Google script answers the bot every minute and keeps what you send. It all lands here, on the right day, when the app opens.</p>
+      ${problem ? `<p class="lock-msg">${problem.startsWith('Google isn') ? problem : esc(problem)}</p>` : ''}
+      ${r.lastTick ? `<div class="kv"><span>Google last checked</span><b>${esc(ago(r.lastTick))}</b></div>` : r.trigger ? '<div class="kv"><span>Google</span><b>first check within a minute</b></div>' : ''}
+      ${r.okAt ? `<div class="kv"><span>Collected from Google</span><b>${esc(ago(r.okAt))}</b></div>` : ''}
+      ${r.waiting ? `<div class="kv"><span>Waiting to be logged</span><b>${r.waiting}</b></div>` : ''}
+      <div class="btns" style="margin-top:8px"><button class="btn" data-act="tg-relay-off" ${rs.busy ? 'disabled' : ''}>Turn always-on off</button></div>
+    </div>`;
+  }
+  if (!rs.open) {
+    return `<div class="tg-relay">
+      <h3>🌙 Make it always on <span class="right muted small">free · 3 min</span></h3>
+      <p class="muted small" style="margin-top:0">Right now the bot answers only while this app is open. Turn on <b>always on</b> and it answers even when the PC is off: a small free script in <b>your own Google account</b> checks the bot every minute and keeps your messages until the app opens. No server, nothing to pay.</p>
+      <button class="btn primary block" data-act="tg-relay-start">Set up always on</button>
+    </div>`;
+  }
+  return `<div class="tg-relay">
+    <h3>🌙 Always on: one-time setup</h3>
+    <ol class="steps small">
+      <li><button class="btn ${rs.copied ? '' : 'primary'}" data-act="tg-relay-copy">${rs.copied ? '✓ Copied' : '📋 Copy the script'}</button>
+        ${rs.script ? `<textarea class="tg-script" readonly rows="4" aria-label="The script">${esc(rs.script)}</textarea><span>Copying didn't work: click in the box, Ctrl+A, Ctrl+C.</span>` : ''}</li>
+      <li><button class="btn" data-act="tg-relay-site">Open Google Apps Script ↗</button> (sign in with your Google account). A new project opens.</li>
+      <li>Click in the code, <b>Ctrl+A</b>, then <b>Ctrl+V</b> to paste over everything. Press 💾 <b>Save</b>.</li>
+      <li>Top right: <b>Deploy → New deployment</b>. Next to "Select type" press ⚙ → <b>Web app</b>. Set <b>Execute as: Me</b> and <b>Who has access: Anyone</b>. Press <b>Deploy</b>.</li>
+      <li>Google asks for access: <b>Authorize access</b> → your account → <b>Advanced</b> → <b>Go to … (unsafe)</b> → <b>Allow</b>. It warns only because the script is yours and not published.</li>
+      <li>Copy the <b>Web app URL</b> it shows and paste it here:</li>
+    </ol>
+    <form id="tg-relay-form" autocomplete="off">
+      <label class="field"><span>Web app URL</span><input id="tg-relay-url" type="text" inputmode="url" placeholder="https://script.google.com/macros/s/…/exec" spellcheck="false"></label>
+      ${rs.error ? `<p class="lock-msg">${esc(rs.error)}</p>` : ''}
+      <div class="btns"><button class="btn primary" type="submit" ${rs.busy ? 'disabled' : ''}>${rs.busy ? 'Checking…' : 'Turn on'}</button><button class="btn" type="button" data-act="tg-relay-cancel">Not now</button></div>
+    </form>
+  </div>`;
+}
+
 const steps = `<ol class="steps small">
   <li>In Telegram, open <b>@BotFather</b> and send <code>/newbot</code>. Pick any name, e.g. "My money".</li>
   <li>BotFather replies with a <b>token</b> (looks like <code>123456789:AA…</code>). Paste it below.</li>
@@ -373,8 +426,9 @@ export function settingsCard() {
     ${!fixToken && (s.error || st.error) ? `<p class="lock-msg">${esc(s.error || st.error)}</p>` : ''}
     ${s.lastCheck ? `<div class="kv"><span>Last checked</span><b>${esc(new Date(s.lastCheck).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))}</b></div>` : ''}
     <p class="muted small">Send <code>coffee 35</code>, <code>taxi 45 cash</code>, <code>coffee 35 yesterday</code>, <code>+500 salary</code>, or tap a button below the chat. /today, /month, /balance, /last, /undo.</p>
-    <p class="muted small"><b>PC off?</b> Keep logging on your phone: Telegram keeps the messages for 24 hours and the app logs them, on the day you sent them, as soon as it opens. You get one summary message.</p>
+    ${s.relay?.on ? '' : '<p class="muted small"><b>PC off?</b> Keep logging on your phone: Telegram keeps the messages for 24 hours and the app logs them, on the day you sent them, as soon as it opens. You get one summary message.</p>'}
     <button class="btn primary block" data-act="tg-load">📥 Load from Telegram now</button>
+    ${relaySection(s)}
     <label class="field check"><input type="checkbox" data-tg="daily" ${p.daily ? 'checked' : ''}><span>Evening reminder to log</span></label>
     ${p.daily ? `<label class="field"><span>Remind me at</span><input type="time" data-tg="at" value="${esc(p.at)}"></label>` : ''}
     <label class="field check"><input type="checkbox" data-tg="bills" ${p.bills ? 'checked' : ''}><span>Morning note when a bill is due today or tomorrow</span></label>
@@ -388,7 +442,28 @@ export function settingsCard() {
   </section>`;
 }
 
+const cleanError = (e) => String(e?.message || e).replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
+
+async function relayConnect(form) {
+  const rs = st.relay;
+  rs.busy = true;
+  rs.error = '';
+  const url = form.querySelector('#tg-relay-url').value;
+  refresh();
+  try {
+    const r = await bot().relayConnect(url);
+    Object.assign(st.relay, { open: false, copied: false, script: '' });
+    ctx.toast(r.trigger ? 'Always on ✓ Your bot now works even when the PC is off.' : 'Connected. One more step: Google isn\'t checking yet (see Settings → Telegram).');
+  } catch (e) {
+    rs.error = cleanError(e);
+  }
+  rs.busy = false;
+  await loadStatus();
+  if (rs.error) { const i = document.getElementById('tg-relay-url'); if (i) i.value = url; }
+}
+
 export async function onSubmit(form) {
+  if (form.id === 'tg-relay-form') { await relayConnect(form); return true; }
   if (form.id !== 'tg-form') return false;
   st.busy = true;
   st.error = '';
@@ -398,7 +473,7 @@ export async function onSubmit(form) {
     form.querySelector('#tg-token').value = '';
     if (r?.kept) { st.pair = null; ctx.toast('Bot reconnected. Your Telegram is still linked ✓'); } else st.pair = await bot().pair();
   } catch (e) {
-    st.error = String(e?.message || e).replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
+    st.error = cleanError(e);
   }
   st.busy = false;
   await loadStatus();
@@ -412,6 +487,22 @@ export function onClick(act) {
   if (act === 'tg-open') { if (st.pair?.link) bot().openLink(st.pair.link); return true; }
   if (act === 'tg-review') { sendWeekly().then(() => ctx.toast('Sent. Check Telegram.')); return true; }
   if (act === 'tg-test') { send(T.reminderText(ctx.state, todayISO()), keyboard()).then(() => ctx.toast('Sent. Check Telegram.')); return true; }
+  if (act === 'tg-relay-start') { st.relay.open = true; refresh(); return true; }
+  if (act === 'tg-relay-cancel') { Object.assign(st.relay, { open: false, error: '', script: '' }); refresh(); return true; }
+  if (act === 'tg-relay-site') { bot().openLink('https://script.google.com/home/projects/create'); return true; }
+  if (act === 'tg-relay-copy') {
+    bot().relayScript().then(async (text) => {
+      try { await navigator.clipboard.writeText(text); st.relay.copied = true; st.relay.script = ''; ctx.toast('Script copied. Now open Google Apps Script.'); } catch { st.relay.script = text; }
+      refresh();
+    }, (e) => ctx.toast(cleanError(e)));
+    return true;
+  }
+  if (act === 'tg-relay-off') {
+    st.relay.busy = true;
+    refresh();
+    bot().relayOff().finally(() => { st.relay.busy = false; loadStatus(); ctx.toast('Always on is off. You can delete the script at script.google.com.'); });
+    return true;
+  }
   if (act === 'tg-off') { bot().disconnect().then(() => { st.pair = null; st.error = ''; loadStatus(); ctx.toast('Telegram disconnected'); }); return true; }
   return false;
 }

@@ -13,7 +13,7 @@ const plain = (c) => String(c / 100).replace('.', ',');
 export function settingsCard() {
   const list = B.blocks(ctx.state);
   return `<section class="card" id="tgb-card"><h2>Telegram buttons <button class="right btn" data-act="tgb-add">+ Button</button></h2>
-    <p class="muted small" style="margin-top:0">One tap in Telegram logs it for that day. They work with your PC off too: Telegram keeps the taps and the app logs them when it opens.</p>
+    <p class="muted small" style="margin-top:0">One tap in Telegram logs it for that day. They work with your PC off too: the taps are kept and the app logs them when it opens (with <b>Always on</b> the bot also answers them).</p>
     <div class="tgb-grid">${list.map((b, i) => `<div class="tgb">
       <button type="button" class="tgb-main" data-act="tgb-edit" data-id="${esc(b.id)}" title="Edit">
         <span class="tgb-emoji" aria-hidden="true">${esc(b.emoji || '•')}</span>

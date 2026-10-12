@@ -114,3 +114,77 @@ test('a new token for the same bot keeps the linked chat; a revoked token says s
   assert.equal(bot.status().linked, false);
   await bot.disconnect();
 });
+
+test('always on: the Google script keeps messages while the app is closed; the app collects and confirms them once', async () => {
+  const { loadRelay } = await import('../e2e/appscript.mjs');
+  // One bot, read by both the app (async fetch) and the Google script (sync).
+  const queue = [];
+  const sent = [];
+  let confirmed = 0;
+  const api = (method, body) => {
+    if (method === 'getMe') return { username: 'my_money_bot' };
+    if (method === 'getUpdates') { confirmed = Math.max(confirmed, body.offset || 0); return queue.filter((u) => u.update_id >= confirmed).slice(0, body.limit || 100); }
+    if (method === 'sendMessage') { sent.push(body); return { message_id: 500 + sent.length }; }
+    return true;
+  };
+  const URL_ = 'https://script.google.com/macros/s/TEST-deploy_1/exec';
+  let relay = null;
+  let clock = 1_000_000;
+  const relayCalls = [];
+  const net = {
+    async fetch(url, opts = {}) {
+      if (url.startsWith(URL_)) {
+        const q = Object.fromEntries(new URL(url).searchParams);
+        relayCalls.push(opts.method === 'POST' ? JSON.parse(opts.body).a : q.a);
+        const out = opts.method === 'POST' ? relay.post(JSON.parse(opts.body)) : relay.get(q);
+        return { status: 200, text: async () => JSON.stringify(out) };
+      }
+      await new Promise((r) => setTimeout(r, 5));
+      return { status: 200, json: async () => ({ ok: true, result: api(url.split('/').pop(), JSON.parse(opts.body || '{}')) }) };
+    },
+  };
+  const got = [];
+  const bot = createTelegram({ app: {}, net, storage: memory(), onUpdates: (u) => got.push(...u) });
+  await bot.connect(TOKEN);
+  const { code } = bot.pair();
+  queue.push(msg(1, 222, `/start ${code}`));
+  await until(() => bot.status().linked);
+
+  await assert.rejects(bot.relayConnect('https://example.com/x'), /Web app URL/);
+  const script = await bot.relayScript();
+  const key = script.match(/const KEY = '([\w-]+)'/)[1];
+  assert.ok(key.length >= 30);
+  relay = loadRelay({ key, telegram: { call: (m, p) => api(m, p) }, now: () => clock });
+  const on = await bot.relayConnect(URL_);
+  assert.equal(on.trigger, true);
+  assert.equal(bot.status().relay.on, true);
+
+  // PC off: the app stops; Google answers and keeps the message.
+  bot.stop();
+  clock += 120_000;
+  queue.push(msg(2, 222, 'coffee 35'));
+  relay.poll();
+  assert.match(sent.at(-1).text, /Saved: <b>coffee 35<\/b>/);
+  assert.equal(confirmed, 3);
+  assert.equal(relay.get({ k: key, a: 'status' }).waiting, 1);
+
+  // PC on: the app collects it from Google, handles it once, confirms it there.
+  bot.start();
+  assert.ok((await bot.loadNow()) >= 1);
+  await until(() => got.some((u) => u.update_id === 2));
+  assert.deepEqual(got.filter((u) => u.update_id === 2).length, 1);
+  bot.ack([2]);
+  await until(() => relayCalls.includes('ack'));
+  await until(() => relay.get({ k: key, a: 'status' }).waiting === 0);
+  assert.equal(relay.get({ k: key, a: 'status' }).waiting, 0);
+  assert.ok(bot.status().relay.okAt > 0);
+
+  // While the app is open Google stays quiet.
+  queue.push(msg(3, 222, 'tea 15'));
+  relay.poll();
+  assert.equal(sent.filter((m) => /Saved/.test(m.text)).length, 1);
+  await bot.relayOff();
+  assert.equal(bot.status().relay.on, false);
+  assert.equal(relay.triggers.length, 0);
+  await bot.disconnect();
+});
