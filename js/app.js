@@ -136,7 +136,10 @@ function undoRedo(dir) {
 }
 
 function applyTheme() {
-  const t = state.settings.theme;
+  const choice = state.settings.theme;
+  const design = ['ocean', 'forest', 'paper'].includes(choice) ? choice : '';
+  document.documentElement.dataset.design = design;
+  const t = design ? (design === 'paper' ? 'light' : 'dark') : choice;
   if (t === 'dark' || t === 'light') {
     document.documentElement.dataset.theme = t;
     ownTheme = true;
@@ -814,7 +817,7 @@ function viewSettings() {
     look: `<section class="card"><h2>Look</h2>
     <div class="row2">
       <label class="field"><span>Theme</span><select data-set="theme">
-        ${['system', 'dark', 'light'].map((t) => `<option value="${t}" ${st.theme === t ? 'selected' : ''}>${t[0].toUpperCase() + t.slice(1)}</option>`).join('')}
+        ${[['system', 'Follow system'], ['dark', 'Midnight premium'], ['light', 'Classic light'], ['ocean', 'Ocean'], ['forest', 'Forest'], ['paper', 'Paper']].map(([t, name]) => `<option value="${t}" ${st.theme === t ? 'selected' : ''}>${name}</option>`).join('')}
       </select></label>
       <label class="field"><span>Currency</span><input type="text" data-set="currency" value="${esc(st.currency)}" maxlength="5"></label>
     </div>

@@ -19,7 +19,11 @@
     // Apply the saved theme before first paint so there is no flash.
     try {
       const t = JSON.parse(localStorage.getItem('finance-helper.state') || '{}')?.settings?.theme || JSON.parse(localStorage.getItem('finance-helper.head') || '{}')?.theme;
-      if (t === 'dark' || t === 'light') document.documentElement.dataset.theme = t;
+      const design = ['ocean', 'forest', 'paper'].includes(t) ? t : '';
+      if (design) {
+        document.documentElement.dataset.design = design;
+        document.documentElement.dataset.theme = design === 'paper' ? 'light' : 'dark';
+      } else if (t === 'dark' || t === 'light') document.documentElement.dataset.theme = t;
     } catch {}
   </script>
 </head>
