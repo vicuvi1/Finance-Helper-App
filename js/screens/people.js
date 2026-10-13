@@ -188,7 +188,7 @@ function card(r, y) {
     <div class="pp-card-actions">
       ${hasOpen ? `<button type="button" class="btn sm primary" data-act="settle-quick" data-id="${esc(p.id)}" data-kind="${primaryKind}" data-amt="${primaryAmt}" data-cur="${esc(primaryCur)}" title="1-click settle debt">⚡ Settle</button>` : ''}
       <button type="button" class="btn sm" data-act="loan-with" data-id="${esc(p.id)}" title="Record loan or payback">+ Loan</button>
-      <button type="button" class="btn sm" data-act="tx-with" data-id="${esc(p.id)}" data-name="${esc(p.name)}" title="Log transaction">+ Log</button>
+      <button type="button" class="btn sm" data-act="table-with" data-id="${esc(p.id)}" data-name="${esc(p.name)}" title="View in Log Table">📊 Table</button>
       <button type="button" class="btn sm" data-act="person-open" data-id="${esc(p.id)}" title="Open history & profile">Details</button>
     </div>
   </div>`;
@@ -242,6 +242,7 @@ function tableView(rs) {
               <div class="btns-inline">
                 ${hasOpen ? `<button type="button" class="btn sm primary" data-act="settle-quick" data-id="${esc(p.id)}" data-kind="${primaryKind}" data-amt="${primaryAmt}" data-cur="${esc(primaryCur)}">⚡ Settle</button>` : ''}
                 <button type="button" class="btn sm" data-act="loan-with" data-id="${esc(p.id)}">+ Loan</button>
+                <button type="button" class="btn sm" data-act="table-with" data-id="${esc(p.id)}" data-name="${esc(p.name)}" title="View in Log Table">📊 Table</button>
                 <button type="button" class="btn sm" data-act="person-open" data-id="${esc(p.id)}">Details</button>
               </div>
             </td>
@@ -557,6 +558,7 @@ function openPerson(id) {
     ` : (owesLine ? `<div class="pp-badges" style="margin-bottom:12px">${owesLine}</div>` : '')}
     <div class="btns" style="margin-bottom:14px">
       <button class="btn primary" data-p="loan">+ Loan or payback</button>
+      <button class="btn" data-p="open-table" title="View all records and loans with this contact in the Log Table">📊 View in table</button>
       <button class="btn" data-p="income">${esc(p.name)} gave me</button>
       <button class="btn" data-p="expense">I gave ${esc(p.name)}</button>
     </div>
@@ -836,6 +838,7 @@ function openPerson(id) {
       }
       ctx.closeSheet();
       if (k === 'loan') setTimeout(() => openLoan(id), 200);
+      else if (k === 'open-table') ctx.openTableForPerson?.(p);
       else if (k === 'income') ctx.openTxSheet(null, { type: 'income', personName: p.name });
       else if (k === 'expense') ctx.openTxSheet(null, { type: 'expense', personName: p.name });
     });
@@ -921,14 +924,29 @@ function openLoan(personId = null, opts = {}) {
       const now = Date.now();
       const p = M.person(state, who);
       if (!p.currency && cur !== state.settings.currency) { p.currency = cur; M.touch(p, now); }
-      state.tx.push({
+      const tx = {
         id: M.uid(), createdAt: now, updatedAt: now, type: k.type, amount: inAcc, currency: accCur, rate, base: Math.round(inAcc * rate),
         date: $('#loan-date').value || todayISO(), category: k.type === 'income' ? 'other-in' : 'other', account: acc.id,
         note: $('#loan-note').value.trim() || k.note, person: who, loan: true, ...(accCur !== cur ? { debt: { amount, currency: cur } } : {}),
-      });
+      };
+      state.tx.push(tx);
+      const targetMonth = (tx.date || todayISO()).slice(0, 7);
+      if (ctx.ui) {
+        ctx.ui.month = targetMonth;
+        ctx.ui.flashId = tx.id;
+      }
       ctx.commit();
       ctx.closeSheet();
-      ctx.toast(`${k.label}: ${formatMoney(amount, cur)} · ${p.name}`);
+      ctx.toast(`${k.label}: ${formatMoney(amount, cur)} · ${p.name}`, 'View in table', () => {
+        if (ctx.openTableForTx) {
+          ctx.openTableForTx(tx);
+        } else {
+          state.settings.logView = 'table';
+          if (ctx.ui) { ctx.ui.month = targetMonth; ctx.ui.flashId = tx.id; }
+          location.hash = '#log';
+          ctx.render();
+        }
+      });
     });
   });
 }
@@ -1076,6 +1094,7 @@ export function onClick(act, el) {
   if (act === 'person-new') { addPerson(); return true; }
   if (act === 'loan-new') { openLoan(null, { kind: el.dataset.kind || 'lent' }); return true; }
   if (act === 'loan-with') { openLoan(el.dataset.id); return true; }
+  if (act === 'table-with') { ctx.openTableForPerson?.({ name: el.dataset.name }); return true; }
   if (act === 'tx-with') { ctx.openTxSheet(null, { personName: el.dataset.name }); return true; }
   if (act === 'settle-quick') {
     openLoan(el.dataset.id, {

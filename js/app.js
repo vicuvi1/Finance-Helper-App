@@ -639,7 +639,8 @@ function logView() {
 function logRecords() {
   const q = ui.search.trim();
   let list = q ? searchTx(state, q, todayISO()) : M.txInMonth(state, ui.month);
-  if (ui.filter !== 'all') list = list.filter((t) => t.type === ui.filter);
+  if (ui.filter === 'loan') list = list.filter((t) => t.loan);
+  else if (ui.filter !== 'all') list = list.filter((t) => t.type === ui.filter);
   return list;
 }
 
@@ -908,7 +909,7 @@ function viewLog() {
       <button type="button" class="btn" data-act="export-month" title="Download this month as a file Excel opens">Export month</button>
     </div>
   </div>
-  ${view === 'calendar' || (view === 'sheet' && !q) ? '' : `<div class="chips">${chip('all', 'All')}${chip('expense', 'Spent')}${chip('income', 'Earned')}${chip('transfer', 'Moves')}</div>`}
+  ${view === 'calendar' || (view === 'sheet' && !q) ? '' : `<div class="chips">${chip('all', 'All')}${chip('expense', 'Spent')}${chip('income', 'Earned')}${chip('transfer', 'Moves')}${chip('loan', '⚡ Loans')}</div>`}
   ${q && view !== 'calendar' ? searchCard(list) : view === 'calendar' ? '' : `<p class="search-hint muted small">Search all months: <span>${esc(SEARCH_HINT)}</span></p>`}
   ${content}
   ${view === 'sheet' && !q ? '<p class="muted small">Type an amount and it saves. Clear it to delete. <b>+</b> at the bottom adds the next month.</p>' : ''}
@@ -1743,13 +1744,27 @@ function onCellChange(el) {
   if (row.hasAttribute('data-draft')) {
     const d = ui.draft;
     if (col === 'type') {
-      d.type = v;
-      d.category = M.suggestCategory(state, d.note, v) || '';
+      if (v === 'loan-lent') {
+        d.type = 'expense';
+        d.loan = true;
+        d.category = 'other';
+      } else if (v === 'loan-borrowed') {
+        d.type = 'income';
+        d.loan = true;
+        d.category = 'other-in';
+      } else {
+        d.type = v;
+        d.loan = false;
+        d.category = M.suggestCategory(state, d.note, v) || '';
+      }
       renderKeepFocus();
     } else if (col === 'note') {
       d.note = v;
+      if (!d.loan && /^(loan|lent|borrowed|debt)\b/i.test(v.trim())) {
+        d.loan = true;
+      }
       if (!d.category) {
-        d.category = M.suggestCategory(state, v, d.type) || '';
+        d.category = M.suggestCategory(state, v, d.type) || (d.loan ? (d.type === 'income' ? 'other-in' : 'other') : '');
         const sel = row.querySelector('[data-col="category"]');
         if (sel && d.category) sel.value = d.category;
       }
@@ -1765,23 +1780,44 @@ function onCellChange(el) {
     if (!c || c <= 0) { toast('Amount must be a number bigger than 0'); el.value = formatMoney(t.amount, ''); return; }
     t.amount = c;
     t.base = Math.round(c * (t.rate || 1));
+    if (t.debt && t.currency === t.debt.currency) {
+      t.debt.amount = c;
+    }
   } else if (col === 'date') {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) { el.value = t.date; return; }
     t.date = v;
   } else if (col === 'type') {
-    if (v === 'transfer') {
+    if (v === 'loan-lent') {
+      t.type = 'expense';
+      t.loan = true;
+      t.account = t.account || t.from || state.settings.accounts[0].id;
+      t.category = t.category || 'other';
+      delete t.from;
+      delete t.to;
+    } else if (v === 'loan-borrowed') {
+      t.type = 'income';
+      t.loan = true;
+      t.account = t.account || t.from || state.settings.accounts[0].id;
+      t.category = t.category || 'other-in';
+      delete t.from;
+      delete t.to;
+    } else if (v === 'transfer') {
+      delete t.loan;
+      delete t.debt;
       t.from = t.account || state.settings.accounts[0].id;
       t.to = state.settings.accounts.find((a) => a.id !== t.from && a.id === state.settings.savingsAccount)?.id
         || state.settings.accounts.find((a) => a.id !== t.from)?.id;
       delete t.account;
       delete t.category;
     } else {
+      delete t.loan;
+      delete t.debt;
       t.account = t.account || t.from || state.settings.accounts[0].id;
       t.category = M.suggestCategory(state, t.note, v) || (v === 'income' ? 'other-in' : 'other');
       delete t.from;
       delete t.to;
+      t.type = v;
     }
-    t.type = v;
   } else if (col === 'from' || col === 'to') {
     const other = col === 'from' ? t.to : t.from;
     if (v === other) { toast('Pick two different accounts'); el.value = t[col]; return; }
@@ -1790,9 +1826,18 @@ function onCellChange(el) {
     setTxAccount(t, v);
   } else if (col === 'person') {
     const id = M.ensurePerson(state, v);
-    if (id) t.person = id; else { delete t.person; delete t.loan; }
+    if (id) {
+      t.person = id;
+    } else {
+      delete t.person;
+      delete t.loan;
+      delete t.debt;
+    }
   } else if (['category', 'note'].includes(col)) {
     t[col] = col === 'note' ? v.trim() : v;
+    if (col === 'note' && !t.loan && /^(loan|lent|borrowed|debt)\b/i.test(t.note)) {
+      t.loan = true;
+    }
   } else return;
   M.touch(t);
   persist();
@@ -1818,19 +1863,25 @@ function addDraftRow() {
   const cur = M.account(state, d.type === 'transfer' ? d.from : d.account)?.currency || state.settings.currency;
   const rate = suggestedRate(cur);
   if (!rate) { toast(`No rate for ${cur} yet. Use + New record to enter it.`); return; }
-  const base = { id: M.uid(), createdAt: now, updatedAt: now, type: d.type, amount, currency: cur, rate, base: Math.round(amount * rate), date: d.date, note: (d.note || '').trim() };
+  
+  const isLoan = Boolean(d.loan || d.type === 'loan-lent' || d.type === 'loan-borrowed' || /^(loan|lent|borrowed|debt)\b/i.test(d.note || ''));
+  const actualType = d.type === 'loan-borrowed' ? 'income' : (d.type === 'loan-lent' ? 'expense' : d.type);
+  
+  const base = { id: M.uid(), createdAt: now, updatedAt: now, type: actualType, amount, currency: cur, rate, base: Math.round(amount * rate), date: d.date, note: (d.note || '').trim() };
+  if (isLoan) base.loan = true;
   if (d.type === 'transfer' && cur !== (M.account(state, d.to)?.currency || cur)) {
     const toAmount = convert(amount, cur, M.account(state, d.to).currency, state.rates);
     if (toAmount == null) { toast('Different currencies: use + New record to enter what arrives.'); return; }
     base.toAmount = toAmount;
   }
+  const personId = M.ensurePerson(state, d.personName);
   ui.flashId = base.id;
-  state.tx.push(d.type === 'transfer'
+  state.tx.push(actualType === 'transfer'
     ? { ...base, from: d.from, to: d.to }
-    : { ...base, account: d.account, category: d.category || M.suggestCategory(state, d.note, d.type) || (d.type === 'income' ? 'other-in' : 'other'), ...(M.ensurePerson(state, d.personName) ? { person: M.ensurePerson(state, d.personName) } : {}) });
-  ui.draft = { ...d, note: '', category: '', amountText: '', personName: '' };
+    : { ...base, account: d.account, category: d.category || M.suggestCategory(state, d.note, actualType) || (actualType === 'income' ? 'other-in' : 'other'), ...(personId ? { person: personId } : {}) });
+  ui.draft = { ...d, type: 'expense', loan: false, note: '', category: '', amountText: '', personName: '' };
   commit();
-  toast(`Added ${money(amount)}`);
+  toast(isLoan ? `Added loan ${money(amount)}` : `Added ${money(amount)}`);
   document.querySelector('#tx-table tr[data-draft] [data-col="note"]')?.focus();
 }
 
@@ -2421,6 +2472,22 @@ Object.assign(ctx, {
   openSplit: (tx) => openSplitSheet(tx),
   backupNow: () => Backups.autoBackup({ force: true }),
   undo: () => undoRedo(-1),
+  openTableForTx: (tx) => {
+    state.settings.logView = 'table';
+    if (tx?.date) ui.month = tx.date.slice(0, 7);
+    if (tx?.id) ui.flashId = tx.id;
+    ui.search = '';
+    ui.filter = 'all';
+    location.hash = '#log';
+    render();
+  },
+  openTableForPerson: (p) => {
+    state.settings.logView = 'table';
+    ui.search = p?.name || '';
+    ui.filter = 'all';
+    location.hash = '#log';
+    render();
+  },
   // Sync brings in a merged copy of the data.
   replaceState: (next) => { state = next; persist({ quiet: true }); },
   // Swap the data in memory without saving (lock / unlock with encryption).

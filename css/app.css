@@ -705,8 +705,31 @@ table.grid .row-del:hover { color: var(--expense); }
 table.grid tr.draft td { background: var(--gold-soft); border-bottom: 0; }
 table.grid tr.draft .row-add { color: var(--gold); font-weight: 700; }
 table.grid tfoot td { padding: 11px 10px; font-size: 13px; color: var(--muted); border: 0; border-top: 1px solid var(--line-strong); }
-table.grid tfoot .num { font-feature-settings: "tnum"; }
 table.grid tfoot b { color: var(--text); font-weight: 600; }
+table.grid tr.is-loan { background: rgba(227, 185, 95, 0.05); }
+table.grid tr.is-loan td { border-bottom-color: rgba(227, 185, 95, 0.2); }
+table.grid .tbl-loan-badge {
+  display: inline-flex; align-items: center; gap: 3px;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.02em;
+  padding: 1px 6px; border-radius: 999px; margin-right: 6px;
+  white-space: nowrap; vertical-align: middle; flex-shrink: 0;
+}
+table.grid .tbl-loan-badge.lent {
+  background: rgba(227, 185, 95, 0.18); color: var(--gold);
+  border: 1px solid rgba(227, 185, 95, 0.4);
+}
+table.grid .tbl-loan-badge.borrowed {
+  background: rgba(86, 199, 133, 0.18); color: var(--income);
+  border: 1px solid rgba(86, 199, 133, 0.4);
+}
+table.grid .debt-cur-tag {
+  color: var(--gold) !important; background: rgba(227, 185, 95, 0.14);
+  padding: 1px 5px; border-radius: 4px; font-size: 10.5px;
+  border: 1px solid rgba(227, 185, 95, 0.3); margin-right: 6px;
+}
+table.grid select.sel-loan { color: var(--gold); font-weight: 600; }
+table.grid .note-cell { display: flex; align-items: center; width: 100%; min-width: 0; }
+table.grid .note-cell input { flex: 1; min-width: 0; }
 
 /* Calendar view */
 .cal { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)) minmax(0, 0.9fr); gap: 6px; }

@@ -236,3 +236,41 @@ test('normalizeState automatically merges Oliviu into Brother if both exist', as
   assert.equal(s.tx[1].person, 'p-brother', 't2 moved to brother');
 });
 
+test('tableHTML and log table views distinctly display loans with badges and totals', async () => {
+  const { tableHTML } = await import('../js/logviews.js');
+  const s = defaultState();
+  s.people = [{ id: 'p1', name: 'Haruto' }];
+  const list = [
+    { id: 't1', type: 'expense', amount: 624500, currency: 'MDL', rate: 1, base: 624500, date: '2026-10-10', category: 'food', account: 'wallet', note: 'Food' },
+    { id: 't2', type: 'expense', amount: 17300, currency: 'MDL', rate: 1, base: 17300, date: '2026-10-10', category: 'other', account: 'wallet', note: 'loan', person: 'p1', loan: true },
+    { id: 't3', type: 'income', amount: 314689, currency: 'MDL', rate: 1, base: 314689, date: '2026-10-14', category: 'other-in', account: 'safe', note: 'paid back', person: 'p1', loan: true, debt: { amount: 17500, currency: 'USD' } },
+  ];
+
+  const html = tableHTML(s, list, { sort: { col: 'date', dir: 1 }, fmt: (n) => `${n}`, selected: new Set() });
+  assert.ok(html.includes('class="t-expense is-loan'), 'row has is-loan class');
+  assert.ok(html.includes('⚡ Lent'), 'lent badge or select option present');
+  assert.ok(html.includes('⚡ Borrowed') || html.includes('paid back'), 'borrowed / payback option present');
+  assert.ok(html.includes('⚡ 175 USD'), 'debt tag rendered for foreign currency loan');
+  assert.ok(html.includes('⚡ −17300 lent'), 'day row summary includes lent total');
+  assert.ok(html.includes('⚡ −17300 lent'), 'footer includes lent total');
+});
+
+test('people screen provides direct 📊 Table action to jump to log table', async () => {
+  const PeopleScreen = await import('../js/screens/people.js');
+  const { ctx } = await import('../js/ctx.js');
+  const s = defaultState();
+  s.people = [{ id: 'p-bro', name: 'Brother' }];
+  ctx.state = s;
+  ctx.ui = {};
+  ctx.money = (n) => `${n}`;
+
+  let openedPersonTable = null;
+  ctx.openTableForPerson = (p) => { openedPersonTable = p.name; };
+
+  const html = PeopleScreen.view();
+  assert.ok(html.includes('data-act="table-with"'), 'Table action button rendered in people view');
+
+  PeopleScreen.onClick('table-with', { dataset: { id: 'p-bro', name: 'Brother' } });
+  assert.equal(openedPersonTable, 'Brother', 'openTableForPerson called with person name');
+});
+
