@@ -50,6 +50,7 @@ import { createHistory } from './history.js';
 import { searchTx, searchSummary, SEARCH_HINT } from './search.js';
 import { safeToSpend, shortDay } from './safespend.js';
 import { sound } from './audio.js';
+import { AmbientMusic } from './ambient.js';
 import { openPalette, closePalette, isPaletteOpen } from './palette.js';
 import { bindSankeyHover } from './charts.js';
 
@@ -144,6 +145,7 @@ const THEME_STYLES = [
   ['ocean', 'Ocean', 'Blue tides and drifting bubbles', '#08131f', '#82caff'],
   ['forest', 'Forest', 'Soft greens and falling leaves', '#0b1712', '#b8d88d'],
   ['paper', 'Paper', 'Warm pages and floating flecks', '#f5f0e6', '#875523'],
+  ['samurai', 'Samurai', 'Sakura petals, blood moon & bushido spirit', '#0c080e', '#ff4d6d'],
   ['light', 'Classic light', 'Clean whites and a soft shimmer', '#f3f4f7', '#8a6a22'],
   ['system', 'Follow system', 'Matches your device appearance', '#303b4b', '#c6d3e2'],
 ];
@@ -164,7 +166,8 @@ function applyAtmosphere() {
   layer.id = 'theme-atmosphere';
   layer.className = 'theme-atmosphere atmosphere-' + key;
   layer.setAttribute('aria-hidden', 'true');
-  for (let i = 0; i < 12; i++) {
+  const count = key === 'samurai' ? 18 : 12;
+  for (let i = 0; i < count; i++) {
     const particle = document.createElement('span');
     particle.className = 'atmosphere-particle';
     particle.style.cssText = `--x:${(i * 37 + 9) % 100}%;--delay:-${i * 2.7}s;--duration:${18 + i % 5 * 3}s;--size:${9 + i % 4 * 4}px;--drift:${i % 2 ? -70 : 70}px;`;
@@ -176,10 +179,36 @@ function applyAtmosphere() {
 document.addEventListener('visibilitychange', () => document.getElementById('theme-atmosphere')?.classList.toggle('paused', document.hidden));
 window.matchMedia('(prefers-reduced-motion: reduce)').addEventListener('change', applyAtmosphere);
 
+function applyWallpaper() {
+  document.getElementById('theme-wallpaper')?.remove();
+  let wp = state.settings.wallpaper;
+  if (!wp && state.settings.theme === 'samurai') {
+    wp = 'samurai-moon';
+  }
+  if (!wp || wp === 'none') return;
+  const layer = document.createElement('div');
+  layer.id = 'theme-wallpaper';
+  layer.className = 'theme-wallpaper';
+  layer.setAttribute('aria-hidden', 'true');
+  const opacity = state.settings.wallpaperOpacity != null ? Number(state.settings.wallpaperOpacity) : 0.35;
+  layer.style.opacity = Math.max(0.05, Math.min(1, opacity));
+  if (wp === 'samurai-moon') {
+    layer.classList.add('wp-samurai-moon');
+  } else if (wp === 'samurai-katana') {
+    layer.classList.add('wp-samurai-katana');
+  } else if (wp === 'custom' && state.settings.customWallpaper) {
+    layer.style.backgroundImage = `url("${state.settings.customWallpaper.replace(/"/g, '\\"')}")`;
+  } else {
+    return;
+  }
+  document.body.prepend(layer);
+}
+
 function applyTheme() {
   applyAtmosphere();
+  applyWallpaper();
   const choice = state.settings.theme;
-  const design = ['ocean', 'forest', 'paper'].includes(choice) ? choice : '';
+  const design = ['ocean', 'forest', 'paper', 'samurai'].includes(choice) ? choice : '';
   document.documentElement.dataset.design = design;
   const t = design ? (design === 'paper' ? 'light' : 'dark') : choice;
   if (t === 'dark' || t === 'light') {
@@ -190,6 +219,11 @@ function applyTheme() {
     ownTheme = false;
   }
 }
+
+AmbientMusic.subscribe(() => {
+  renderSidebar();
+  if (ui.tab === 'settings' && ui.settingsTab === 'general') render();
+});
 
 // ---------- Shared pieces ----------
 
@@ -288,12 +322,27 @@ function renderSidebar() {
   badge('goals', gs.target && gs.ratio > 0 ? `${Math.round(gs.ratio * 100)}%` : '', 'gold');
   const r = 15;
   const c = 2 * Math.PI * r;
+  const ambState = AmbientMusic.getState();
+  const currentTrack = AmbientMusic.TRACKS.find((t) => t.id === ambState.track) || AmbientMusic.TRACKS[0];
+  const ambPill = `<div class="sf-ambient">
+    <button type="button" class="ambient-pill ${ambState.playing ? 'playing' : ''}" data-act="amb-toggle" title="${ambState.playing ? 'Pause' : 'Play'} Lo-Fi & Zen music (${esc(currentTrack.name)})">
+      <span class="amb-note">${currentTrack.icon}</span>
+      <span class="amb-label">
+        <b>${esc(currentTrack.name)}</b>
+        <small>${ambState.playing ? 'Playing Lo-Fi' : 'Offline Lo-Fi Player'}</small>
+      </span>
+      <span class="amb-waves" aria-hidden="true">
+        <i class="w1"></i><i class="w2"></i><i class="w3"></i>
+      </span>
+    </button>
+  </div>`;
   bottom.innerHTML = `${gs.target ? `<button type="button" class="sf-goal" data-go="goals" title="${esc(g.name)}">
       <svg viewBox="0 0 38 38" width="38" height="38" aria-hidden="true"><circle cx="19" cy="19" r="${r}" class="sf-track"/><circle cx="19" cy="19" r="${r}" class="sf-prog" style="stroke-dasharray:${c.toFixed(1)};stroke-dashoffset:${(c * (1 - gs.ratio)).toFixed(1)}" transform="rotate(-90 19 19)"/></svg>
       <span><b>${esc(g.emoji || '🎯')} ${esc(g.name)}</b><small>${Math.round(gs.ratio * 100)}% · ${money(Math.round(gs.remaining / 100) * 100, { compact: true })} to go</small></span>
     </button>` : ''}
     <div class="sf-row"><span class="sf-today dow-${dowIndex(today)}"><i aria-hidden="true"></i>${DOW_LONG[dowIndex(today)].slice(0, 3)}, ${Number(today.slice(8, 10))} ${MONTHS[Number(today.slice(5, 7)) - 1].slice(0, 3)}</span>
-    <button type="button" class="sf-buddy" data-act="bd-toggle" aria-pressed="${Buddy.isOn()}" title="${Buddy.isOn() ? 'Hide' : 'Show'} ${esc(Buddy.buddyName())}">🤖 <span>${esc(Buddy.buddyName())}</span><b>${Buddy.isOn() ? 'On' : 'Off'}</b></button></div>`;
+    <button type="button" class="sf-buddy" data-act="bd-toggle" aria-pressed="${Buddy.isOn()}" title="${Buddy.isOn() ? 'Hide' : 'Show'} ${esc(Buddy.buddyName())}">🤖 <span>${esc(Buddy.buddyName())}</span><b>${Buddy.isOn() ? 'On' : 'Off'}</b></button></div>
+    ${ambPill}`;
 }
 
 // "Today · Saturday, 10 October" in today's weekday color.
@@ -927,12 +976,56 @@ function viewSettings() {
     </div>
     <p class="muted small" style="margin-bottom:0">From Google Sheets: File → Download → <b>Microsoft Excel (.xlsx)</b> and import the whole file: every month tab at once, you pick which. Bank statements: export CSV or Excel from maib / Victoriabank online banking. Importing the same thing twice is safe.</p>
   </section>`,
-    look: `<section class="card look-card"><h2>Look</h2>
+    look: `<section class="card look-card"><h2>Look & Atmosphere</h2>
     ${themePicker(st)}
-    <label class="motion-setting"><span><b>Living atmosphere</b><small>Leaves, bubbles and starlight. Follows your device’s reduced-motion preference.</small></span><input type="checkbox" data-set="themeMotion" ${st.themeMotion !== false ? 'checked' : ''} aria-label="Living atmosphere"></label>
-    <label class="motion-setting"><span><b>Tactile sounds</b><small>Mechanical micro-click on buttons, keys and coin chime on logging.</small></span><input type="checkbox" data-set="sound" ${st.sound !== false ? 'checked' : ''} aria-label="Tactile sounds"></label>
+    <label class="motion-setting"><span><b>Living atmosphere</b><small>Sakura petals, leaves, bubbles and starlight. Follows your device’s reduced-motion preference.</small></span><input type="checkbox" data-set="themeMotion" ${st.themeMotion !== false ? 'checked' : ''} aria-label="Living atmosphere"></label>
+    <div class="field" style="margin-top:14px">
+      <span style="font-weight:600;display:block;margin-bottom:6px">Atmospheric Wallpaper</span>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px">
+        <label class="btn outline sm" style="display:flex;align-items:center;gap:6px;cursor:pointer">
+          <input type="radio" name="app-wp" data-set="wallpaper" value="none" ${(!st.wallpaper || st.wallpaper === 'none') ? 'checked' : ''}> None
+        </label>
+        <label class="btn outline sm" style="display:flex;align-items:center;gap:6px;cursor:pointer">
+          <input type="radio" name="app-wp" data-set="wallpaper" value="samurai-moon" ${st.wallpaper === 'samurai-moon' || (!st.wallpaper && st.theme === 'samurai') ? 'checked' : ''}> ⛩️ Blood Moon
+        </label>
+        <label class="btn outline sm" style="display:flex;align-items:center;gap:6px;cursor:pointer">
+          <input type="radio" name="app-wp" data-set="wallpaper" value="samurai-katana" ${st.wallpaper === 'samurai-katana' ? 'checked' : ''}> ⚔️ Katana Slash
+        </label>
+        <label class="btn outline sm" style="display:flex;align-items:center;gap:6px;cursor:pointer">
+          <input type="radio" name="app-wp" data-set="wallpaper" value="custom" ${st.wallpaper === 'custom' ? 'checked' : ''}> 🖼️ Custom URL
+        </label>
+      </div>
+      ${st.wallpaper === 'custom' ? `<input type="url" data-set="customWallpaper" placeholder="https://example.com/wallpaper.jpg" value="${esc(st.customWallpaper || '')}" style="margin-top:8px" aria-label="Custom wallpaper URL">` : ''}
+      ${(st.wallpaper && st.wallpaper !== 'none') || (!st.wallpaper && st.theme === 'samurai') ? `<label class="field" style="margin-top:8px"><span>Wallpaper Opacity (${Math.round((st.wallpaperOpacity ?? 0.35) * 100)}%)</span><input type="range" data-set="wallpaperOpacity" min="0.05" max="0.9" step="0.05" value="${st.wallpaperOpacity ?? 0.35}"></label>` : ''}
+    </div>
+    <label class="motion-setting" style="margin-top:14px"><span><b>Tactile sounds</b><small>Mechanical micro-click on buttons, keys and coin chime on logging.</small></span><input type="checkbox" data-set="sound" ${st.sound !== false ? 'checked' : ''} aria-label="Tactile sounds"></label>
     <div style="margin:4px 0 10px"><button type="button" class="btn sm" data-act="test-sound">🔊 Test sounds</button></div>
     <label class="field"><span>Currency</span><input type="text" data-set="currency" value="${esc(st.currency)}" maxlength="5"></label>
+  </section>
+  <section class="card ambient-card">
+    <h2>Lo-Fi & Zen Ambient Music</h2>
+    <p class="muted small" style="margin-top:0">100% offline procedural soundscapes generated in real-time via Web Audio API. Gentle background focus while managing finances.</p>
+    <div class="amb-controls" style="margin-top:12px">
+      <button type="button" class="btn ${AmbientMusic.getState().playing ? 'primary' : 'outline'}" data-act="amb-toggle">
+        ${AmbientMusic.getState().playing ? '⏸️ Pause soundscape' : '▶️ Play soundscape'}
+      </button>
+      <button type="button" class="btn outline sm" data-act="amb-next">⏭️ Next track</button>
+      <label style="display:inline-flex;align-items:center;gap:8px;font-size:13px;margin-left:auto">
+        <span>Volume</span>
+        <input type="range" data-act="amb-vol" min="0" max="1" step="0.05" value="${AmbientMusic.getState().volume}" style="width:110px">
+      </label>
+    </div>
+    <div class="amb-tracks">
+      ${AmbientMusic.TRACKS.map((t) => `
+        <button type="button" class="amb-track-btn ${AmbientMusic.getState().track === t.id ? 'active' : ''}" data-act="amb-track" data-track="${t.id}">
+          <span class="amb-t-icon">${t.icon}</span>
+          <span class="amb-t-text">
+            <b>${esc(t.name)}</b>
+            <small>${esc(t.desc)}</small>
+          </span>
+        </button>
+      `).join('')}
+    </div>
   </section>`,
     danger: `<section class="card"><h2>Danger zone</h2>
     <button class="btn danger block" data-act="wipe">Erase everything on this device</button>
@@ -1925,11 +2018,31 @@ function onSettingsChange(el) {
     else if (key === 'goal.target') st.goal.target = Math.max(0, evalAmount(v) || 0);
     else if (key === 'goal.account') st.goal.account = v;
     else if (key === 'savingsAccount') st.savingsAccount = v;
-    else if (key === 'theme') { st.theme = v; applyTheme(); }
+    else if (key === 'theme') {
+      st.theme = v;
+      if (v === 'samurai' && !st.wallpaper) {
+        st.wallpaper = 'samurai-moon';
+      }
+      applyTheme();
+      render();
+    }
     else if (key === 'themeMotion') { st.themeMotion = el.checked; applyAtmosphere(); }
     else if (key === 'sound') { st.sound = el.checked; if (st.sound) sound.test(state); }
     else if (key === 'currency') st.currency = v.trim().toUpperCase() || 'MDL';
-    if (!['theme', 'themeMotion', 'sound'].includes(key)) st.updatedAt = Date.now();
+    else if (key === 'wallpaper') {
+      st.wallpaper = v;
+      applyWallpaper();
+      render();
+    }
+    else if (key === 'customWallpaper') {
+      st.customWallpaper = v.trim();
+      applyWallpaper();
+    }
+    else if (key === 'wallpaperOpacity') {
+      st.wallpaperOpacity = Number(v);
+      applyWallpaper();
+    }
+    if (!['theme', 'themeMotion', 'sound', 'wallpaper', 'customWallpaper', 'wallpaperOpacity'].includes(key)) st.updatedAt = Date.now();
   } else if (el.dataset.jar) {
     const j = M.touch(M.jar(state, el.dataset.jar));
     if (el.dataset.field === 'pct') j.pct = Math.max(0, Math.min(100, Math.round(Number(v) || 0)));
@@ -1970,6 +2083,25 @@ document.addEventListener('click', (e) => {
   if (act === 'test-sound') {
     sound.test(state);
     toast('Playing sound test 🔊');
+    return;
+  }
+  if (act === 'amb-toggle') {
+    AmbientMusic.toggle();
+    renderSidebar();
+    if (ui.tab === 'settings' && ui.settingsTab === 'general') render();
+    return;
+  }
+  if (act === 'amb-next') {
+    AmbientMusic.nextTrack();
+    renderSidebar();
+    if (ui.tab === 'settings' && ui.settingsTab === 'general') render();
+    return;
+  }
+  if (act === 'amb-track') {
+    AmbientMusic.setTrack(el.dataset.track);
+    if (!AmbientMusic.getState().playing) AmbientMusic.play();
+    renderSidebar();
+    if (ui.tab === 'settings' && ui.settingsTab === 'general') render();
     return;
   }
   if (SCREENS[ui.tab]?.onClick?.(act, el)) return;
@@ -2078,6 +2210,24 @@ document.addEventListener('change', (e) => {
 });
 
 document.addEventListener('input', (e) => {
+  if (e.target.dataset.act === 'amb-vol') {
+    AmbientMusic.setVolume(e.target.value);
+    return;
+  }
+  if (e.target.dataset.set === 'wallpaperOpacity') {
+    state.settings.wallpaperOpacity = Number(e.target.value);
+    applyWallpaper();
+    const lbl = e.target.closest('label')?.querySelector('span');
+    if (lbl) lbl.textContent = `Wallpaper Opacity (${Math.round(state.settings.wallpaperOpacity * 100)}%)`;
+    persist();
+    return;
+  }
+  if (e.target.dataset.set === 'customWallpaper') {
+    state.settings.customWallpaper = e.target.value.trim();
+    applyWallpaper();
+    persist();
+    return;
+  }
   if (!e.target.closest('.sheet') && SCREENS[ui.tab]?.onInput?.(e.target)) return;
   if (e.target.id === 'search') {
     ui.search = e.target.value;

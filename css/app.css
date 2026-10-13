@@ -1946,6 +1946,33 @@ body.locked .calc-fab, body.locked .calc, body.printing .calc-fab, body.printing
 }
 :root[data-design="forest"] .card { box-shadow: 0 8px 24px -16px rgb(0 0 0 / 45%); }
 :root[data-design="paper"] .card { box-shadow: 0 3px 12px -8px rgb(80 60 30 / 20%); }
+:root[data-design="samurai"] {
+  --bg: #0c080e;
+  --surface: #140d16;
+  --surface-2: #1c1220;
+  --surface-3: #271a2c;
+  --side-bg: #100a13;
+  --line: #2e1a2b;
+  --line-strong: #4a243f;
+  --text: #faebf0;
+  --muted: #b898a7;
+  --faint: #8e7280;
+  --gold: #ff4d6d;
+  --gold-soft: rgb(255 77 109 / 14%);
+  --gold-ink: #ffffff;
+  --btn-bg: #ff4d6d;
+  --btn-ink: #140509;
+  --chart-bar: #c9184a;
+  --spot: rgb(255 77 109 / 9%);
+  --ambient: rgb(224 40 75 / 10%);
+  --display: "Geist", system-ui, sans-serif;
+  --radius: 14px;
+  --radius-sm: 8px;
+}
+:root[data-design="samurai"] .card {
+  box-shadow: 0 8px 32px -16px rgb(255 77 109 / 18%);
+  border-color: color-mix(in srgb, #ff4d6d 22%, var(--line));
+}
 /* Theme gallery: live selection with keyboard-native radio controls. */
 .style-picker { padding: 0; margin: 0 0 20px; border: 0; min-width: 0; }
 .style-picker legend { font-size: 14px; color: var(--muted); margin-bottom: 12px; }
@@ -1972,6 +1999,7 @@ input:checked + .style-preview .style-check { opacity: 1; transform: scale(1); }
 .style-ocean .preview-motif { background: transparent; border: 1px solid currentColor; border-radius: 50%; }
 .style-dark .preview-motif, .style-light .preview-motif { clip-path: polygon(50% 0,60% 40%,100% 50%,60% 60%,50% 100%,40% 60%,0 50%,40% 40%); border-radius: 0; }
 .style-paper .preview-motif { width: 7px; height: 12px; border-radius: 1px; }
+.style-samurai .preview-motif { width: 10px; height: 14px; background: #ff4d6d; border-radius: 2px 85% 2px 85%; transform: rotate(-35deg); box-shadow: 0 0 8px rgba(255, 77, 109, 0.6); }
 .style-choice:hover .preview-motif { animation: preview-drift 3s ease-in-out infinite; }
 @keyframes preview-drift { 50% { transform: translate(-12px, 18px) rotate(80deg); } }
 .motion-setting { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 0; border-top: 1px solid var(--line); margin-bottom: 12px; cursor: pointer; }
@@ -1989,15 +2017,107 @@ input:checked + .style-preview .style-check { opacity: 1; transform: scale(1); }
 .atmosphere-forest .atmosphere-particle::after { content: ''; position: absolute; top: 15%; left: 50%; height: 70%; width: 1px; background: #526f3c; transform: rotate(-45deg); }
 .atmosphere-ocean .atmosphere-particle { top: auto; bottom: -30px; border-radius: 50%; background: transparent; border: 1px solid #82caff; animation-name: atmosphere-rise; }
 .atmosphere-paper .atmosphere-particle { height: calc(var(--size) * 1.3); background: #b68e57; border-radius: 1px; }
+.atmosphere-samurai .atmosphere-particle {
+  width: var(--size);
+  height: calc(var(--size) * 1.35);
+  border-radius: 2px 85% 2px 85%;
+  background: linear-gradient(135deg, #ffa8b6 0%, #ff5c7c 60%, #c9184a 100%);
+  border: 1px solid rgba(255, 117, 143, 0.5);
+  box-shadow: 0 0 8px rgba(255, 92, 124, 0.4);
+  animation-name: atmosphere-sakura;
+}
 .atmosphere-dark .atmosphere-particle, .atmosphere-light .atmosphere-particle, .atmosphere-system .atmosphere-particle { top: var(--x); width: 4px; height: 4px; border-radius: 50%; animation: atmosphere-star var(--duration) ease-in-out var(--delay) infinite; }
 .theme-atmosphere.paused .atmosphere-particle { animation-play-state: paused; }
 @keyframes atmosphere-fall { 0% { opacity: 0; transform: translate(0, -30px) rotate(0); } 10%,85% { opacity: .18; } 50% { transform: translate(var(--drift), 50vh) rotate(160deg); } 100% { opacity: 0; transform: translate(0, calc(100vh + 40px)) rotate(320deg); } }
 @keyframes atmosphere-rise { 0% { opacity: 0; transform: translate(0, 30px); } 10%,85% { opacity: .16; } 50% { transform: translate(var(--drift), -50vh); } 100% { opacity: 0; transform: translate(0, calc(-100vh - 40px)); } }
+@keyframes atmosphere-sakura {
+  0% { opacity: 0; transform: translate(0, -30px) rotate(0deg) scale(0.7); }
+  15%, 85% { opacity: 0.45; }
+  50% { transform: translate(var(--drift), 50vh) rotate(190deg) scale(1.1); }
+  100% { opacity: 0; transform: translate(calc(var(--drift) * 1.6), calc(100vh + 40px)) rotate(380deg) scale(0.85); }
+}
 @keyframes atmosphere-star { 0%,100% { opacity: .02; transform: scale(.7); } 50% { opacity: .3; transform: scale(1.4); } }
 @media (max-width: 719px) { .atmosphere-particle:nth-child(n+7) { display: none; } }
 @media (prefers-reduced-motion: reduce) { .theme-atmosphere { display: none; } .style-choice:hover { transform: none; } }
 body.locked .theme-atmosphere, body.printing .theme-atmosphere { display: none; }
 @media print { .theme-atmosphere { display: none; } }
+
+/* Atmospheric Wallpapers */
+.theme-wallpaper {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-position: center center;
+  background-repeat: no-repeat;
+  background-size: cover;
+  transition: opacity 0.4s ease, filter 0.4s ease;
+}
+.wp-samurai-moon {
+  background-image:
+    radial-gradient(circle at 50% 38%, rgba(255, 77, 109, 0.18) 0%, transparent 45%),
+    url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid slice"><defs><radialGradient id="moon" cx="50%" cy="38%" r="35%"><stop offset="0%" stop-color="%23ff4d6d" stop-opacity="0.95"/><stop offset="55%" stop-color="%23c9184a" stop-opacity="0.8"/><stop offset="100%" stop-color="%23590d22" stop-opacity="0"/></radialGradient><linearGradient id="mt" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="%231a0e1c"/><stop offset="100%" stop-color="%230c080e"/></linearGradient></defs><rect width="1920" height="1080" fill="%230a070c"/><circle cx="960" cy="420" r="260" fill="url(%23moon)"/><path d="M0 800 Q 480 690 960 740 T 1920 780 L 1920 1080 L 0 1080 Z" fill="url(%23mt)" opacity="0.95"/><path d="M0 870 Q 480 810 1000 850 T 1920 870 L 1920 1080 L 0 1080 Z" fill="%23070408"/><g fill="%23070408" transform="translate(960,610)"><path d="M-150 -120 L 150 -120 Q 0 -138 -150 -120 Z" stroke="%23ff4d6d" stroke-width="5"/><path d="M-170 -105 L 170 -105 L 160 -95 L -160 -95 Z"/><rect x="-140" y="-80" width="280" height="12"/><rect x="-95" y="-80" width="18" height="195"/><rect x="77" y="-80" width="18" height="195"/><rect x="-10" y="-105" width="20" height="25"/></g></svg>');
+}
+.wp-samurai-katana {
+  background-image:
+    radial-gradient(circle at 75% 25%, rgba(255, 77, 109, 0.15) 0%, transparent 40%),
+    url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid slice"><defs><linearGradient id="blade" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="%23ff4d6d" stop-opacity="0.5"/><stop offset="50%" stop-color="%23ff758f" stop-opacity="0.2"/><stop offset="100%" stop-color="%23000" stop-opacity="0"/></linearGradient></defs><rect width="1920" height="1080" fill="%230b080d"/><path d="M200 120 L 1720 960" stroke="url(%23blade)" stroke-width="6" stroke-linecap="round"/><circle cx="1380" cy="380" r="240" fill="%23ff4d6d" opacity="0.12"/></svg>');
+}
+
+/* Sidebar Ambient Music Pill */
+.sf-ambient { margin-top: 8px; width: 100%; }
+.ambient-pill {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color .15s, background .15s, transform .15s;
+}
+.ambient-pill:hover { border-color: var(--gold); transform: translateY(-1px); }
+.ambient-pill.playing { border-color: color-mix(in srgb, var(--gold) 60%, var(--line)); background: color-mix(in srgb, var(--gold) 12%, var(--surface-2)); }
+.amb-note { font-size: 16px; flex: none; }
+.amb-label { display: grid; gap: 1px; flex: 1; min-width: 0; }
+.amb-label b { font-size: 12px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.amb-label small { font-size: 10.5px; color: var(--muted); }
+.amb-waves { display: flex; align-items: flex-end; gap: 2px; height: 14px; flex: none; }
+.amb-waves i { width: 3px; border-radius: 99px; background: var(--muted); height: 3px; }
+.ambient-pill.playing .amb-waves i { background: var(--gold); animation: amb-wave-bounce 0.8s ease-in-out infinite alternate; }
+.ambient-pill.playing .amb-waves i.w1 { animation-delay: 0.1s; height: 12px; }
+.ambient-pill.playing .amb-waves i.w2 { animation-delay: 0.3s; height: 8px; }
+.ambient-pill.playing .amb-waves i.w3 { animation-delay: 0.2s; height: 14px; }
+@keyframes amb-wave-bounce { 0% { height: 3px; } 100% { height: 14px; } }
+
+/* Settings Ambient Tracks */
+.amb-tracks { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px; margin-top: 10px; }
+.amb-track-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color .15s, transform .15s;
+}
+.amb-track-btn:hover { border-color: var(--gold); }
+.amb-track-btn.active { border-color: var(--gold); background: color-mix(in srgb, var(--gold) 12%, var(--surface-2)); }
+.amb-t-icon { font-size: 20px; flex: none; }
+.amb-t-text { display: grid; gap: 2px; min-width: 0; }
+.amb-t-text b { font-size: 13px; font-weight: 650; }
+.amb-t-text small { font-size: 11px; color: var(--muted); }
+.amb-controls { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
 
 /* Safe to spend today (Home) */
 .ss { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px 32px; align-items: center; margin-bottom: 14px; padding: 20px 24px;
