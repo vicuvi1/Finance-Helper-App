@@ -5,7 +5,7 @@
 import { ctx, esc } from '../ctx.js';
 import { APP_VERSION } from '../version.js';
 
-const desk = () => window.desktop?.update;
+const desk = () => (typeof window !== 'undefined' ? window.desktop?.update : null);
 const u = { status: 'idle', version: null, percent: 0, message: '' };
 let started = false;
 
@@ -15,7 +15,7 @@ const when = (ts) => (ts ? new Date(ts).toLocaleString([], { dateStyle: 'medium'
 export async function initUpdates() {
   if (started) return;
   started = true;
-  const info = (await window.desktop?.appInfo?.().catch(() => null)) || { version: APP_VERSION };
+  const info = (await (typeof window !== 'undefined' ? window.desktop?.appInfo?.().catch(() => null) : null)) || { version: APP_VERSION };
   u.current = info.version;
   const m = ctx.state.meta;
   if (m.installedVersion !== info.version) {
@@ -51,34 +51,60 @@ export function settingsCard() {
   const current = u.current || APP_VERSION;
   let body;
   if (!desk()) {
-    body = `<p class="muted small" style="margin:0 0 10px">This is the web version: it loads the newest version by itself whenever it opens online. For one-click updates use the desktop app.</p>
-      <button class="btn block" data-act="update-reload">Reload now</button>`;
+    body = `<div class="set-status-box success">
+      <div class="set-sb-icon">⚡</div>
+      <div class="set-sb-content">
+        <b>PWA Cloud &amp; Offline Ready</b>
+        <p class="muted small" style="margin:2px 0 0">Web edition automatically fetches the newest service worker release online while remaining 100% offline-functional.</p>
+      </div>
+    </div>
+    <button class="btn block" style="margin-top:12px" data-act="update-reload">↻ Check &amp; Reload now</button>`;
   } else {
     const s = u.status;
     const line = {
       idle: 'Not checked yet this session.',
       checking: 'Checking GitHub for a new version…',
-      latest: 'You have the latest version.',
-      available: `Version ${esc(u.version)} is available.`,
+      latest: 'You have the latest version installed.',
+      available: `Version ${esc(u.version)} is available on GitHub Releases.`,
       downloading: `Downloading version ${esc(u.version || '')}… ${u.percent}%`,
-      ready: `Version ${esc(u.version)} is ready. Restart to finish.`,
+      ready: `Version ${esc(u.version)} is ready to install. Restart to finish.`,
       error: `Couldn't update: ${esc(u.message)}`,
       dev: esc(u.message),
     }[s];
     const btn = {
-      available: '<button class="btn primary block" data-act="update-download">Update now</button>',
-      ready: '<button class="btn primary block" data-act="update-install">Restart to update</button>',
+      available: '<button class="btn primary block" data-act="update-download">Download update</button>',
+      ready: '<button class="btn primary block" data-act="update-install">Restart to apply update</button>',
       downloading: `<div class="bar gold"><i style="width:${u.percent}%"></i></div>`,
-      checking: '<button class="btn block" disabled>Checking…</button>',
-    }[s] || '<button class="btn block" data-act="update-check">Check for updates</button>';
-    body = `<p style="margin:0 0 10px" class="${s === 'error' ? 'expense' : s === 'latest' ? 'income' : ''}">${line}</p>${btn}`;
+      checking: '<button class="btn block" disabled>Checking GitHub…</button>',
+    }[s] || '<button class="btn block" data-act="update-check">🔍 Check for updates</button>';
+    body = `<div class="set-status-box ${s === 'error' ? 'danger' : s === 'latest' ? 'success' : s === 'available' || s === 'ready' ? 'accent' : ''}">
+      <div class="set-sb-icon">${s === 'error' ? '⚠️' : s === 'latest' ? '✓' : s === 'available' ? '🚀' : 'ℹ️'}</div>
+      <div class="set-sb-content">
+        <b>${s === 'latest' ? 'Up to date' : s === 'available' ? 'New release available' : s === 'ready' ? 'Ready to install' : 'Release Status'}</b>
+        <p class="muted small" style="margin:2px 0 0">${line}</p>
+      </div>
+    </div>
+    <div style="margin-top:12px">${btn}</div>`;
   }
-  return `<section class="card" id="update-card"><h2>About &amp; updates</h2>
-    <div class="kv"><span>Version</span><b>${esc(current)}</b></div>
-    <div class="kv"><span>On this device since</span><b>${esc(when(m.installedAt))}</b></div>
-    ${m.previousVersion ? `<div class="kv"><span>Updated from</span><b>${esc(m.previousVersion)}</b></div>` : ''}
-    ${desk() ? `<div class="kv"><span>Last check</span><b>${esc(when(m.lastUpdateCheck))}</b></div>` : ''}
-    <div style="margin-top:12px">${body}</div>
+  return `<section class="card set-update-card" id="update-card">
+    <div class="card-head-pill">
+      <h2>📦 Application Release</h2>
+      <span class="set-badge gold">v${esc(current)}</span>
+    </div>
+    <div class="set-version-hero">
+      <div class="set-vh-badge">v${esc(current)}</div>
+      <div class="set-vh-meta">
+        <b>Finance Helper</b>
+        <span class="muted small">Offline-first personal finance platform</span>
+      </div>
+    </div>
+    <div class="set-kv-list">
+      <div class="kv"><span>Installed on this device</span><b>${esc(when(m.installedAt))}</b></div>
+      ${m.previousVersion ? `<div class="kv"><span>Previous version</span><b>v${esc(m.previousVersion)}</b></div>` : ''}
+      <div class="kv"><span>Channel</span><b>${desk() ? 'Desktop (Electron)' : 'Progressive Web App (PWA)'}</b></div>
+      ${desk() ? `<div class="kv"><span>Last update check</span><b>${esc(when(m.lastUpdateCheck))}</b></div>` : ''}
+    </div>
+    <div style="margin-top:14px">${body}</div>
   </section>`;
 }
 

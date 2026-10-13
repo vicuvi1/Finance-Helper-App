@@ -111,10 +111,17 @@ export function settingsCard() {
       <span><b>${esc(r.name)}</b><span class="muted small">${r.skip ? 'not connected' : esc(r.detail)}</span></span>
     </div>`).join('');
   const last = ctx.state.meta.lastSelfCheck;
-  return `<section class="card" id="selfcheck-card"><h2>Check everything</h2>
-    <p class="muted small" style="margin-top:0">Tries every connection on this device and tells you what works.${last && !results ? ` Last run ${new Date(last.at).toLocaleString()}: ${last.ok} OK, ${last.failed} to fix.` : ''}</p>
+  const statusBadge = last
+    ? (last.failed > 0 ? `<span class="set-badge danger">${last.failed} to fix</span>` : `<span class="set-badge income">All ${last.ok} OK</span>`)
+    : '<span class="set-badge accent">Diagnostics</span>';
+  return `<section class="card set-diag-card" id="selfcheck-card">
+    <div class="card-head-pill">
+      <h2>🩺 System Diagnostics</h2>
+      ${statusBadge}
+    </div>
+    <p class="muted small" style="margin-top:0">Tests all device connections, encryption integrity, rate providers, storage, and cloud sync pipelines.${last && !results ? ` Last executed: ${new Date(last.at).toLocaleString()} (${last.ok} OK, ${last.failed} to fix).` : ''}</p>
     ${rows ? `<div class="checks">${rows}</div>` : ''}
-    <button class="btn block" data-act="selfcheck" ${running ? 'disabled' : ''}>${running ? 'Checking…' : results ? 'Run again' : 'Run the check'}</button>
+    <button class="btn block primary" data-act="selfcheck" ${running ? 'disabled' : ''}>${running ? 'Checking…' : results ? '⚡ Run diagnostics again' : '⚡ Run complete system check'}</button>
   </section>`;
 }
 

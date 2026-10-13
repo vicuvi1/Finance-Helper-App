@@ -53,6 +53,7 @@ import { sound } from './audio.js';
 import { AmbientMusic } from './ambient.js';
 import { openPalette, closePalette, isPaletteOpen } from './palette.js';
 import { bindSankeyHover } from './charts.js';
+import { APP_VERSION } from './version.js';
 
 let state = load();
 // Undo / redo for this session (js/history.js).
@@ -1027,29 +1028,64 @@ function viewSettings() {
       `).join('')}
     </div>
   </section>`,
-    danger: `<section class="card"><h2>Danger zone</h2>
-    <button class="btn danger block" data-act="wipe">Erase everything on this device</button>
-  </section>`,
+    danger: `<section class="card set-danger-card">
+      <div class="card-head-pill">
+        <h2>⚠️ Danger zone</h2>
+        <span class="set-badge danger">Irreversible</span>
+      </div>
+      <p class="muted small" style="margin:0 0 14px">Permanently wipe all transactions, accounts, people, and preferences stored in this browser or device. Make sure to export a JSON backup first if you want to keep your data.</p>
+      <button class="btn danger block" data-act="wipe">Erase everything on this device</button>
+    </section>`,
   };
   // One section at a time, picked on the left (like any settings screen).
   const sections = [
-    { id: 'general', icon: '⚙️', label: 'General', sub: 'Look, smart split, your hour', html: () => cards.look + cards.split + WorkHour.settingsCard() + cards.accounts + cards.goals },
-    { id: 'categories', icon: '🏷️', label: 'Categories & rules', sub: 'Categories, jars, auto-rules', html: () => cards.categories + Rules.settingsCard() },
-    { id: 'data', icon: '💾', label: 'Data & backups', sub: 'Import, export, backups, sync', html: () => cards.data + Backups.settingsCard() + Sync.settingsCard() },
-    { id: 'connect', icon: '🔗', label: 'Telegram & Binance', sub: 'Your bot, crypto balances', html: () => Telegram.settingsCard() + TgBlocks.settingsCard() + Binance.settingsCard() },
-    { id: 'buddy', icon: '🤖', label: 'Bit, your buddy', sub: 'Show, name, color', html: () => Buddy.settingsCard() },
-    { id: 'security', icon: '🔒', label: 'Security', sub: 'PIN and encryption', html: () => Security.settingsCard() },
-    { id: 'about', icon: 'ℹ️', label: 'About & updates', sub: 'Version, check, erase', html: () => Updates.settingsCard() + SelfCheck.settingsCard() + cards.danger },
+    { id: 'general', icon: '⚙️', label: 'General', sub: 'Look, smart split, your hour', desc: 'Theme colors, procedural lo-fi ambient audio, smart split jars, and hourly valuation.', badgeText: 'Preferences', badgeClass: 'gold', html: () => cards.look + cards.split + WorkHour.settingsCard() + cards.accounts + cards.goals },
+    { id: 'categories', icon: '🏷️', label: 'Categories & rules', sub: 'Categories, jars, auto-rules', desc: 'Custom spending & income categories, jar assignments, and auto-sorting rules.', badgeText: 'Structure', badgeClass: 'accent', html: () => cards.categories + Rules.settingsCard() },
+    { id: 'data', icon: '💾', label: 'Data & backups', sub: 'Import, export, backups, sync', desc: 'Device storage status, automated JSON backups, cloud sync, and Excel imports.', badgeText: 'Storage', badgeClass: 'income', html: () => cards.data + Backups.settingsCard() + Sync.settingsCard() },
+    { id: 'connect', icon: '🔗', label: 'Telegram & Binance', sub: 'Your bot, crypto balances', desc: 'Personal Telegram bot integration for instant logging and Binance read-only portfolio.', badgeText: 'Integrations', badgeClass: 'accent', html: () => Telegram.settingsCard() + TgBlocks.settingsCard() + Binance.settingsCard() },
+    { id: 'buddy', icon: '🤖', label: 'Bit, your buddy', sub: 'Show, name, color', desc: 'Your offline interactive companion, avatar expression, cheer, and mascot styling.', badgeText: 'Companion', badgeClass: 'gold', html: () => Buddy.settingsCard() },
+    { id: 'security', icon: '🔒', label: 'Security', sub: 'PIN and encryption', desc: 'Hardware-backed AES-256 vault encryption and biometric/PIN screen protection.', badgeText: 'Vault', badgeClass: 'income', html: () => Security.settingsCard() },
+    { id: 'about', icon: 'ℹ️', label: 'About & updates', sub: 'Version, check, erase', desc: 'Application release telemetry, self-check diagnostics, and device data management.', badgeText: `v${APP_VERSION}`, badgeClass: 'gold', html: () => Updates.settingsCard() + SelfCheck.settingsCard() + cards.danger },
   ];
   const cur = sections.find((x) => x.id === ui.settingsTab) || sections[0];
 
-  return `<header class="top"><h1>Settings</h1></header>
+  return `<header class="top">
+    <div>
+      <h1>Settings</h1>
+      <div class="sub">Preferences, appearance, data vault &amp; diagnostics</div>
+    </div>
+  </header>
   ${installPrompt ? '<div class="banner"><p>Install the app for one-tap access, even offline.</p><button class="btn primary" data-act="install">Install</button></div>' : ''}
   ${isIOS ? '<div class="banner"><p>To install on iPhone: tap Share, then “Add to Home Screen”.</p></div>' : ''}
   <div class="set-layout">
-    <nav class="set-nav" aria-label="Settings sections">${sections.map((x) => `<button type="button" class="set-tab" data-act="set-tab" data-sec="${x.id}" aria-current="${x.id === cur.id ? 'page' : 'false'}"><span class="set-ic" aria-hidden="true">${x.icon}</span><span class="set-t"><b>${x.label}</b><span>${x.sub}</span></span></button>`).join('')}
-      <p class="muted small set-foot">Finance Helper · private, offline, no account, no tracking.</p></nav>
-    <div class="set-body"><h2 class="set-title">${cur.icon} ${cur.label}</h2><div class="set-grid">${cur.html()}</div></div>
+    <nav class="set-nav" aria-label="Settings sections">
+      <div class="set-nav-header">
+        <span class="set-nav-title">Configuration</span>
+        <span class="set-badge-sm">Offline</span>
+      </div>
+      <div class="set-nav-list">
+        ${sections.map((x) => `<button type="button" class="set-tab" data-act="set-tab" data-sec="${x.id}" aria-current="${x.id === cur.id ? 'page' : 'false'}"><span class="set-ic" aria-hidden="true">${x.icon}</span><span class="set-t"><b>${x.label}</b><span>${x.sub}</span></span><span class="set-tab-chevron" aria-hidden="true">›</span></button>`).join('')}
+      </div>
+      <div class="set-nav-foot">
+        <span class="set-privacy-badge">🔒 100% Private &amp; Offline</span>
+        <span>Zero tracking · Your device, your data</span>
+      </div>
+    </nav>
+    <div class="set-body">
+      <div class="set-hero-banner">
+        <div class="set-hero-left">
+          <div class="set-hero-icon" aria-hidden="true">${cur.icon}</div>
+          <div class="set-hero-text">
+            <h2 class="set-hero-title">${cur.label}</h2>
+            <p class="set-hero-desc">${cur.desc || cur.sub}</p>
+          </div>
+        </div>
+        <div class="set-hero-badges">
+          <span class="set-badge ${cur.badgeClass || 'gold'}">${cur.badgeText || 'Active'}</span>
+        </div>
+      </div>
+      <div class="set-grid">${cur.html()}</div>
+    </div>
   </div>`;
 }
 
