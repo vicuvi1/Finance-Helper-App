@@ -30,10 +30,19 @@ function guessGroup(p) {
   return 'Other';
 }
 
+const GROUP_ICONS = {
+  Family: '👨‍👩‍👧‍👦',
+  Work: '💼',
+  Friends: '🤝',
+  Clients: '🏢',
+  Other: '👥',
+};
+const groupIcon = (g) => GROUP_ICONS[g] || '👥';
+
 function badge(r) {
   const plus = fmtOwes(r.owes, 1);
   const minus = fmtOwes(r.owes, -1);
-  return `${plus ? `<span class="pp-badge in">owes you ${esc(plus)}</span>` : ''}${minus ? `<span class="pp-badge out">you owe ${esc(minus)}</span>` : ''}`;
+  return `${plus ? `<span class="pp-badge in">↙ Owes you ${esc(plus)}</span>` : ''}${minus ? `<span class="pp-badge out">↗ You owe ${esc(minus)}</span>` : ''}`;
 }
 
 function card(r, y) {
@@ -46,28 +55,132 @@ function card(r, y) {
   const primaryAmt = primaryOpen ? Math.abs(primaryOpen[1]) : 0;
   const primaryCur = primaryOpen ? primaryOpen[0] : (p.currency || ctx.state.settings.currency);
 
-  return `<div class="pp-card" style="--pc:${colorOf(p)}">
+  const netFlow = r.received - r.given;
+  const netLabel = netFlow > 0 ? `+${ctx.money(netFlow)} received` : (netFlow < 0 ? `−${ctx.money(Math.abs(netFlow))} given` : 'Balanced');
+  const netClass = netFlow > 0 ? 'income' : (netFlow < 0 ? 'expense' : 'muted');
+
+  const owesPlus = fmtOwes(r.owes, 1);
+  const owesMinus = fmtOwes(r.owes, -1);
+  const debtBadge = owesPlus
+    ? `<span class="pp-badge in">↙ Owes you ${esc(owesPlus)}</span>`
+    : (owesMinus ? `<span class="pp-badge out">↗ You owe ${esc(owesMinus)}</span>` : '');
+
+  const debtCardClass = owesPlus ? 'has-debt debt-in' : (owesMinus ? 'has-debt debt-out' : '');
+
+  return `<div class="pp-card ${debtCardClass}" style="--pc:${colorOf(p)}">
     <div class="pp-top" data-act="person-open" data-id="${esc(p.id)}" style="cursor:pointer" title="Click to view details">
       <span class="pp-av" aria-hidden="true">${initialOf(p.name)}</span>
-      <span class="pp-name">
-        <b>${esc(p.name)}</b>
-        <span>${esc([p.note, p.currency && p.currency !== ctx.state.settings.currency ? p.currency : ''].filter(Boolean).join(' · ') || (r.last ? `Last ${dayLabel(r.last)} ${r.last.slice(0, 4)}` : 'No records yet'))}</span>
-      </span>
+      <div class="pp-name">
+        <div class="pp-title-row">
+          <b>${esc(p.name)}</b>
+          ${hasOpen ? `<span class="pp-tag-debt ${primaryOpen[1] > 0 ? 'in' : 'out'}">${primaryOpen[1] > 0 ? '↙ Owes you' : '↗ You owe'}</span>` : ''}
+        </div>
+        <span class="pp-meta">${esc([p.note, p.currency && p.currency !== ctx.state.settings.currency ? p.currency : ''].filter(Boolean).join(' · ') || (r.last ? `Last active ${dayLabel(r.last)}` : 'No records yet'))}</span>
+      </div>
     </div>
-    <div class="pp-badges">${badge(r) || '<span class="pp-badge none">All settled</span>'}</div>
+    ${debtBadge ? `<div class="pp-debt-callout ${primaryOpen && primaryOpen[1] > 0 ? 'in' : 'out'}">${debtBadge}</div>` : ''}
     <div class="pp-flow">
+      <div class="pp-flow-head">
+        <span class="pp-flow-label">Financial flow</span>
+        <span class="pp-net ${netClass}">Net: ${netLabel}</span>
+      </div>
       <div class="pp-row"><span>Received</span><b class="income">${r.received ? ctx.money(r.received) : '–'}</b></div>
       <div class="pp-bar"><i class="in" style="width:${(r.received / max) * 100}%"></i></div>
       <div class="pp-row"><span>Given</span><b>${r.given ? ctx.money(r.given) : '–'}</b></div>
       <div class="pp-bar"><i class="out" style="width:${(r.given / max) * 100}%"></i></div>
     </div>
-    <div class="pp-foot">${r.count} record${r.count === 1 ? '' : 's'}${y && (y.received || y.given) ? ` · ${todayISO().slice(0, 4)}: +${ctx.money(y.received)} / −${ctx.money(y.given)}` : ''}</div>
+    <div class="pp-foot">
+      <span>${r.count} record${r.count === 1 ? '' : 's'}</span>
+      ${y && (y.received || y.given) ? `<span>${todayISO().slice(0, 4)}: +${ctx.money(y.received)} / −${ctx.money(y.given)}</span>` : ''}
+    </div>
     <div class="pp-card-actions">
-      ${hasOpen ? `<button type="button" class="btn sm primary" data-act="settle-quick" data-id="${esc(p.id)}" data-kind="${primaryKind}" data-amt="${primaryAmt}" data-cur="${esc(primaryCur)}">⚡ Settle</button>` : ''}
-      <button type="button" class="btn sm" data-act="loan-with" data-id="${esc(p.id)}">+ Loan</button>
-      <button type="button" class="btn sm" data-act="person-open" data-id="${esc(p.id)}">Details</button>
+      ${hasOpen ? `<button type="button" class="btn sm primary" data-act="settle-quick" data-id="${esc(p.id)}" data-kind="${primaryKind}" data-amt="${primaryAmt}" data-cur="${esc(primaryCur)}" title="1-click settle debt">⚡ Settle</button>` : ''}
+      <button type="button" class="btn sm" data-act="loan-with" data-id="${esc(p.id)}" title="Record loan or payback">+ Loan</button>
+      <button type="button" class="btn sm" data-act="tx-with" data-id="${esc(p.id)}" data-name="${esc(p.name)}" title="Log transaction">+ Log</button>
+      <button type="button" class="btn sm" data-act="person-open" data-id="${esc(p.id)}" title="Open history & profile">Details</button>
     </div>
   </div>`;
+}
+
+function tableView(rs) {
+  const groupOf = (p) => p.group || guessGroup(p);
+  return `<div class="pp-table-card card">
+    <table class="pp-table">
+      <thead>
+        <tr>
+          <th>Contact</th>
+          <th>Group</th>
+          <th>Active Debt / Loan</th>
+          <th class="num">Received</th>
+          <th class="num">Given</th>
+          <th class="num">Net Standing</th>
+          <th>Last Active</th>
+          <th class="actions">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rs.map((r) => {
+          const p = r.person;
+          const openEntries = Object.entries(r.owes).filter(([, v]) => v !== 0);
+          const primaryOpen = openEntries[0];
+          const hasOpen = Boolean(primaryOpen);
+          const primaryKind = primaryOpen ? (primaryOpen[1] > 0 ? 'back-in' : 'back-out') : 'lent';
+          const primaryAmt = primaryOpen ? Math.abs(primaryOpen[1]) : 0;
+          const primaryCur = primaryOpen ? primaryOpen[0] : (p.currency || ctx.state.settings.currency);
+          const netFlow = r.received - r.given;
+          const netClass = netFlow > 0 ? 'income' : (netFlow < 0 ? 'expense' : 'muted');
+
+          return `<tr>
+            <td>
+              <div class="pp-tbl-contact" data-act="person-open" data-id="${esc(p.id)}" title="View details">
+                <span class="pp-av sm" style="--pc:${colorOf(p)}">${initialOf(p.name)}</span>
+                <div class="pp-tbl-name">
+                  <b>${esc(p.name)}</b>
+                  ${p.note ? `<small>${esc(p.note)}</small>` : ''}
+                </div>
+              </div>
+            </td>
+            <td><span class="pp-group-tag">${groupIcon(groupOf(p))} ${esc(groupOf(p))}</span></td>
+            <td>${badge(r) || '<span class="muted small">Settled ✓</span>'}</td>
+            <td class="num income">${r.received ? ctx.money(r.received) : '–'}</td>
+            <td class="num">${r.given ? ctx.money(r.given) : '–'}</td>
+            <td class="num ${netClass}"><b>${netFlow !== 0 ? (netFlow > 0 ? '+' : '−') + ctx.money(Math.abs(netFlow)) : '0'}</b></td>
+            <td class="small muted">${r.last ? dayLabel(r.last) : '–'}</td>
+            <td class="actions">
+              <div class="btns-inline">
+                ${hasOpen ? `<button type="button" class="btn sm primary" data-act="settle-quick" data-id="${esc(p.id)}" data-kind="${primaryKind}" data-amt="${primaryAmt}" data-cur="${esc(primaryCur)}">⚡ Settle</button>` : ''}
+                <button type="button" class="btn sm" data-act="loan-with" data-id="${esc(p.id)}">+ Loan</button>
+                <button type="button" class="btn sm" data-act="person-open" data-id="${esc(p.id)}">Details</button>
+              </div>
+            </td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>
+  </div>`;
+}
+
+function groupSection(g, rs, thisYearMap, isCollapsed) {
+  const gReceived = rs.reduce((a, r) => a + r.received, 0);
+  const gGiven = rs.reduce((a, r) => a + r.given, 0);
+  const gNet = gReceived - gGiven;
+  const gDebts = rs.filter((r) => Object.keys(r.owes).length > 0).length;
+
+  return `<section class="pp-group ${isCollapsed ? 'collapsed' : ''}">
+    <header class="pp-group-header" data-act="people-toggle-group" data-group="${esc(g)}" title="Click to collapse / expand">
+      <div class="pp-gh-left">
+        <span class="pp-gh-toggle">${isCollapsed ? '▶' : '▼'}</span>
+        <span class="pp-gh-icon">${groupIcon(g)}</span>
+        <h2 class="pp-gh-title">${esc(g)}</h2>
+        <span class="pp-gh-count">${rs.length} contact${rs.length === 1 ? '' : 's'}</span>
+      </div>
+      <div class="pp-gh-right">
+        <span class="pp-gh-flow">Net: <b class="${gNet >= 0 ? 'income' : 'expense'}">${gNet >= 0 ? '+' : '−'}${ctx.money(Math.abs(gNet))}</b></span>
+        ${gDebts ? `<span class="pill pill-gold">${gDebts} active debt${gDebts === 1 ? '' : 's'}</span>` : `<span class="pill pill-soft">Settled ✓</span>`}
+      </div>
+    </header>
+    ${isCollapsed ? '' : `<div class="pp-grid">${rs.map((r) => card(r, thisYearMap.get(r.person.id))).join('')}</div>`}
+  </section>`;
 }
 
 export function view() {
@@ -97,12 +210,37 @@ export function view() {
   }
 
   const pick = ui.peopleGroup || 'all';
-  const rows = all.filter((r) => {
+  const sortMode = ui.peopleSort || 'debts';
+  const viewMode = ui.peopleView || 'grid';
+  const collapsed = ui.peopleCollapsed || new Set();
+
+  let rows = all.filter((r) => {
     const matchesQ = !q || `${r.person.name} ${r.person.note || ''}`.toLowerCase().includes(q);
     if (!matchesQ) return false;
     if (pick === 'open-loans') return Object.keys(r.owes).length > 0;
+    if (pick === 'i-owe') return Object.values(r.owes).some((v) => v < 0);
     if (pick === 'all') return true;
     return groupOf(r.person) === pick;
+  });
+
+  // Sort rows
+  rows.sort((a, b) => {
+    if (sortMode === 'debts') {
+      const aDebt = Object.values(a.owes).some((v) => v !== 0) ? 1 : 0;
+      const bDebt = Object.values(b.owes).some((v) => v !== 0) ? 1 : 0;
+      if (aDebt !== bDebt) return bDebt - aDebt;
+      return (b.last || '').localeCompare(a.last || '');
+    }
+    if (sortMode === 'recent') {
+      return (b.last || '').localeCompare(a.last || '');
+    }
+    if (sortMode === 'flow') {
+      return (b.received + b.given) - (a.received + a.given);
+    }
+    if (sortMode === 'name') {
+      return a.person.name.localeCompare(b.person.name);
+    }
+    return 0;
   });
 
   // Totals per currency
@@ -125,10 +263,16 @@ export function view() {
   const yr = [...thisYear.values()];
   const received = yr.reduce((a, r) => a + r.received, 0);
   const given = yr.reduce((a, r) => a + r.given, 0);
-  const list = (rs) => rs.map((r) => card(r, thisYear.get(r.person.id))).join('');
-  const sections = pick === 'all' && !q
-    ? groups.map((g) => { const rs = rows.filter((r) => groupOf(r.person) === g); return rs.length ? `<section class="pp-group"><h2>${esc(g)} <span class="muted">${rs.length}</span></h2><div class="pp-grid">${list(rs)}</div></section>` : ''; }).join('')
-    : `<div class="pp-grid">${list(rows)}</div>`;
+
+  const sections = viewMode === 'table'
+    ? tableView(rows)
+    : (pick === 'all' && !q
+      ? groups.map((g) => {
+          const rs = rows.filter((r) => groupOf(r.person) === g);
+          return rs.length ? groupSection(g, rs, thisYear, collapsed.has(g)) : '';
+        }).join('')
+      : `<div class="pp-grid">${rows.map((r) => card(r, thisYear.get(r.person.id))).join('')}</div>`);
+
   const tot = (o) => Object.entries(o).map(([cur, v]) => `<b>${esc(formatMoney(v, cur))}</b>`).join('<span class="muted"> · </span>') || `<b>0 ${esc(baseCur)}</b>`;
 
   const openOwedCount = openLoans.filter((l) => l.direction === 'owed_to_me').length;
@@ -147,22 +291,22 @@ export function view() {
   </header>
 
   <section class="pp-sum">
-    <div class="pp-tile ${Object.keys(owed).length ? 'highlight-in' : ''}">
+    <div class="pp-tile clickable ${Object.keys(owed).length ? 'highlight-in' : ''} ${pick === 'open-loans' ? 'active' : ''}" data-act="people-group" data-group="open-loans" title="Click to filter contacts who owe you">
       <div class="pp-tile-head"><span>Owed to you</span><span class="pp-tile-icon">📥</span></div>
       <div class="pp-big income">${tot(owed)}</div>
-      <div class="pp-tile-sub">${openOwedCount ? `${openOwedCount} contact${openOwedCount === 1 ? '' : 's'} owe you` : 'All clear ✨'}</div>
+      <div class="pp-tile-sub">${openOwedCount ? `${openOwedCount} contact${openOwedCount === 1 ? '' : 's'} owe you →` : 'All clear ✨'}</div>
     </div>
-    <div class="pp-tile ${Object.keys(iOwe).length ? 'highlight-out' : ''}">
+    <div class="pp-tile clickable ${Object.keys(iOwe).length ? 'highlight-out' : ''} ${pick === 'i-owe' ? 'active' : ''}" data-act="people-group" data-group="i-owe" title="Click to filter debts you owe">
       <div class="pp-tile-head"><span>You owe (debts)</span><span class="pp-tile-icon">📤</span></div>
       <div class="pp-big ${Object.keys(iOwe).length ? 'expense' : ''}">${Object.keys(iOwe).length ? tot(iOwe) : `<b>0 ${esc(baseCur)}</b>`}</div>
-      <div class="pp-tile-sub">${openDebtCount ? `${openDebtCount} debt${openDebtCount === 1 ? '' : 's'} to settle` : 'Debt-free 🎉'}</div>
+      <div class="pp-tile-sub">${openDebtCount ? `${openDebtCount} debt${openDebtCount === 1 ? '' : 's'} to settle →` : 'Debt-free 🎉'}</div>
     </div>
     <div class="pp-tile">
       <div class="pp-tile-head"><span>Net loan balance</span><span class="pp-tile-icon">⚖️</span></div>
       <div class="pp-big ${netCents > 0 ? 'income' : netCents < 0 ? 'expense' : ''}">${netCents === 0 ? `0 ${esc(baseCur)}` : `${netCents > 0 ? '+' : '−'}${formatMoney(Math.abs(netCents), baseCur)}`}</div>
-      <div class="pp-tile-sub">${netCents > 0 ? 'Net creditor position' : netCents < 0 ? 'Net debts to pay back' : 'Balanced'}</div>
+      <div class="pp-tile-sub">${netCents > 0 ? 'Net creditor position' : netCents < 0 ? 'Net debts to pay back' : 'Balanced ✨'}</div>
     </div>
-    <div class="pp-tile">
+    <div class="pp-tile clickable ${pick === 'all' ? 'active' : ''}" data-act="people-group" data-group="all" title="Click to show all contacts">
       <div class="pp-tile-head"><span>Contacts & flows</span><span class="pp-tile-icon">👥</span></div>
       <div class="pp-big">${all.length} <small style="font-size:13px;font-weight:normal;color:var(--muted)">contact${all.length === 1 ? '' : 's'}</small></div>
       <div class="pp-tile-sub">${year}: +${formatMoney(received, baseCur, { compact: true })} / −${formatMoney(given, baseCur, { compact: true })}</div>
@@ -173,11 +317,11 @@ export function view() {
     <div class="loans-hub-head">
       <div class="loans-hub-title">
         <span>⚡ Open Loans & Debts Hub</span>
-        ${openLoans.length ? `<span class="pill pill-gold">${openLoans.length} open</span>` : ''}
+        ${openLoans.length ? `<span class="pill pill-gold">${openLoans.length} active</span>` : ''}
       </div>
       <div class="loans-hub-actions">
-        <button class="btn sm" data-act="loan-new" data-kind="lent">+ Lend</button>
-        <button class="btn sm" data-act="loan-new" data-kind="borrowed">+ Borrow</button>
+        <button class="btn sm" data-act="loan-new" data-kind="lent">+ Lend money</button>
+        <button class="btn sm" data-act="loan-new" data-kind="borrowed">+ Borrow money</button>
       </div>
     </div>
     ${openLoans.length ? `
@@ -188,7 +332,7 @@ export function view() {
               <span class="pp-av sm" style="--pc:${colorOf(l.person)}" aria-hidden="true">${initialOf(l.person.name)}</span>
               <div class="olc-meta">
                 <button type="button" class="olc-name" data-act="person-open" data-id="${esc(l.person.id)}"><b>${esc(l.person.name)}</b></button>
-                <span class="olc-group">${esc(groupOf(l.person))}${l.last ? ` · last ${dayLabel(l.last)}` : ''}</span>
+                <span class="olc-group">${groupIcon(groupOf(l.person))} ${esc(groupOf(l.person))}${l.last ? ` · last ${dayLabel(l.last)}` : ''}</span>
               </div>
               <span class="olc-pill ${l.direction === 'owed_to_me' ? 'pill-in' : 'pill-out'}">
                 ${l.direction === 'owed_to_me' ? '↙ Owes you' : '↗ You owe'}
@@ -202,7 +346,10 @@ export function view() {
                 ⚡ Settle / Pay back
               </button>
               <button type="button" class="btn sm" data-act="loan-with" data-id="${esc(l.person.id)}">
-                + Add
+                + Add loan
+              </button>
+              <button type="button" class="btn sm" data-act="tx-with" data-id="${esc(l.person.id)}" data-name="${esc(l.person.name)}">
+                Log tx
               </button>
             </div>
           </div>
@@ -220,11 +367,29 @@ export function view() {
   </section>
 
   <div class="pp-tools">
-    <input type="search" id="people-search" placeholder="Find a person or note" value="${esc(ui.peopleSearch || '')}" aria-label="Find a person">
-    <div class="chips">
-      <button class="chip" data-act="people-group" data-group="all" aria-pressed="${pick === 'all'}">All (${all.length})</button>
-      ${openLoans.length ? `<button class="chip" data-act="people-group" data-group="open-loans" aria-pressed="${pick === 'open-loans'}">💸 Open loans (${openLoans.length})</button>` : ''}
-      ${groups.map((g) => `<button class="chip" data-act="people-group" data-group="${esc(g)}" aria-pressed="${pick === g}">${esc(g)}</button>`).join('')}
+    <div class="pp-search-box">
+      <input type="search" id="people-search" placeholder="Find by name, note, or group..." value="${esc(ui.peopleSearch || '')}" aria-label="Find a person">
+      ${ui.peopleSearch ? '<button type="button" class="pp-search-clear" data-act="people-clear-search" aria-label="Clear search">✕</button>' : ''}
+    </div>
+    <div class="chips pp-filter-chips">
+      <button class="chip ${pick === 'all' ? 'active' : ''}" data-act="people-group" data-group="all" aria-pressed="${pick === 'all'}">All (${all.length})</button>
+      ${openLoans.length ? `<button class="chip chip-gold ${pick === 'open-loans' ? 'active' : ''}" data-act="people-group" data-group="open-loans" aria-pressed="${pick === 'open-loans'}">⚡ Open debts (${openLoans.length})</button>` : ''}
+      ${groups.map((g) => {
+        const cnt = all.filter((r) => groupOf(r.person) === g).length;
+        return `<button class="chip ${pick === g ? 'active' : ''}" data-act="people-group" data-group="${esc(g)}" aria-pressed="${pick === g}">${groupIcon(g)} ${esc(g)} (${cnt})</button>`;
+      }).join('')}
+    </div>
+    <div class="pp-toolbar-right">
+      <select class="pp-sort-select" data-act="people-sort" aria-label="Sort contacts">
+        <option value="debts" ${sortMode === 'debts' ? 'selected' : ''}>Sort: Debts first</option>
+        <option value="recent" ${sortMode === 'recent' ? 'selected' : ''}>Sort: Recently active</option>
+        <option value="flow" ${sortMode === 'flow' ? 'selected' : ''}>Sort: Highest flow</option>
+        <option value="name" ${sortMode === 'name' ? 'selected' : ''}>Sort: Name (A–Z)</option>
+      </select>
+      <div class="seg sm pp-view-toggle">
+        <button type="button" data-act="people-view" data-view="grid" aria-pressed="${viewMode === 'grid'}" title="Card Grid view">🎴 Cards</button>
+        <button type="button" data-act="people-view" data-view="table" aria-pressed="${viewMode === 'table'}" title="Table Ledger view">📋 Table</button>
+      </div>
     </div>
   </div>
 
@@ -464,6 +629,7 @@ export function onClick(act, el) {
   if (act === 'person-new') { addPerson(); return true; }
   if (act === 'loan-new') { openLoan(null, { kind: el.dataset.kind || 'lent' }); return true; }
   if (act === 'loan-with') { openLoan(el.dataset.id); return true; }
+  if (act === 'tx-with') { ctx.openTxSheet(null, { personName: el.dataset.name }); return true; }
   if (act === 'settle-quick') {
     openLoan(el.dataset.id, {
       kind: el.dataset.kind,
@@ -473,6 +639,25 @@ export function onClick(act, el) {
     return true;
   }
   if (act === 'people-group') { ctx.ui.peopleGroup = el.dataset.group; ctx.render(); return true; }
+  if (act === 'people-view') { ctx.ui.peopleView = el.dataset.view; ctx.render(); return true; }
+  if (act === 'people-clear-search') { ctx.ui.peopleSearch = ''; ctx.render(); return true; }
+  if (act === 'people-toggle-group') {
+    if (!ctx.ui.peopleCollapsed) ctx.ui.peopleCollapsed = new Set();
+    const g = el.dataset.group;
+    if (ctx.ui.peopleCollapsed.has(g)) ctx.ui.peopleCollapsed.delete(g);
+    else ctx.ui.peopleCollapsed.add(g);
+    ctx.render();
+    return true;
+  }
+  return false;
+}
+
+export function onChange(el) {
+  if (el.dataset.act === 'people-sort') {
+    ctx.ui.peopleSort = el.value;
+    ctx.render();
+    return true;
+  }
   return false;
 }
 
@@ -482,8 +667,8 @@ export function onInput(el) {
   const pos = el.selectionStart;
   ctx.render();
   const s = document.getElementById('people-search');
-  s.focus();
-  s.setSelectionRange(pos, pos);
+  s?.focus();
+  s?.setSelectionRange(pos, pos);
   return true;
 }
 

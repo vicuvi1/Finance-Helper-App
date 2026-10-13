@@ -1489,8 +1489,12 @@ table.grid tr.selected td { background: var(--gold-soft); }
 .sync-adv[open] summary { margin-bottom: 8px; }
 
 /* People & Loans */
+/* People & Loans */
 .pp-sum { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-bottom: 16px; }
 .pp-tile { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; display: grid; gap: 6px; position: relative; }
+.pp-tile.clickable { cursor: pointer; transition: transform .15s var(--ease-out), border-color .15s, box-shadow .15s; }
+.pp-tile.clickable:hover { border-color: var(--gold); transform: translateY(-2px); box-shadow: var(--shadow-sm); }
+.pp-tile.clickable.active { border-color: var(--gold); background: color-mix(in srgb, var(--gold) 8%, var(--surface)); box-shadow: 0 0 0 2px var(--gold-soft); }
 .pp-tile-head { display: flex; align-items: center; justify-content: space-between; font-size: 12.5px; color: var(--muted); }
 .pp-tile-icon { font-size: 16px; opacity: 0.9; }
 .pp-tile-sub { font-size: 11.5px; color: var(--muted); }
@@ -1515,6 +1519,8 @@ table.grid tr.selected td { background: var(--gold-soft); }
 .olc-name:hover b { color: var(--gold); text-decoration: underline; }
 .olc-group { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .olc-pill { font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 99px; white-space: nowrap; }
+.olc-pill.pill-in { background: var(--income-soft); color: var(--income); }
+.olc-pill.pill-out { background: var(--expense-soft); color: var(--expense); }
 .olc-amount { font-size: 21px; font-weight: 750; font-feature-settings: "tnum"; letter-spacing: -0.02em; }
 .olc-actions { display: flex; gap: 8px; margin-top: 2px; }
 .open-loans-settled { display: flex; align-items: center; gap: 14px; padding: 14px 18px; border-radius: 12px; background: color-mix(in srgb, var(--gold) 6%, var(--surface-2)); border: 1px dashed color-mix(in srgb, var(--gold) 30%, var(--line)); flex-wrap: wrap; }
@@ -1523,36 +1529,92 @@ table.grid tr.selected td { background: var(--gold-soft); }
 .open-loans-settled b { font-size: 14px; color: var(--text); }
 .open-loans-settled span { font-size: 12.5px; color: var(--muted); }
 
-.pp-tools { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 16px; }
-.pp-tools input[type="search"] { flex: 1 1 260px; min-width: 0; min-height: 42px; }
-.pp-tools .chips { margin: 0; }
-.pp-group { margin-bottom: 18px; }
-.pp-group > h2 { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin: 0 0 10px; }
+/* Tools & Filtering */
+.pp-tools { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+.pp-search-box { position: relative; flex: 1 1 240px; min-width: 200px; }
+.pp-search-box input { width: 100%; min-height: 40px; padding-right: 32px; }
+.pp-search-clear { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: none; border: none; font-size: 14px; color: var(--muted); cursor: pointer; padding: 4px; border-radius: 50%; }
+.pp-search-clear:hover { color: var(--text); }
+.pp-filter-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; }
+.pp-toolbar-right { display: flex; align-items: center; gap: 10px; margin-left: auto; }
+.pp-sort-select { min-height: 38px; padding: 6px 10px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--line); color: var(--text); font: inherit; font-size: 13px; cursor: pointer; }
+.pp-sort-select:hover { border-color: var(--gold); }
+.pp-view-toggle button { padding: 6px 12px; font-size: 12.5px; }
+
+/* Group sections & collapsible headers */
+.pp-group { margin-bottom: 22px; }
+.pp-group.collapsed .pp-grid { display: none; }
+.pp-group-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--line); margin-bottom: 12px; cursor: pointer; user-select: none; transition: background .15s, border-color .15s; }
+.pp-group-header:hover { background: color-mix(in srgb, var(--gold) 6%, var(--surface-2)); border-color: color-mix(in srgb, var(--gold) 40%, var(--line)); }
+.pp-gh-left { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.pp-gh-toggle { font-size: 10px; color: var(--muted); width: 14px; }
+.pp-gh-icon { font-size: 16px; }
+.pp-gh-title { margin: 0; font-size: 14px; font-weight: 700; color: var(--text); }
+.pp-gh-count { font-size: 12px; color: var(--muted); margin-left: 2px; }
+.pp-gh-right { display: flex; align-items: center; gap: 10px; font-size: 12px; }
+.pp-gh-flow { color: var(--muted); }
+.pp-gh-flow b { font-weight: 650; }
+
+/* Contact Cards Grid */
 .pp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 12px; }
 .pp-card { display: grid; gap: 12px; align-content: start; text-align: left; padding: 16px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); color: var(--text); position: relative; overflow: hidden; transition: border-color 0.15s, transform 0.15s var(--ease-out), box-shadow 0.15s; }
 .pp-card::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 3px; background: var(--pc); opacity: 0.8; }
 .pp-card:hover { border-color: color-mix(in srgb, var(--pc) 45%, var(--line)); transform: translateY(-2px); box-shadow: var(--shadow-pop); }
+.pp-card.has-debt.debt-in { border-color: color-mix(in srgb, var(--income) 55%, var(--line)); box-shadow: 0 0 16px -6px color-mix(in srgb, var(--income) 40%, transparent); }
+.pp-card.has-debt.debt-out { border-color: color-mix(in srgb, var(--expense) 55%, var(--line)); box-shadow: 0 0 16px -6px color-mix(in srgb, var(--expense) 40%, transparent); }
+
 .pp-top { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .pp-av { width: 42px; height: 42px; border-radius: 13px; flex: none; display: grid; place-items: center; font-weight: 750; font-size: 17px; color: var(--pc); background: color-mix(in srgb, var(--pc) 16%, transparent); }
 .pp-av.sm { width: 32px; height: 32px; border-radius: 10px; font-size: 14px; display: inline-grid; vertical-align: middle; margin-right: 6px; }
-.pp-name { display: grid; gap: 2px; min-width: 0; }
-.pp-name b { font-size: 15.5px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pp-name span { font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pp-name { display: grid; gap: 2px; min-width: 0; flex: 1; }
+.pp-title-row { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.pp-title-row b { font-size: 15.5px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pp-tag-debt { font-size: 10.5px; font-weight: 700; padding: 2px 7px; border-radius: 99px; text-transform: uppercase; letter-spacing: 0.04em; }
+.pp-tag-debt.in { background: var(--income-soft); color: var(--income); }
+.pp-tag-debt.out { background: var(--expense-soft); color: var(--expense); }
+.pp-meta { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.pp-debt-callout { padding: 7px 10px; border-radius: 9px; margin-top: 2px; }
+.pp-debt-callout.in { background: color-mix(in srgb, var(--income) 12%, var(--surface-2)); border: 1px solid color-mix(in srgb, var(--income) 30%, transparent); }
+.pp-debt-callout.out { background: color-mix(in srgb, var(--expense) 12%, var(--surface-2)); border: 1px solid color-mix(in srgb, var(--expense) 30%, transparent); }
+.pp-debt-callout .pp-badge { padding: 0; background: none; font-size: 13px; font-weight: 700; }
+
 .pp-badges { display: flex; flex-wrap: wrap; gap: 6px; }
 .pp-badge { font-size: 12px; font-weight: 650; padding: 4px 9px; border-radius: 99px; }
 .pp-badge.in { color: var(--income); background: var(--income-soft); }
 .pp-badge.out { color: var(--expense); background: var(--expense-soft); }
 .pp-badge.none { color: var(--faint); background: var(--surface-2); font-weight: 500; }
+
 .pp-flow { display: grid; gap: 4px; }
+.pp-flow-head { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; font-size: 11.5px; margin-bottom: 2px; }
+.pp-flow-label { color: var(--muted); text-transform: uppercase; font-size: 10.5px; letter-spacing: 0.06em; font-weight: 600; }
+.pp-net { font-size: 12px; font-weight: 650; }
 .pp-row { display: flex; justify-content: space-between; font-size: 12.5px; color: var(--muted); }
 .pp-row b { color: var(--text); font-weight: 600; font-feature-settings: "tnum"; }
 .pp-row b.income { color: var(--income); }
 .pp-bar { height: 5px; border-radius: 99px; background: var(--surface-3); overflow: hidden; margin-bottom: 4px; }
 .pp-bar i { display: block; height: 100%; border-radius: 99px; }
 .pp-bar i.in { background: var(--income); } .pp-bar i.out { background: var(--muted); }
-.pp-foot { font-size: 12px; color: var(--faint); }
+.pp-foot { display: flex; align-items: center; justify-content: space-between; font-size: 11.5px; color: var(--faint); padding-top: 2px; }
+
 .pp-card-actions { display: flex; gap: 6px; padding-top: 10px; border-top: 1px solid var(--line); margin-top: 2px; }
 .pp-card-actions .btn { flex: 1; padding: 5px 8px; font-size: 12px; height: 30px; }
+
+/* Table Ledger View */
+.pp-table-card { padding: 0; overflow-x: auto; margin-bottom: 20px; }
+.pp-table { width: 100%; border-collapse: collapse; font-size: 13.5px; text-align: left; }
+.pp-table th { padding: 12px 14px; font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); border-bottom: 1px solid var(--line); background: var(--surface-2); white-space: nowrap; }
+.pp-table td { padding: 12px 14px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.pp-table tbody tr:hover td { background: color-mix(in srgb, var(--gold) 5%, transparent); }
+.pp-table td.num, .pp-table th.num { text-align: right; font-feature-settings: "tnum"; }
+.pp-table td.actions { text-align: right; white-space: nowrap; }
+.pp-tbl-contact { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+.pp-tbl-contact:hover b { color: var(--gold); text-decoration: underline; }
+.pp-tbl-name { display: grid; gap: 2px; min-width: 0; }
+.pp-tbl-name b { font-weight: 650; font-size: 14px; }
+.pp-tbl-name small { font-size: 11.5px; color: var(--muted); }
+.pp-group-tag { font-size: 11.5px; font-weight: 600; padding: 2px 8px; border-radius: 6px; background: var(--surface-2); border: 1px solid var(--line); color: var(--text); }
+
 .pp-sheet-stats { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--muted); margin: 4px 0 12px; }
 .pp-settle-banner { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; border-radius: 12px; background: color-mix(in srgb, var(--gold) 8%, var(--surface-2)); border: 1px solid color-mix(in srgb, var(--gold) 25%, var(--line)); margin-bottom: 14px; }
 .pp-empty-state { text-align: center; padding: 40px 20px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); display: grid; place-items: center; gap: 8px; }

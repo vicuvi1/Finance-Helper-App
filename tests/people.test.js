@@ -59,3 +59,36 @@ test('navigation: people is primary tab over clients', () => {
   assert.match(appJs, /NAV_PARENT\s*=\s*\{[^}]*clients:\s*'people'/);
 });
 
+test('people screen: sorting, filtering, and view toggling', async () => {
+  const { ctx } = await import('../js/ctx.js');
+  const PeopleScreen = await import('../js/screens/people.js');
+
+  const s = defaultState();
+  s.people = [{ id: 'p1', name: 'Haruto', group: 'Work' }, { id: 'p2', name: 'Mother', group: 'Family' }];
+  s.tx.push(tx('a', 'expense', 17500, { loan: true })); // Haruto owes 175 MDL
+
+  ctx.state = s;
+  ctx.ui = {};
+  ctx.render = () => {};
+  ctx.money = (n) => `${n} MDL`;
+
+  const html = PeopleScreen.view();
+  assert.ok(html.includes('Open Loans & Debts Hub'));
+  assert.ok(html.includes('Haruto'));
+  assert.ok(html.includes('Mother'));
+
+  // View toggle
+  PeopleScreen.onClick('people-view', { dataset: { view: 'table' } });
+  assert.equal(ctx.ui.peopleView, 'table');
+  const tableHtml = PeopleScreen.view();
+  assert.ok(tableHtml.includes('<table class="pp-table">'));
+
+  // Sort change
+  PeopleScreen.onChange({ dataset: { act: 'people-sort' }, value: 'name' });
+  assert.equal(ctx.ui.peopleSort, 'name');
+
+  // Group toggle collapse
+  PeopleScreen.onClick('people-toggle-group', { dataset: { group: 'Family' } });
+  assert.ok(ctx.ui.peopleCollapsed.has('Family'));
+});
+
