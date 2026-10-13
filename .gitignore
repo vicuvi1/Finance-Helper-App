@@ -3,3 +3,6 @@ dist/
 .DS_Store
 *.log
 _site/
+
+# Screenshots the goals e2e test writes on each run
+goal-allocation-*.png
