@@ -92,3 +92,41 @@ test('people screen: sorting, filtering, and view toggling', async () => {
   assert.ok(ctx.ui.peopleCollapsed.has('Family'));
 });
 
+test('people avatars: support custom emojis, photos, color rings, and auto-suggestion', async () => {
+  const { personAvatar, colorOf, suggestEmoji } = await import('../js/screens/people.js');
+
+  // Initial fallback
+  const pDefault = { id: 'p1', name: 'Mother' };
+  const htmlDefault = personAvatar(pDefault);
+  assert.match(htmlDefault, /class="pp-av"/);
+  assert.match(htmlDefault, />M<\/span>/);
+
+  // Custom emoji
+  const pEmoji = { id: 'p2', name: 'Mother', emoji: '👩' };
+  const htmlEmoji = personAvatar(pEmoji);
+  assert.match(htmlEmoji, /class="pp-av\s+emoji"/);
+  assert.match(htmlEmoji, />👩<\/span>/);
+
+  // Custom photo / image
+  const pImg = { id: 'p3', name: 'Haruto', image: 'data:image/jpeg;base64,mockdata' };
+  const htmlImg = personAvatar(pImg);
+  assert.match(htmlImg, /class="pp-av\s+has-img"/);
+  assert.match(htmlImg, /<img src="data:image\/jpeg;base64,mockdata" alt="Haruto" class="pp-av-img"/);
+
+  // Custom color
+  const pColor = { id: 'p4', name: 'Brother', color: 'var(--c7)' };
+  assert.equal(colorOf(pColor), 'var(--c7)');
+  const htmlColor = personAvatar(pColor);
+  assert.match(htmlColor, /style="--pc:var\(--c7\)"/);
+
+  // Auto-suggestion from name
+  assert.equal(suggestEmoji('Mother'), '👩');
+  assert.equal(suggestEmoji('Dad'), '👨');
+  assert.equal(suggestEmoji('Grandpa'), '👴');
+  assert.equal(suggestEmoji('Grandmother'), '👵');
+  assert.equal(suggestEmoji('Brother'), '👦');
+  assert.equal(suggestEmoji('Haruto'), '🥋');
+  assert.equal(suggestEmoji('Client Acme'), '💼');
+});
+
+

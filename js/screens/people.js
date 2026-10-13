@@ -11,11 +11,103 @@ import { formatMoney, evalAmount, centsToPlain } from '../money.js';
 import { convert, FIAT } from '../fx.js';
 
 const initialOf = (name) => esc((String(name).match(/\p{L}|\p{N}/u) || ['?'])[0].toUpperCase());
-const colorOf = (p) => {
+
+export const colorOf = (p) => {
+  if (p && p.color) {
+    return p.color.startsWith('var(') || p.color.startsWith('#') || p.color.startsWith('rgb') ? p.color : `var(--${p.color})`;
+  }
   let h = 0;
-  for (const ch of p.id) h = (h * 31 + ch.charCodeAt(0)) % 997;
+  for (const ch of (p?.id || 'p')) h = (h * 31 + ch.charCodeAt(0)) % 997;
   return `var(--c${(h % 8) + 1})`;
 };
+
+export function personAvatar(p, { size = '', cls = '' } = {}) {
+  if (!p) return '';
+  const pc = colorOf(p);
+  const classes = ['pp-av', size, cls].filter(Boolean).join(' ');
+  if (p.image) {
+    return `<span class="${classes} has-img" style="--pc:${pc}" aria-hidden="true"><img src="${esc(p.image)}" alt="${esc(p.name)}" class="pp-av-img" onerror="this.parentElement.classList.remove('has-img'); this.remove();"></span>`;
+  }
+  if (p.emoji) {
+    return `<span class="${classes} emoji" style="--pc:${pc}" aria-hidden="true">${esc(p.emoji)}</span>`;
+  }
+  return `<span class="${classes}" style="--pc:${pc}" aria-hidden="true">${initialOf(p.name)}</span>`;
+}
+
+export const EMOJI_PALETTE = [
+  '👩', '👨', '👵', '👴', '👦', '👧', '👶', '❤️', '🏡',
+  '💼', '🧑‍💻', '👩‍💼', '👔', '🏢', '🤝', '📑', '💵', '📊',
+  '😎', '🥳', '🍻', '☕', '⚽', '🏋️', '🎮', '🚗', '🎸',
+  '👑', '⭐', '🦁', '🐱', '🐶', '🥋', '🩺', '🎓', '🎨',
+];
+
+export const COLOR_PRESETS = [
+  { id: 'c1', name: 'Emerald', value: 'var(--c1)' },
+  { id: 'c2', name: 'Sky', value: 'var(--c2)' },
+  { id: 'c3', name: 'Purple', value: 'var(--c3)' },
+  { id: 'c4', name: 'Pink', value: 'var(--c4)' },
+  { id: 'c5', name: 'Orange', value: 'var(--c5)' },
+  { id: 'c6', name: 'Teal', value: 'var(--c6)' },
+  { id: 'c7', name: 'Gold', value: 'var(--c7)' },
+  { id: 'c8', name: 'Coral', value: 'var(--c8)' },
+];
+
+const NAME_EMOJI_GUESS = [
+  { match: /grandmother|grandma|bunica/i, emoji: '👵' },
+  { match: /grandfather|grandpa|bunic\b/i, emoji: '👴' },
+  { match: /mother|mom|mum|mama|mamica/i, emoji: '👩' },
+  { match: /father|dad|tata|tatic/i, emoji: '👨' },
+  { match: /brother|frate/i, emoji: '👦' },
+  { match: /sister|sora/i, emoji: '👧' },
+  { match: /baby|bebe/i, emoji: '👶' },
+  { match: /boss|manager|client|work|office/i, emoji: '💼' },
+  { match: /friend|prieten|buddy/i, emoji: '🤝' },
+  { match: /coach|trainer|sport|karate|gym/i, emoji: '🥋' },
+  { match: /doctor|medic/i, emoji: '🩺' },
+  { match: /haruto/i, emoji: '🥋' },
+];
+
+export function suggestEmoji(name) {
+  if (!name) return null;
+  for (const { match, emoji } of NAME_EMOJI_GUESS) {
+    if (match.test(name)) return emoji;
+  }
+  return null;
+}
+
+function processAvatarFile(file, callback) {
+  if (!file || !file.type.startsWith('image/')) return;
+  if (typeof FileReader === 'undefined') return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    if (typeof Image === 'undefined' || typeof document === 'undefined') {
+      callback(e.target.result);
+      return;
+    }
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        const size = 128;
+        canvas.width = size;
+        canvas.height = size;
+        const ctx2d = canvas.getContext('2d');
+        const minDim = Math.min(img.width, img.height);
+        const sx = (img.width - minDim) / 2;
+        const sy = (img.height - minDim) / 2;
+        ctx2d.drawImage(img, sx, sy, minDim, minDim, 0, 0, size, size);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+        callback(dataUrl);
+      } catch {
+        callback(e.target.result);
+      }
+    };
+    img.onerror = () => callback(e.target.result);
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
 const fmtOwes = (owes, sign = 1) => Object.entries(owes).filter(([, v]) => v * sign > 0).map(([cur, v]) => formatMoney(Math.abs(v), cur)).join(' · ');
 const currencies = () => {
   const { state } = ctx;
@@ -68,8 +160,8 @@ function card(r, y) {
   const debtCardClass = owesPlus ? 'has-debt debt-in' : (owesMinus ? 'has-debt debt-out' : '');
 
   return `<div class="pp-card ${debtCardClass}" style="--pc:${colorOf(p)}">
-    <div class="pp-top" data-act="person-open" data-id="${esc(p.id)}" style="cursor:pointer" title="Click to view details">
-      <span class="pp-av" aria-hidden="true">${initialOf(p.name)}</span>
+    <div class="pp-top" data-act="person-open" data-id="${esc(p.id)}" style="cursor:pointer" title="Click to view details and customize icon/photo">
+      ${personAvatar(p)}
       <div class="pp-name">
         <div class="pp-title-row">
           <b>${esc(p.name)}</b>
@@ -132,8 +224,8 @@ function tableView(rs) {
 
           return `<tr>
             <td>
-              <div class="pp-tbl-contact" data-act="person-open" data-id="${esc(p.id)}" title="View details">
-                <span class="pp-av sm" style="--pc:${colorOf(p)}">${initialOf(p.name)}</span>
+              <div class="pp-tbl-contact" data-act="person-open" data-id="${esc(p.id)}" title="View details and customize icon/photo">
+                ${personAvatar(p, { size: 'sm' })}
                 <div class="pp-tbl-name">
                   <b>${esc(p.name)}</b>
                   ${p.note ? `<small>${esc(p.note)}</small>` : ''}
@@ -329,7 +421,7 @@ export function view() {
         ${openLoans.map((l) => `
           <div class="open-loan-card ${l.direction === 'owed_to_me' ? 'incoming' : 'outgoing'}">
             <div class="olc-top">
-              <span class="pp-av sm" style="--pc:${colorOf(l.person)}" aria-hidden="true">${initialOf(l.person.name)}</span>
+              ${personAvatar(l.person, { size: 'sm' })}
               <div class="olc-meta">
                 <button type="button" class="olc-name" data-act="person-open" data-id="${esc(l.person.id)}"><b>${esc(l.person.name)}</b></button>
                 <span class="olc-group">${groupIcon(groupOf(l.person))} ${esc(groupOf(l.person))}${l.last ? ` · last ${dayLabel(l.last)}` : ''}</span>
@@ -433,7 +525,7 @@ function openPerson(id) {
   const primaryOpen = openEntries[0];
   const hasOpen = Boolean(primaryOpen);
 
-  ctx.openSheet(`<h3><span class="pp-av sm" style="--pc:${colorOf(p)}" aria-hidden="true">${initialOf(p.name)}</span> ${esc(p.name)} <button type="button" class="icon-btn" data-close aria-label="Close">✕</button></h3>
+  ctx.openSheet(`<h3>${personAvatar(p, { size: 'sm', cls: 'pp-sheet-av-header' })} ${esc(p.name)} <button type="button" class="icon-btn" data-close aria-label="Close">✕</button></h3>
     ${hasOpen ? `
       <div class="pp-settle-banner">
         <div><span>Active loan:</span> ${owesLine}</div>
@@ -445,6 +537,54 @@ function openPerson(id) {
       <button class="btn" data-p="income">${esc(p.name)} gave me</button>
       <button class="btn" data-p="expense">I gave ${esc(p.name)}</button>
     </div>
+
+    <!-- Avatar, Photo & Icon Customizer -->
+    <div class="pp-avatar-manager">
+      <div style="display:flex; gap:16px; align-items:center; flex-wrap:wrap;">
+        <div class="pp-avatar-preview-wrap">
+          <div id="pp-cur-avatar">${personAvatar(p, { size: 'lg' })}</div>
+          <label for="p-file-input" class="pp-avatar-badge-btn" title="Upload photo or image">📷</label>
+          <input type="file" id="p-file-input" accept="image/*" style="display:none;">
+        </div>
+        <div style="flex:1; min-width:200px; display:grid; gap:8px;">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <span class="small font-bold">Avatar, Photo & Icon</span>
+            <div class="btns-inline">
+              <button type="button" class="btn sm" id="p-btn-rm-img" style="color:var(--expense); ${p.image ? '' : 'display:none;'}">Remove photo</button>
+              <button type="button" class="btn sm" id="p-btn-reset-av" style="${(p.image || p.emoji || p.color) ? '' : 'display:none;'}">Reset to default</button>
+            </div>
+          </div>
+          <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+            <label class="btn sm primary" for="p-file-input" style="cursor:pointer; display:inline-flex; align-items:center; gap:5px; margin:0;">
+              📷 Upload photo
+            </label>
+            <div style="display:flex; align-items:center; gap:6px; flex:1; min-width:180px;">
+              <input type="text" id="p-emoji-input" value="${esc(p.emoji || '')}" placeholder="Emoji" maxlength="4" style="width:65px; text-align:center; font-size:17px; padding:4px 6px;" title="Type or paste custom emoji">
+              <input type="url" id="p-imgurl-input" value="${esc(p.image && !p.image.startsWith('data:') ? p.image : '')}" placeholder="Or paste image URL" style="flex:1; font-size:12px; padding:6px 8px;">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="pp-quick-emojis" style="margin-top:12px; padding-top:10px; border-top:1px solid var(--line);">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+          <span class="muted small">Quick icons:</span>
+          <div class="pp-color-swatches" style="display:flex; gap:5px;">
+            ${COLOR_PRESETS.map((c) => `
+              <button type="button" class="pp-color-dot" data-color="${c.value}" style="background:${c.value}; border-color:${(p.color === c.value || colorOf(p) === c.value) ? '#fff' : 'transparent'};" title="${c.name}"></button>
+            `).join('')}
+          </div>
+        </div>
+        <div class="pp-emoji-palette">
+          ${EMOJI_PALETTE.map((em) => `
+            <button type="button" class="pp-emoji-btn ${p.emoji === em ? 'active' : ''}" data-set-emoji="${em}" title="Choose ${em}">
+              ${em}
+            </button>
+          `).join('')}
+        </div>
+      </div>
+    </div>
+
     <div class="row2">
       <label class="field"><span>Name</span><input id="p-name" type="text" value="${esc(p.name)}"></label>
       <label class="field"><span>Group</span><input id="p-group" type="text" list="pp-groups" value="${esc(p.group || '')}" placeholder="Family, Friends, Work…"><datalist id="pp-groups">${groupOpts.map((g) => `<option value="${esc(g)}">`).join('')}</datalist></label>
@@ -468,9 +608,110 @@ function openPerson(id) {
       Object.assign(p, next);
       M.touch(p);
       ctx.commit();
+      refreshAvatarPreview();
     };
+
+    const refreshAvatarPreview = () => {
+      const container = sheet.querySelector('#pp-cur-avatar');
+      if (container) container.innerHTML = personAvatar(p, { size: 'lg' });
+      const hdr = sheet.querySelector('.pp-sheet-av-header');
+      if (hdr) hdr.outerHTML = personAvatar(p, { size: 'sm', cls: 'pp-sheet-av-header' });
+
+      sheet.querySelectorAll('.pp-emoji-btn').forEach((b) => {
+        b.classList.toggle('active', b.dataset.setEmoji === p.emoji);
+      });
+      const curCol = colorOf(p);
+      sheet.querySelectorAll('.pp-color-dot').forEach((d) => {
+        d.style.borderColor = (d.dataset.color === curCol) ? '#fff' : 'transparent';
+      });
+      const rmBtn = sheet.querySelector('#p-btn-rm-img');
+      if (rmBtn) rmBtn.style.display = p.image ? 'inline-block' : 'none';
+      const resetBtn = sheet.querySelector('#p-btn-reset-av');
+      if (resetBtn) resetBtn.style.display = (p.image || p.emoji || p.color) ? 'inline-block' : 'none';
+
+      const emInp = sheet.querySelector('#p-emoji-input');
+      if (emInp && document.activeElement !== emInp) emInp.value = p.emoji || '';
+      const urlInp = sheet.querySelector('#p-imgurl-input');
+      if (urlInp && document.activeElement !== urlInp) urlInp.value = (p.image && !p.image.startsWith('data:')) ? p.image : '';
+    };
+
+    const fileInput = sheet.querySelector('#p-file-input');
+    if (fileInput) {
+      fileInput.addEventListener('change', (ev) => {
+        const file = ev.target.files?.[0];
+        if (!file) return;
+        processAvatarFile(file, (dataUrl) => {
+          p.image = dataUrl;
+          M.touch(p);
+          ctx.commit();
+          refreshAvatarPreview();
+          ctx.toast('Photo updated');
+        });
+      });
+    }
+
+    const emojiInput = sheet.querySelector('#p-emoji-input');
+    if (emojiInput) {
+      emojiInput.addEventListener('input', () => {
+        const val = emojiInput.value.trim();
+        p.emoji = val;
+        if (val) delete p.image;
+        M.touch(p);
+        ctx.commit();
+        refreshAvatarPreview();
+      });
+    }
+
+    const urlInput = sheet.querySelector('#p-imgurl-input');
+    if (urlInput) {
+      urlInput.addEventListener('change', () => {
+        const val = urlInput.value.trim();
+        if (val) {
+          p.image = val;
+          delete p.emoji;
+          M.touch(p);
+          ctx.commit();
+          refreshAvatarPreview();
+        }
+      });
+    }
+
     for (const sel of ['#p-name', '#p-note', '#p-group', '#p-cur']) sheet.querySelector(sel).addEventListener('change', save);
     sheet.addEventListener('click', (e) => {
+      const em = e.target.closest('[data-set-emoji]');
+      if (em) {
+        p.emoji = em.dataset.setEmoji;
+        delete p.image;
+        M.touch(p);
+        ctx.commit();
+        refreshAvatarPreview();
+        return;
+      }
+      const colBtn = e.target.closest('[data-color]');
+      if (colBtn) {
+        p.color = colBtn.dataset.color;
+        M.touch(p);
+        ctx.commit();
+        refreshAvatarPreview();
+        return;
+      }
+      if (e.target.closest('#p-btn-rm-img')) {
+        delete p.image;
+        M.touch(p);
+        ctx.commit();
+        refreshAvatarPreview();
+        return;
+      }
+      if (e.target.closest('#p-btn-reset-av')) {
+        delete p.image;
+        delete p.emoji;
+        delete p.color;
+        M.touch(p);
+        ctx.commit();
+        refreshAvatarPreview();
+        return;
+      }
+
       const row = e.target.closest('[data-act="edit"]');
       if (row) { ctx.closeSheet(); ctx.openTxSheet(ctx.state.tx.find((t) => t.id === row.dataset.id)); return; }
       const b = e.target.closest('[data-p]');
@@ -602,21 +843,135 @@ function openLoan(personId = null, opts = {}) {
 
 function addPerson() {
   const groups = [...new Set([...M.PERSON_GROUPS, ...ctx.state.people.map((x) => x.group).filter(Boolean)])];
-  ctx.openSheet(`<h3>Add person <button type="button" class="icon-btn" data-close aria-label="Close">✕</button></h3>
-    <form id="p-form"><label class="field"><span>Name</span><input id="p-new" type="text" placeholder="e.g. Ana, Mom, US client" required></label>
-    <div class="row2">
-      <label class="field"><span>Group</span><select id="p-new-group">${groups.map((g) => `<option>${esc(g)}</option>`).join('')}</select></label>
-      <label class="field"><span>Usual currency</span><select id="p-new-cur">${currencies().map((c) => `<option>${c}</option>`).join('')}</select></label>
-    </div>
-    <label class="field"><span>Note (optional)</span><input id="p-new-note" type="text" placeholder="e.g. brother, client"></label>
-    <div class="btns"><button class="btn primary" type="submit">Add</button></div></form>`, (sheet) => {
-    sheet.querySelector('#p-new').focus();
+  let newEmoji = '';
+  let newImage = '';
+  let newColor = '';
+
+  ctx.openSheet(`<h3>Add contact or person <button type="button" class="icon-btn" data-close aria-label="Close">✕</button></h3>
+    <form id="p-form">
+      <div style="display:flex; gap:14px; align-items:center; margin-bottom:14px; background:var(--surface-2); padding:12px; border-radius:var(--radius); border:1px solid var(--line);">
+        <div class="pp-avatar-preview-wrap">
+          <div id="p-new-av-prev">${personAvatar({ name: '?', color: 'var(--c1)' }, { size: 'lg' })}</div>
+          <label for="p-new-file" class="pp-avatar-badge-btn" title="Upload photo">📷</label>
+          <input type="file" id="p-new-file" accept="image/*" style="display:none;">
+        </div>
+        <div style="flex:1; min-width:180px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <span class="small font-bold">Icon or Photo</span>
+            <div class="pp-color-swatches" style="display:flex; gap:4px;">
+              ${COLOR_PRESETS.slice(0, 6).map((c) => `
+                <button type="button" class="pp-color-dot" data-new-color="${c.value}" style="background:${c.value};" title="${c.name}"></button>
+              `).join('')}
+            </div>
+          </div>
+          <div style="display:flex; gap:6px; align-items:center;">
+            <label class="btn sm primary" for="p-new-file" style="cursor:pointer; margin:0; font-size:12px;">📷 Upload</label>
+            <input type="text" id="p-new-emoji" placeholder="Emoji" maxlength="4" style="width:65px; text-align:center; font-size:16px; padding:4px;">
+            <span class="muted small" id="p-new-suggest-hint" style="flex:1; font-size:11.5px;">Auto-suggests from name</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick emoji row -->
+      <div class="pp-emoji-palette" style="margin-bottom:14px;">
+        ${['👩', '👨', '👵', '👴', '👦', '👧', '👶', '💼', '🧑‍💻', '🤝', '😎', '🏠', '🥋', '👑'].map((em) => `
+          <button type="button" class="pp-emoji-btn" data-new-emoji="${em}">${em}</button>
+        `).join('')}
+      </div>
+
+      <label class="field"><span>Name</span><input id="p-new" type="text" placeholder="e.g. Mom, Brother, Haruto, US client" required></label>
+      <div class="row2">
+        <label class="field"><span>Group</span><select id="p-new-group">${groups.map((g) => `<option>${esc(g)}</option>`).join('')}</select></label>
+        <label class="field"><span>Usual currency</span><select id="p-new-cur">${currencies().map((c) => `<option>${c}</option>`).join('')}</select></label>
+      </div>
+      <label class="field"><span>Note (optional)</span><input id="p-new-note" type="text" placeholder="e.g. brother, client from the US"></label>
+      <div class="btns"><button class="btn primary" type="submit">Add person</button></div>
+    </form>`, (sheet) => {
+    const nameInput = sheet.querySelector('#p-new');
+    const emojiInput = sheet.querySelector('#p-new-emoji');
+    const hintEl = sheet.querySelector('#p-new-suggest-hint');
+
+    const updatePreview = () => {
+      const mockPerson = {
+        name: nameInput.value.trim() || '?',
+        emoji: newEmoji || undefined,
+        image: newImage || undefined,
+        color: newColor || 'var(--c1)',
+      };
+      const prevWrap = sheet.querySelector('.pp-avatar-preview-wrap');
+      if (prevWrap) {
+        const curPrev = prevWrap.querySelector('.pp-av');
+        if (curPrev) curPrev.outerHTML = personAvatar(mockPerson, { size: 'lg' });
+      }
+      sheet.querySelectorAll('[data-new-emoji]').forEach((b) => {
+        b.classList.toggle('active', b.dataset.newEmoji === newEmoji);
+      });
+    };
+
+    const fileInput = sheet.querySelector('#p-new-file');
+    if (fileInput) {
+      fileInput.addEventListener('change', (ev) => {
+        const file = ev.target.files?.[0];
+        if (!file) return;
+        processAvatarFile(file, (dataUrl) => {
+          newImage = dataUrl;
+          newEmoji = '';
+          emojiInput.value = '';
+          updatePreview();
+        });
+      });
+    }
+
+    emojiInput.addEventListener('input', () => {
+      newEmoji = emojiInput.value.trim();
+      newImage = '';
+      updatePreview();
+    });
+
+    sheet.addEventListener('click', (e) => {
+      const em = e.target.closest('[data-new-emoji]');
+      if (em) {
+        newEmoji = em.dataset.newEmoji;
+        newImage = '';
+        emojiInput.value = newEmoji;
+        updatePreview();
+        return;
+      }
+      const col = e.target.closest('[data-new-color]');
+      if (col) {
+        newColor = col.dataset.newColor;
+        updatePreview();
+        return;
+      }
+    });
+
+    nameInput.addEventListener('input', () => {
+      const val = nameInput.value.trim();
+      if (!newEmoji && !newImage) {
+        const guessed = suggestEmoji(val);
+        if (guessed) {
+          newEmoji = guessed;
+          emojiInput.value = guessed;
+          if (hintEl) hintEl.textContent = `Suggested ${guessed}`;
+        }
+      }
+      updatePreview();
+    });
+
+    nameInput.focus();
     sheet.querySelector('#p-form').addEventListener('submit', (e) => {
       e.preventDefault();
-      const id = M.ensurePerson(ctx.state, sheet.querySelector('#p-new').value);
+      const id = M.ensurePerson(ctx.state, nameInput.value);
       if (!id) return;
       const p = M.person(ctx.state, id);
-      Object.assign(p, { note: sheet.querySelector('#p-new-note').value.trim(), group: sheet.querySelector('#p-new-group').value, currency: sheet.querySelector('#p-new-cur').value });
+      Object.assign(p, {
+        note: sheet.querySelector('#p-new-note').value.trim(),
+        group: sheet.querySelector('#p-new-group').value,
+        currency: sheet.querySelector('#p-new-cur').value,
+        emoji: newEmoji || undefined,
+        image: newImage || undefined,
+        color: newColor || undefined,
+      });
       M.touch(p);
       ctx.commit();
       ctx.closeSheet();

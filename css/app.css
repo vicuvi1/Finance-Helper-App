@@ -1616,8 +1616,140 @@ table.grid tr.selected td { background: var(--gold-soft); }
 .pp-card.has-debt.debt-out { border-color: color-mix(in srgb, var(--expense) 55%, var(--line)); box-shadow: 0 0 16px -6px color-mix(in srgb, var(--expense) 40%, transparent); }
 
 .pp-top { display: flex; align-items: center; gap: 12px; min-width: 0; }
-.pp-av { width: 42px; height: 42px; border-radius: 13px; flex: none; display: grid; place-items: center; font-weight: 750; font-size: 17px; color: var(--pc); background: color-mix(in srgb, var(--pc) 16%, transparent); }
-.pp-av.sm { width: 32px; height: 32px; border-radius: 10px; font-size: 14px; display: inline-grid; vertical-align: middle; margin-right: 6px; }
+.pp-av {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  font-weight: 750;
+  font-size: 17px;
+  color: var(--pc);
+  background: color-mix(in srgb, var(--pc) 16%, transparent);
+  border: 1.5px solid color-mix(in srgb, var(--pc) 30%, transparent);
+  position: relative;
+  overflow: hidden;
+  user-select: none;
+  transition: transform .15s, border-color .15s, box-shadow .15s;
+}
+.pp-card:hover .pp-av {
+  border-color: var(--pc);
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--pc) 25%, transparent);
+}
+.pp-av.sm {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  font-size: 14px;
+  display: inline-grid;
+  vertical-align: middle;
+  margin-right: 6px;
+}
+.pp-av.lg {
+  width: 68px;
+  height: 68px;
+  border-radius: 20px;
+  font-size: 28px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+.pp-av.has-img {
+  background: var(--surface-3);
+  padding: 0;
+}
+.pp-av img.pp-av-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+  display: block;
+}
+.pp-av.emoji {
+  font-size: 22px;
+  font-weight: normal;
+  line-height: 1;
+}
+.pp-av.sm.emoji {
+  font-size: 16px;
+}
+.pp-av.lg.emoji {
+  font-size: 34px;
+}
+
+/* Avatar Customizer in Profile Sheet */
+.pp-avatar-manager {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 14px;
+  margin-bottom: 14px;
+}
+.pp-avatar-preview-wrap {
+  position: relative;
+  flex: none;
+}
+.pp-avatar-badge-btn {
+  position: absolute;
+  bottom: -4px;
+  right: -4px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  font-size: 13px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+  transition: transform .12s, border-color .12s;
+}
+.pp-avatar-badge-btn:hover {
+  transform: scale(1.15);
+  border-color: var(--gold);
+}
+.pp-emoji-palette {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-height: 125px;
+  overflow-y: auto;
+  padding: 2px 0;
+}
+.pp-emoji-btn {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  width: 32px;
+  height: 32px;
+  font-size: 16px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  padding: 0;
+  transition: transform .1s, border-color .1s, background-color .1s;
+}
+.pp-emoji-btn:hover {
+  border-color: var(--gold);
+  transform: scale(1.15);
+}
+.pp-emoji-btn.active {
+  border-color: var(--gold);
+  background: color-mix(in srgb, var(--gold) 20%, var(--surface));
+}
+.pp-color-dot {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  padding: 0;
+  transition: transform .12s;
+}
+.pp-color-dot:hover {
+  transform: scale(1.25);
+}
 .pp-name { display: grid; gap: 2px; min-width: 0; flex: 1; }
 .pp-title-row { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
 .pp-title-row b { font-size: 15.5px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
