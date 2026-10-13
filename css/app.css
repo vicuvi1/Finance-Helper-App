@@ -1718,7 +1718,12 @@ table.grid tr.selected td { background: var(--gold-soft); }
 .olc-pill.pill-in { background: var(--income-soft); color: var(--income); }
 .olc-pill.pill-out { background: var(--expense-soft); color: var(--expense); }
 .olc-amount { font-size: 21px; font-weight: 750; font-feature-settings: "tnum"; letter-spacing: -0.02em; }
-.olc-actions { display: flex; gap: 8px; margin-top: 2px; }
+.olc-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.olc-actions .btn { flex: 1 1 auto; min-height: 30px; padding: 4px 8px; font-size: 12px; white-space: nowrap; }
+.olc-actions .btn.danger { color: var(--expense); border-color: color-mix(in srgb, var(--expense) 30%, var(--line)); }
+.olc-actions .btn.danger:hover { background: color-mix(in srgb, var(--expense) 12%, var(--surface-2)); border-color: var(--expense); }
+.olc-confirm-del { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; padding: 8px 10px; background: color-mix(in srgb, var(--expense) 10%, var(--surface-2)); border: 1px solid color-mix(in srgb, var(--expense) 35%, var(--line)); border-radius: 9px; flex-wrap: wrap; }
+.olc-confirm-msg { font-size: 12px; font-weight: 600; color: var(--text); }
 .open-loans-settled { display: flex; align-items: center; gap: 14px; padding: 14px 18px; border-radius: 12px; background: color-mix(in srgb, var(--gold) 6%, var(--surface-2)); border: 1px dashed color-mix(in srgb, var(--gold) 30%, var(--line)); flex-wrap: wrap; }
 .ols-icon { font-size: 24px; flex: none; }
 .open-loans-settled > div:first-of-type { display: grid; gap: 2px; flex: 1; min-width: 220px; }

@@ -418,7 +418,9 @@ export function view() {
     </div>
     ${openLoans.length ? `
       <div class="loans-grid">
-        ${openLoans.map((l) => `
+        ${openLoans.map((l) => {
+          const isConfirming = ui.confirmingLoanDel === `${l.person.id}:${l.currency}`;
+          return `
           <div class="open-loan-card ${l.direction === 'owed_to_me' ? 'incoming' : 'outgoing'}">
             <div class="olc-top">
               ${personAvatar(l.person, { size: 'sm' })}
@@ -434,18 +436,31 @@ export function view() {
               ${l.direction === 'owed_to_me' ? '+' : '−'}${formatMoney(l.amount, l.currency)}
             </div>
             <div class="olc-actions">
-              <button type="button" class="btn sm primary" data-act="settle-quick" data-id="${esc(l.person.id)}" data-kind="${l.direction === 'owed_to_me' ? 'back-in' : 'back-out'}" data-amt="${l.amount}" data-cur="${esc(l.currency)}">
-                ⚡ Settle / Pay back
-              </button>
-              <button type="button" class="btn sm" data-act="loan-with" data-id="${esc(l.person.id)}">
-                + Add loan
-              </button>
-              <button type="button" class="btn sm" data-act="tx-with" data-id="${esc(l.person.id)}" data-name="${esc(l.person.name)}">
-                Log tx
-              </button>
+              ${isConfirming ? `
+                <div class="olc-confirm-del">
+                  <span class="olc-confirm-msg">Delete this ${l.direction === 'owed_to_me' ? 'loan' : 'debt'} of <b>${formatMoney(l.amount, l.currency)}</b>?</span>
+                  <div class="btns-inline">
+                    <button type="button" class="btn sm" data-act="loan-del-cancel">Keep</button>
+                    <button type="button" class="btn sm danger" data-act="loan-del-do" data-id="${esc(l.person.id)}" data-cur="${esc(l.currency)}" data-amt="${l.amount}" data-name="${esc(l.person.name)}">Delete</button>
+                  </div>
+                </div>
+              ` : `
+                <button type="button" class="btn sm primary" data-act="settle-quick" data-id="${esc(l.person.id)}" data-kind="${l.direction === 'owed_to_me' ? 'back-in' : 'back-out'}" data-amt="${l.amount}" data-cur="${esc(l.currency)}" title="1-click settle debt">
+                  ⚡ Settle / Pay back
+                </button>
+                <button type="button" class="btn sm" data-act="loan-with" data-id="${esc(l.person.id)}" title="Add loan">
+                  + Add loan
+                </button>
+                <button type="button" class="btn sm" data-act="tx-with" data-id="${esc(l.person.id)}" data-name="${esc(l.person.name)}" title="Log transaction">
+                  Log tx
+                </button>
+                <button type="button" class="btn sm danger" data-act="loan-del-ask" data-id="${esc(l.person.id)}" data-cur="${esc(l.currency)}" title="Delete this loan">
+                  Delete
+                </button>
+              `}
             </div>
           </div>
-        `).join('')}
+        `}).join('')}
       </div>
     ` : `
       <div class="open-loans-settled">
@@ -526,10 +541,17 @@ function openPerson(id) {
   const hasOpen = Boolean(primaryOpen);
 
   ctx.openSheet(`<h3>${personAvatar(p, { size: 'sm', cls: 'pp-sheet-av-header' })} ${esc(p.name)} <button type="button" class="icon-btn" data-close aria-label="Close">✕</button></h3>
-    ${hasOpen ? `
-      <div class="pp-settle-banner">
-        <div><span>Active loan:</span> ${owesLine}</div>
-        <button type="button" class="btn sm primary" data-p="quick-settle">⚡ Settle this debt</button>
+    ${openEntries.length ? `
+      <div class="pp-settle-banners" style="display:grid; gap:8px; margin-bottom:14px;">
+        ${openEntries.map(([cur, v]) => `
+          <div class="pp-settle-banner" data-cur="${esc(cur)}">
+            <div><span>Active ${v > 0 ? 'loan' : 'debt'}:</span> <b class="${v > 0 ? 'income' : 'expense'}">${v > 0 ? '+' : '−'}${formatMoney(Math.abs(v), cur)}</b></div>
+            <div class="btns-inline">
+              <button type="button" class="btn sm primary" data-p="quick-settle" data-cur="${esc(cur)}" data-amt="${Math.abs(v)}" data-kind="${v > 0 ? 'back-in' : 'back-out'}">⚡ Settle</button>
+              <button type="button" class="btn sm danger" data-p="loan-del-ask" data-cur="${esc(cur)}" title="Delete this loan">Delete loan</button>
+            </div>
+          </div>
+        `).join('')}
       </div>
     ` : (owesLine ? `<div class="pp-badges" style="margin-bottom:12px">${owesLine}</div>` : '')}
     <div class="btns" style="margin-bottom:14px">
@@ -719,13 +741,46 @@ function openPerson(id) {
       const k = b.dataset.p;
       if (k === 'quick-settle') {
         ctx.closeSheet();
-        if (primaryOpen) {
+        const cur = b.dataset.cur || primaryOpen?.[0];
+        const amt = Number(b.dataset.amt) || Math.abs(primaryOpen?.[1] || 0);
+        const kind = b.dataset.kind || (primaryOpen?.[1] > 0 ? 'back-in' : 'back-out');
+        if (cur) {
           setTimeout(() => openLoan(id, {
-            kind: primaryOpen[1] > 0 ? 'back-in' : 'back-out',
-            amount: Math.abs(primaryOpen[1]),
-            currency: primaryOpen[0],
+            kind,
+            amount: amt,
+            currency: cur,
           }), 200);
         }
+        return;
+      }
+      if (k === 'loan-del-ask') {
+        const cur = b.dataset.cur;
+        const banner = b.closest('.pp-settle-banner');
+        if (banner) {
+          banner.innerHTML = `<span style="font-size:12.5px; font-weight:600">Delete active loan of <b>${esc(cur)}</b>?</span>
+            <div class="btns-inline">
+              <button type="button" class="btn sm" data-p="loan-del-cancel">Keep</button>
+              <button type="button" class="btn sm danger" data-p="loan-del-confirm" data-cur="${esc(cur)}">Delete</button>
+            </div>`;
+        }
+        return;
+      }
+      if (k === 'loan-del-cancel') {
+        ctx.closeSheet();
+        setTimeout(() => openPerson(id), 50);
+        return;
+      }
+      if (k === 'loan-del-confirm') {
+        const cur = b.dataset.cur;
+        const txs = ctx.state.tx.filter(
+          (t) => t.person === id && t.loan && M.loanAmount(t).currency === cur
+        );
+        for (const t of txs) {
+          M.removeTx(ctx.state, t.id);
+        }
+        ctx.commit();
+        ctx.closeSheet();
+        ctx.toast(`Deleted loan: ${esc(cur)} · ${p.name}`, 'Undo', () => ctx.undo?.());
         return;
       }
       if (k === 'delete') {
@@ -991,6 +1046,35 @@ export function onClick(act, el) {
       amount: Number(el.dataset.amt),
       currency: el.dataset.cur,
     });
+    return true;
+  }
+  if (act === 'loan-del-ask') {
+    ctx.ui.confirmingLoanDel = `${el.dataset.id}:${el.dataset.cur}`;
+    ctx.render();
+    return true;
+  }
+  if (act === 'loan-del-cancel') {
+    delete ctx.ui.confirmingLoanDel;
+    ctx.render();
+    return true;
+  }
+  if (act === 'loan-del-do') {
+    delete ctx.ui.confirmingLoanDel;
+    const pid = el.dataset.id;
+    const cur = el.dataset.cur;
+    const p = M.person(ctx.state, pid);
+    const amt = Number(el.dataset.amt) || 0;
+    const name = p?.name || el.dataset.name || 'Contact';
+    const txs = ctx.state.tx.filter(
+      (t) => t.person === pid && t.loan && M.loanAmount(t).currency === cur
+    );
+    if (txs.length) {
+      for (const t of txs) {
+        M.removeTx(ctx.state, t.id);
+      }
+      ctx.commit();
+      ctx.toast(`Deleted loan: ${formatMoney(amt, cur)} · ${name}`, 'Undo', () => ctx.undo?.());
+    }
     return true;
   }
   if (act === 'people-group') { ctx.ui.peopleGroup = el.dataset.group; ctx.render(); return true; }

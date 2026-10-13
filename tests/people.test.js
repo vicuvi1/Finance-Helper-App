@@ -129,4 +129,65 @@ test('people avatars: support custom emojis, photos, color rings, and auto-sugge
   assert.equal(suggestEmoji('Client Acme'), '💼');
 });
 
+test('open loan card: delete button prompts in-place confirmation and removes loan transactions', async () => {
+  const { ctx } = await import('../js/ctx.js');
+  const PeopleScreen = await import('../js/screens/people.js');
 
+  const s = defaultState();
+  s.people = [{ id: 'p1', name: 'Haruto', group: 'Work' }];
+  s.tx.push({
+    id: 'tx-loan-1',
+    createdAt: 1000,
+    updatedAt: 1000,
+    type: 'expense',
+    amount: 17300,
+    currency: 'MDL',
+    rate: 1,
+    base: 17300,
+    date: '2026-10-12',
+    category: 'other',
+    account: 'acc-1',
+    note: 'loan',
+    person: 'p1',
+    loan: true,
+  });
+
+  ctx.state = s;
+  ctx.ui = {};
+  let rendered = false;
+  ctx.render = () => { rendered = true; };
+  let committed = false;
+  ctx.commit = () => { committed = true; };
+  let toastMsg = '';
+  let toastAction = null;
+  ctx.toast = (msg, label, action) => {
+    toastMsg = msg;
+    toastAction = action;
+  };
+  ctx.money = (n) => `${n} MDL`;
+
+  // 1. Initial view has Delete button
+  const html1 = PeopleScreen.view();
+  assert.match(html1, /data-act="loan-del-ask"/);
+  assert.match(html1, /Delete/);
+
+  // 2. Ask delete -> triggers confirmation
+  PeopleScreen.onClick('loan-del-ask', { dataset: { id: 'p1', cur: 'MDL' } });
+  assert.equal(ctx.ui.confirmingLoanDel, 'p1:MDL');
+  const htmlConfirm = PeopleScreen.view();
+  assert.match(htmlConfirm, /Delete this loan of/);
+  assert.match(htmlConfirm, /data-act="loan-del-cancel"/);
+  assert.match(htmlConfirm, /data-act="loan-del-do"/);
+
+  // 3. Cancel confirmation
+  PeopleScreen.onClick('loan-del-cancel', {});
+  assert.equal(ctx.ui.confirmingLoanDel, undefined);
+
+  // 4. Confirm delete
+  PeopleScreen.onClick('loan-del-do', { dataset: { id: 'p1', cur: 'MDL', amt: '17300' } });
+  assert.equal(s.tx.length, 0, 'loan tx removed');
+  assert.ok(s.deleted['tx-loan-1'], 'marked in s.deleted');
+  assert.ok(committed, 'commit was called');
+  assert.match(toastMsg, /Deleted loan:/);
+  assert.equal(typeof toastAction, 'function', 'undo callback supplied');
+});
