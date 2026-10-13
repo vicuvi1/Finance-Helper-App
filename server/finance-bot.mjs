@@ -81,6 +81,7 @@ function slim(u) {
 const esc = (s) => String(s).replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
 const ASKS = [
   [/^(\/today|📊)/, 'today'], [/^(\/balance|💰)/, 'balance'], [/^(\/month|📅)/, 'month'], [/^(\/last|🧾)/, 'last'],
+  [/^(\/safe|🟢)/, 'safe'], [/^(\/goals|🎯)/, 'goals'], [/^(\/rates|💵)/, 'rates'],
 ];
 const at = (t) => new Date(t).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: process.env.TZ || 'Europe/Chisinau' });
 

@@ -6,6 +6,7 @@ import { loggingStreak } from './review.js';
 import { addDays, monthKey } from './dates.js';
 import { formatMoney } from './money.js';
 import { workText } from './workhours.js';
+import { safeToSpend } from './safespend.js';
 
 const pick = (list, rand) => list[Math.floor(rand() * list.length) % list.length];
 const STREAKS = [3, 7, 14, 21, 30, 50, 75, 100, 150, 200, 365];
@@ -71,6 +72,14 @@ export function greeting(state, today, hour, rand = Math.random) {
     else options.push({ mood: 'thinking', text: `You're keeping ${p}% this month. ${target}% is the goal, you can do it.` });
   }
   if (streak >= 3) options.push({ mood: 'proud', text: `${streak}-day logging streak 🔥 Keep it going!` });
+  if (state.tx.length) {
+    const sf = safeToSpend(state, today);
+    if (sf.leftToday > sf.perDay * 0.75 && sf.perDay > 0 && hour >= 16) {
+      options.push({ mood: 'proud', text: `Pacing well today! ${formatMoney(sf.leftToday, state.settings.currency)} safe cushion remaining.` });
+    } else if (sf.leftToday < 0) {
+      options.push({ mood: 'thinking', text: `Slightly over today's share (${formatMoney(-sf.leftToday, state.settings.currency)}). Tomorrow's allowance adapts automatically.` });
+    }
+  }
   if (!options.length) options.push({ mood: 'happy', text: hour < 12 ? 'Good morning! Ready to count every lei?' : 'Hi! I\'m watching your money with you 👀' });
   return pick(options, rand);
 }

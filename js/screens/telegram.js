@@ -206,6 +206,9 @@ async function handle(updates) {
       if (cmd.startsWith('/start') || cmd === '/help' || text === '❓ Help') { if (!late) send(`👋 Ready.\n\n${T.HELP}\n/review: your week · /cash: count your wallet`, keyboard()); }
       else if (cmd === '/review') { if (!late) sendWeekly(); }
       else if (cmd === '/cash') { if (!late) askCash(); }
+      else if (cmd === '/safe' || text === '🟢 Safe') { if (!late) send(T.safeDetailsText(state, todayISO()), keyboard()); }
+      else if (cmd === '/goals' || text === '🎯 Goals') { if (!late) send(T.goalsText(state, todayISO()), keyboard()); }
+      else if (cmd === '/rates' || text === '💵 Rates') { if (!late) send(T.ratesText(state), keyboard()); }
       else if (cmd === '/today' || text === '📊 Today') { if (!late) send(T.todayText(state, todayISO()), keyboard()); }
       else if (cmd === '/month' || text === '📅 Month') { if (!late) send(T.monthText(state, todayISO()), keyboard()); }
       else if (cmd === '/balance' || text === '💰 Balance') { if (!late) send(T.balanceText(state)); }
@@ -537,7 +540,9 @@ export function pushSnapshot() {
     const today = todayISO();
     const snap = {
       today: T.todayText(state, today), balance: T.balanceText(state), month: T.monthText(state, today), last: T.lastText(state),
-      safe: safeLine(state, today, (c) => esc(formatMoney(Math.round(c / 100) * 100, state.settings.currency))),
+      safe: T.safeDetailsText(state, today),
+      goals: T.goalsText(state, today),
+      rates: T.ratesText(state),
     };
     const key = JSON.stringify(snap);
     if (key === lastSnap) return;

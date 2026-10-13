@@ -68,4 +68,4 @@ export function safeLine(state, today, fmt) {
   return `🟠 ${fmt(-s.leftToday)} over today's ${fmt(s.perDay)}. From tomorrow: ${fmt(s.tomorrow)} a day until ${shortDay(s.payday)}.`;
 }
 
-const shortDay = (iso) => `${Number(iso.slice(8))} ${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][Number(iso.slice(5, 7)) - 1]}`;
+export const shortDay = (iso) => `${Number(iso.slice(8))} ${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][Number(iso.slice(5, 7)) - 1]}`;

@@ -4,12 +4,12 @@
 // The desktop main process (electron/telegram.cjs) only moves messages.
 
 import { evalAmount, formatMoney } from './money.js';
-import { suggestCategory, sortTx, monthSummary, totalBalance, accountValues, jarStatus, budgetAlert, category, account, B } from './model.js';
-import { monthKey, addMonths, addDays, MONTHS, DOW_SHORT, dowIndex } from './dates.js';
+import { suggestCategory, sortTx, monthSummary, totalBalance, accountValues, jarStatus, budgetAlert, category, account, B, goalStatus } from './model.js';
+import { monthKey, addMonths, addDays, MONTHS, DOW_SHORT, dowIndex, monthLabel } from './dates.js';
 import { blockKeyboard } from './blocks.js';
 import { dueItems, upcomingItems } from './recurring.js';
 import { workText } from './workhours.js';
-import { safeLine } from './safespend.js';
+import { safeLine, safeToSpend, shortDay } from './safespend.js';
 
 const fold = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 const INCOME_WORDS = /^(\+|got|earned|income|salary|salariu|venit|primit|зарплата|получил|доход)$/;
@@ -176,9 +176,71 @@ export function billsText(state, today) {
 // The buttons under the message box: your blocks (js/blocks.js) and helpers.
 export const quickKeyboard = (state) => blockKeyboard(state);
 
+// Detailed Safe-to-Spend breakdown.
+export function safeDetailsText(state, today) {
+  const s = safeToSpend(state, today);
+  const cur = state.settings.currency;
+  const f = (c) => esc(formatMoney(c, cur));
+  const statusEmoji = s.pool <= 0 ? '🔴' : s.leftToday >= s.perDay / 4 ? '🟢' : s.leftToday >= 0 ? '🟡' : '🟠';
+  const lines = [
+    `${statusEmoji} <b>Safe to spend today</b>`,
+    `Left today: <b>${f(Math.max(0, s.leftToday))}</b> (of ${f(s.perDay)} daily share)`,
+  ];
+  if (s.spentToday > 0) lines.push(`Spent today: ${f(s.spentToday)}`);
+  if (s.leftToday < 0) lines.push(`⚠️ ${f(-s.leftToday)} over today. From tomorrow: <b>${f(s.tomorrow)}/day</b>`);
+  lines.push('', `👛 Liquid cards & cash: ${f(s.liquid)}`);
+  if (s.billsTotal > 0) lines.push(`🔔 Bills before ${shortDay(s.payday)}: −${f(s.billsTotal)} (${s.bills.length} bill${s.bills.length === 1 ? '' : 's'})`);
+  if (s.savingsLeft > 0) lines.push(`🏦 Savings plan needed: −${f(s.savingsLeft)}`);
+  lines.push(`🏊 Pool: <b>${f(Math.max(0, s.pool))}</b> across ${s.days} day${s.days === 1 ? '' : 's'} until ${shortDay(s.payday)}${s.paydayFrom ? ` (${esc(s.paydayFrom)})` : ''}`);
+  return lines.join('\n');
+}
+
+// Visual status of all active goals.
+export function goalsText(state, today = new Date().toISOString().slice(0, 10)) {
+  const goals = state.goals || [];
+  if (!goals.length) return '🎯 No goals set up yet. Add one in the app: Goals tab.';
+  const cur = state.settings.currency;
+  const f = (c) => esc(formatMoney(c, cur));
+  const lines = ['🎯 <b>Your Goals</b>'];
+  for (const g of goals) {
+    const st = goalStatus(state, today, g);
+    const p = Math.round(st.ratio * 100);
+    const filled = Math.min(10, Math.max(0, Math.round(p / 10)));
+    const bar = '■'.repeat(filled) + '□'.repeat(10 - filled);
+    lines.push('', `${g.emoji || '🎯'} <b>${esc(g.name)}</b>: ${p}%`);
+    lines.push(`<code>[${bar}]</code> ${f(st.current)} / ${f(st.target)}`);
+    if (st.remaining === 0) lines.push('🏆 Completed!');
+    else if (st.eta) lines.push(`⏱ ETA: ${monthLabel(st.eta)} at your pace (${f(st.pace)}/mo)`);
+  }
+  return lines.join('\n');
+}
+
+// Exchange rates from the latest cached rates.
+export function ratesText(state) {
+  const rates = state.rates;
+  const cur = state.settings.currency;
+  if (!rates || (!rates.fiat && !rates.usd)) return '💵 No exchange rates saved yet. Open Rates in the app to fetch them.';
+  const lines = ['💵 <b>Exchange Rates</b>'];
+  const usdRate = rates.usd?.[cur] || rates.fiat?.[cur] || rates[cur];
+  const eurRate = rates.eur?.[cur];
+  if (usdRate) lines.push(`🇺🇸 1 USD = <b>${usdRate.toFixed(2)} ${cur}</b>`);
+  if (eurRate) lines.push(`🇪🇺 1 EUR = <b>${eurRate.toFixed(2)} ${cur}</b>`);
+  else if (rates.usd?.EUR && usdRate) {
+    const eurInCur = usdRate / rates.usd.EUR;
+    lines.push(`🇪🇺 1 EUR ≈ <b>${eurInCur.toFixed(2)} ${cur}</b>`);
+  }
+  if (rates.coins) {
+    lines.push('', '🪙 <b>Crypto</b>');
+    for (const [coin, price] of Object.entries(rates.coins).slice(0, 5)) {
+      lines.push(`${coin.toUpperCase()}: $${price.toLocaleString()}`);
+    }
+  }
+  return lines.join('\n');
+}
+
 export const HELP = `Tap a block below to log it for today, or type: <code>coffee 35</code>, <code>taxi 45 maib</code>, <code>120+45 groceries</code>. Income starts with +: <code>+500 salary</code>. Another day: <code>coffee 35 yesterday</code>.
 
-📊 /today · 📅 /month · 💰 /balance · 🧾 /last · ↩️ /undo
+🟢 /safe · 🎯 /goals · 📊 /today · 📅 /month · 💰 /balance · 💵 /rates · 🧾 /last · ↩️ /undo
 🧱 /blocks: your buttons · <code>/addblock 🍕 Pizza 120</code> · <code>/delblock pizza</code>
 
 PC off? Keep sending: your messages are kept and the app logs them, with the right day, when it opens.`;

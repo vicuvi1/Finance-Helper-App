@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseQuick, recordFromMessage, loggedText, quickKeyboard, reminderText, billsText, recordDay, monthText, balanceText, lastText, catchUpText } from '../js/telegram.js';
+import { parseQuick, recordFromMessage, loggedText, quickKeyboard, reminderText, billsText, recordDay, monthText, balanceText, lastText, catchUpText, safeDetailsText, goalsText, ratesText } from '../js/telegram.js';
 import { blocks, blockLabel, matchBlock, blockFields, blockFromText, upsertBlock, removeBlock, moveBlock, blockKeyboard } from '../js/blocks.js';
 import { defaultState } from '../js/model.js';
 
@@ -129,4 +129,22 @@ test('stickers: a big palette, found by words, suggested from the name', async (
   assert.equal(categoryFor(st, 'Netflix'), 'subscriptions');
   assert.equal(categoryFor(st, 'Taxi'), 'transport');
   assert.equal(categoryFor(st, 'coffee'), 'food'); // learned from your records
+});
+
+test('safeDetailsText, goalsText, and ratesText format expected summaries', () => {
+  const st = state();
+  st.rates = { usd: { MDL: 17.85 }, eur: { MDL: 19.45 }, coins: { btc: 65000 } };
+  const safe = safeDetailsText(st, '2026-10-10');
+  assert.match(safe, /Safe to spend today/);
+  assert.match(safe, /Liquid cards & cash/);
+
+  const goals = goalsText(st, '2026-10-10');
+  assert.match(goals, /Your Goals/);
+  assert.match(goals, /Safe goal/);
+
+  const rates = ratesText(st);
+  assert.match(rates, /Exchange Rates/);
+  assert.match(rates, /1 USD = <b>17.85 MDL<\/b>/);
+  assert.match(rates, /1 EUR = <b>19.45 MDL<\/b>/);
+  assert.match(rates, /BTC: \$65,000/);
 });
