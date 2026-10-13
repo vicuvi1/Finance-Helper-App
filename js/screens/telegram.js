@@ -10,10 +10,13 @@ import { todayISO, weekday, DOW_LONG } from '../dates.js';
 import { weeklyReview, cashAccounts, cashCheck } from '../review.js';
 import { evalAmount } from '../money.js';
 import * as Blocks from '../blocks.js';
+import { safeLine } from '../safespend.js';
+import { formatMoney } from '../money.js';
 
 const bot = () => window.desktop?.telegram;
 const bg = () => window.desktop?.background;
 const st = { status: null, pair: null, busy: false, error: '', bg: null, relay: { busy: false, error: '', copied: false, script: '', open: false } };
+// open: false | 'google' | 'server'
 const prefs = () => ({ daily: true, at: '21:00', bills: true, weekly: true, weeklyDay: 0, weeklyAt: '19:00', cash: true, ...(ctx.state.meta.tg || {}) });
 
 // The Sunday ritual: the week, records to file, then the cash check.
@@ -89,6 +92,7 @@ export function alertText() {
   if (s.errorCode === 'conflict') return 'Telegram bot: another program or a second copy of the app is reading it. Close it.';
   if (s.errorCode === 'network' && Date.now() - (s.lastCheck || 0) > 10 * 60000) return 'Telegram bot: no connection to Telegram for a while (internet?).';
   if (!s.linked) return 'Telegram bot: link your account to finish (Settings → Telegram).';
+  if (s.server?.on && s.server.error && Date.now() - (s.server.okAt || 0) > 5 * 60000) return 'Telegram bot: your server doesn\'t answer. Messages wait there; check it (Settings → Telegram).';
   const r = s.relay;
   if (r?.on && r.error && Date.now() - (r.okAt || 0) > 10 * 60000) return 'Telegram always-on: the Google script doesn\'t answer. Check it in Settings → Telegram.';
   if (r?.on && r.okAt && !r.trigger) return 'Telegram always-on is paused: Google isn\'t checking your bot. See Settings → Telegram.';
@@ -120,6 +124,7 @@ async function loadStatus({ quiet = false } = {}) {
   st.status = await bot()?.status().catch(() => null);
   st.bg = await bg()?.get().catch(() => null);
   paintAlert();
+  if (st.status?.server?.on) pushSnapshot();
   // A background check redraws the card only when something changed, and
   // never while you are typing in it.
   const typing = document.activeElement?.closest?.('#tg-card');
@@ -256,6 +261,7 @@ async function handle(updates) {
   }
   lastLoaded = logged.length;
   if (done.length) bot().ack(done);
+  pushSnapshot();
 }
 
 let lastLoaded = 0;
@@ -285,6 +291,7 @@ export function pushKeyboard() {
 function tick() {
   const { state } = ctx;
   if (ctx.DEMO || state._sealed || !st.status?.linked) return;
+  pushSnapshot(); // the day changed, or records were edited in the app
   const p = prefs();
   const today = todayISO();
   const hm = new Date().toTimeString().slice(0, 5);
@@ -341,9 +348,44 @@ const ago = (t) => {
 
 // "Always on": a free Google script in the user's own account answers the
 // bot and keeps the messages while this PC is off (electron/relay.gs).
+function serverSection(sv) {
+  const live = sv.okAt && Date.now() - sv.okAt < 60000;
+  return `<div class="tg-relay on">
+    <h3>🖥 Always on: your server <span class="right ${sv.error ? 'expense' : 'income'}">● ${sv.error ? 'not reachable' : live ? 'live' : 'connecting…'}</span></h3>
+    <p class="muted small" style="margin-top:0">Your server reads the bot day and night. While this app is open, messages arrive here within a second; while the PC is off, the bot answers right away and keeps them for later. It also keeps a short summary of your numbers (today, balance, month) so /today and /balance work with the PC off.</p>
+    ${sv.error ? `<p class="lock-msg">${esc(sv.error)}</p>` : ''}
+    <div class="kv"><span>Server</span><b>${esc(sv.url.replace(/^https?:\/\//, ''))}</b></div>
+    ${sv.okAt ? `<div class="kv"><span>Last contact</span><b>${esc(ago(sv.okAt))}</b></div>` : ''}
+    ${sv.lastTick ? `<div class="kv"><span>Server read Telegram</span><b>${esc(ago(sv.lastTick))}</b></div>` : ''}
+    ${sv.waiting ? `<div class="kv"><span>Waiting to be logged</span><b>${sv.waiting}</b></div>` : ''}
+    ${sv.snapshotAt ? `<div class="kv"><span>Summary on the server</span><b>${esc(ago(sv.snapshotAt))}</b></div>` : ''}
+    <div class="btns" style="margin-top:8px"><button class="btn" data-act="tg-server-off" ${st.relay.busy ? 'disabled' : ''}>Stop using the server</button></div>
+  </div>`;
+}
+
+function serverForm() {
+  const rs = st.relay;
+  return `<div class="tg-relay">
+    <h3>🖥 Always on with your own server</h3>
+    <ol class="steps small">
+      <li>On the server (next to Hermes): <code>git clone https://github.com/vicuvi1/Finance-Helper-App</code>, then in <code>Finance-Helper-App/server</code> run <code>docker compose up -d --build</code>.</li>
+      <li><code>docker compose logs finance-bot</code> shows your <b>key</b>. Copy it.</li>
+      <li>Paste the server's address: <code>https://your-domain</code>, or with Tailscale <code>http://server-name:8787</code>. Details in <code>server/README.md</code>.</li>
+    </ol>
+    <form id="tg-server-form" autocomplete="off">
+      <label class="field"><span>Server address</span><input id="tg-server-url" type="text" inputmode="url" placeholder="https://money.example.com" spellcheck="false"></label>
+      <label class="field"><span>Key</span><input id="tg-server-key" type="password" placeholder="from docker compose logs" spellcheck="false"></label>
+      ${rs.error ? `<p class="lock-msg">${esc(rs.error)}</p>` : ''}
+      <div class="btns"><button class="btn primary" type="submit" ${rs.busy ? 'disabled' : ''}>${rs.busy ? 'Connecting…' : 'Connect'}</button><button class="btn" type="button" data-act="tg-relay-cancel">Not now</button></div>
+    </form>
+  </div>`;
+}
+
 function relaySection(s) {
   const r = s.relay || { on: false };
   const rs = st.relay;
+  if (s.server?.on) return serverSection(s.server);
+  if (rs.open === 'server') return serverForm();
   if (r.on) {
     const problem = r.error ? `The app can't reach your Google script: ${r.error}`
       : r.okAt && !r.trigger ? 'Google isn\'t checking your bot yet. In the script editor pick <b>install</b> in the list next to ▶ Run, press ▶ Run and allow it.'
@@ -360,9 +402,9 @@ function relaySection(s) {
   }
   if (!rs.open) {
     return `<div class="tg-relay">
-      <h3>🌙 Make it always on <span class="right muted small">free · 3 min</span></h3>
-      <p class="muted small" style="margin-top:0">Right now the bot answers only while this app is open. Turn on <b>always on</b> and it answers even when the PC is off: a small free script in <b>your own Google account</b> checks the bot every minute and keeps your messages until the app opens. No server, nothing to pay.</p>
-      <button class="btn primary block" data-act="tg-relay-start">Set up always on</button>
+      <h3>🌙 Make it always on</h3>
+      <p class="muted small" style="margin-top:0">Right now the bot answers only while this app is open. Make it always on, so it answers even when the PC is off:</p>
+      <div class="btns"><button class="btn primary" data-act="tg-server-start">🖥 My own server (instant, live)</button><button class="btn" data-act="tg-relay-start">Google script (free, every minute)</button></div>
     </div>`;
   }
   return `<div class="tg-relay">
@@ -426,7 +468,7 @@ export function settingsCard() {
     ${!fixToken && (s.error || st.error) ? `<p class="lock-msg">${esc(s.error || st.error)}</p>` : ''}
     ${s.lastCheck ? `<div class="kv"><span>Last checked</span><b>${esc(new Date(s.lastCheck).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))}</b></div>` : ''}
     <p class="muted small">Send <code>coffee 35</code>, <code>taxi 45 cash</code>, <code>coffee 35 yesterday</code>, <code>+500 salary</code>, or tap a button below the chat. /today, /month, /balance, /last, /undo.</p>
-    ${s.relay?.on ? '' : '<p class="muted small"><b>PC off?</b> Keep logging on your phone: Telegram keeps the messages for 24 hours and the app logs them, on the day you sent them, as soon as it opens. You get one summary message.</p>'}
+    ${s.relay?.on || s.server?.on ? '' : '<p class="muted small"><b>PC off?</b> Keep logging on your phone: Telegram keeps the messages for 24 hours and the app logs them, on the day you sent them, as soon as it opens. You get one summary message.</p>'}
     <button class="btn primary block" data-act="tg-load">📥 Load from Telegram now</button>
     ${relaySection(s)}
     <label class="field check"><input type="checkbox" data-tg="daily" ${p.daily ? 'checked' : ''}><span>Evening reminder to log</span></label>
@@ -462,7 +504,49 @@ async function relayConnect(form) {
   if (rs.error) { const i = document.getElementById('tg-relay-url'); if (i) i.value = url; }
 }
 
+async function serverConnect(form) {
+  const rs = st.relay;
+  rs.busy = true;
+  rs.error = '';
+  const url = form.querySelector('#tg-server-url').value;
+  const key = form.querySelector('#tg-server-key').value;
+  refresh();
+  try {
+    await bot().serverConnect(url, key);
+    rs.open = false;
+    ctx.toast('Connected ✓ Your bot now lives on your server, always on.');
+    lastSnap = '';
+    pushSnapshot();
+  } catch (e) {
+    rs.error = cleanError(e);
+  }
+  rs.busy = false;
+  await loadStatus();
+  if (rs.error) { const i = document.getElementById('tg-server-url'); if (i) i.value = url; }
+}
+
+// A short summary of your numbers for your server, so the bot can answer
+// /today, /balance, /month and /last while the PC is off.
+let lastSnap = '';
+let snapTimer = null;
+export function pushSnapshot() {
+  clearTimeout(snapTimer);
+  snapTimer = setTimeout(() => {
+    const { state } = ctx;
+    if (ctx.DEMO || state._sealed || !st.status?.server?.on) return;
+    const today = todayISO();
+    const snap = {
+      today: T.todayText(state, today), balance: T.balanceText(state), month: T.monthText(state, today), last: T.lastText(state),
+      safe: safeLine(state, today, (c) => esc(formatMoney(Math.round(c / 100) * 100, state.settings.currency))),
+    };
+    const key = JSON.stringify(snap);
+    if (key === lastSnap) return;
+    bot()?.snapshot?.(snap).then(() => { lastSnap = key; }, () => {});
+  }, 3000);
+}
+
 export async function onSubmit(form) {
+  if (form.id === 'tg-server-form') { await serverConnect(form); return true; }
   if (form.id === 'tg-relay-form') { await relayConnect(form); return true; }
   if (form.id !== 'tg-form') return false;
   st.busy = true;
@@ -487,7 +571,14 @@ export function onClick(act) {
   if (act === 'tg-open') { if (st.pair?.link) bot().openLink(st.pair.link); return true; }
   if (act === 'tg-review') { sendWeekly().then(() => ctx.toast('Sent. Check Telegram.')); return true; }
   if (act === 'tg-test') { send(T.reminderText(ctx.state, todayISO()), keyboard()).then(() => ctx.toast('Sent. Check Telegram.')); return true; }
-  if (act === 'tg-relay-start') { st.relay.open = true; refresh(); return true; }
+  if (act === 'tg-relay-start') { st.relay.open = 'google'; refresh(); return true; }
+  if (act === 'tg-server-start') { st.relay.open = 'server'; st.relay.error = ''; refresh(); return true; }
+  if (act === 'tg-server-off') {
+    st.relay.busy = true;
+    refresh();
+    bot().serverOff().finally(() => { st.relay.busy = false; loadStatus(); ctx.toast('The app reads Telegram itself again. You can stop the server container.'); });
+    return true;
+  }
   if (act === 'tg-relay-cancel') { Object.assign(st.relay, { open: false, error: '', script: '' }); refresh(); return true; }
   if (act === 'tg-relay-site') { bot().openLink('https://script.google.com/home/projects/create'); return true; }
   if (act === 'tg-relay-copy') {

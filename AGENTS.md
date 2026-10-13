@@ -93,6 +93,11 @@ tested); `js/app.js` only renders and handles taps.
   the bot only while the app hasn't pulled for 90 s, answers and keeps messages (`u_<id>`
   Script Properties); the app pulls/acks every 15 s and sends its offset (`from`) so the
   script never answers what the app handled. Tests run it in a vm (`e2e/appscript.mjs`).
+  Own server (preferred over the Google script): `server/finance-bot.mjs` (Node, no deps, Docker,
+  runs next to the owner's Hermes agent) is then the bot's ONLY reader; the app never calls
+  getUpdates. The app long-polls `POST /api {a:'pull', wait:25}` (Bearer key) and gets each message
+  within a second, acks it, and sends a `snapshot` (today/balance/month/last/safe texts) so the
+  server can answer while the PC is off. Tests: `tests/botserver.test.js`.
 - Calculator: math in `js/calc.js` (pure, no eval), floating panel `js/screens/calc.js`
   (position, open state and tape in localStorage: device-only, never synced).
 - End-to-end: `npm run e2e` (`e2e/*.e2e.mjs`, Playwright; on Linux `xvfb-run -a npm run e2e`

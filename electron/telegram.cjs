@@ -33,6 +33,9 @@ const COMMANDS = [
 const ABOUT = 'Your Finance Helper. Tap a block or type "coffee 35". Sent while your PC is off? It is saved and logged when the app opens.';
 const RELAY_URL = /^https:\/\/script\.google\.com\/(a\/[\w.-]+\/)?macros\/s\/[\w-]+\/exec$/;
 const RELAY_EVERY = 15000; // how often an open app collects from the relay
+// Your own bot server (server/finance-bot.mjs): https anywhere, or plain http
+// only inside a private network (Tailscale, home network, this computer).
+const SERVER_URL = /^(https:\/\/[\w.-]+(:\d+)?|http:\/\/(localhost|127\.\d+\.\d+\.\d+|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|100\.\d+\.\d+\.\d+|[\w-]+|[\w.-]+\.ts\.net)(:\d+)?)(\/[\w./-]*)?$/;
 
 function createTelegram({ app, net, safeStorage, onUpdates = () => {}, onEvent = () => {}, storage }) {
   const file = () => path.join(app.getPath('userData'), 'telegram.bin');
@@ -68,6 +71,55 @@ function createTelegram({ app, net, safeStorage, onUpdates = () => {}, onEvent =
   let relayAcks = new Set(); // handled, still to confirm to the relay
   let relayOkAt = 0;
   const handled = new Set(); // recently handled ids, so the relay can't hand one over twice
+  let serverAcks = new Set(); // handled, still to confirm to your server
+  let serverInfo = {};
+  let serverError = '';
+  let serverOkAt = 0;
+
+  // Your own bot server: JSON over https, the key in a header.
+  async function serverCall(body, { url = cfg?.server?.url, key = cfg?.server?.key, signal } = {}) {
+    const r = await net.fetch(`${String(url).replace(/\/+$/, '')}/api`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+      body: JSON.stringify(body),
+      ...(signal ? { signal } : {}),
+    });
+    let j = null;
+    try { j = await r.json(); } catch { /* not JSON */ }
+    if (r.status === 401) throw new Error('The server says the key is wrong. Copy it again (docker compose logs finance-bot).');
+    if (!j) throw new Error(`Your bot server didn't answer (HTTP ${r.status}).`);
+    if (!j.ok) throw new Error(j.error || 'Your bot server said no.');
+    return j;
+  }
+  const serverFields = (j) => ({ lastTick: j.lastTick || 0, waiting: j.waiting || 0, snapshotAt: j.snapshotAt || 0, lastError: j.lastError || '' });
+
+  async function flushServerAcks() {
+    if (!serverAcks.size) return;
+    const ids = [...serverAcks];
+    await serverCall({ a: 'ack', ids });
+    serverAcks = new Set([...serverAcks].filter((x) => !ids.includes(x)));
+  }
+
+  // With a server, it is the only reader of the bot: a long "pull" that
+  // returns the moment a message arrives.
+  async function pullServer() {
+    await flushServerAcks();
+    const ac = typeof AbortController === 'function' ? new AbortController() : null;
+    poll = ac;
+    let j;
+    try {
+      j = await serverCall({ a: 'pull', wait: waiters.length || serverAcks.size ? 0 : 25, skip: [...inbox.keys()] }, { signal: ac?.signal });
+    } catch (e) {
+      if (ac?.signal.aborted) return null; // cut short (an ack or "load now"): ask again
+      throw e;
+    } finally { poll = null; }
+    serverInfo = serverFields(j);
+    serverError = '';
+    serverOkAt = Date.now();
+    const fresh = (j.updates || []).filter((u) => Number.isInteger(u.update_id) && !inbox.has(u.update_id) && !serverAcks.has(u.update_id) && !handled.has(u.update_id));
+    if (fresh.length) await handle(fresh);
+    return fresh.length;
+  }
 
   // The relay is a Google web app: answers JSON, after a redirect.
   async function relayCall(params, { post = false, url = cfg?.relay?.url } = {}) {
@@ -180,12 +232,24 @@ function createTelegram({ app, net, safeStorage, onUpdates = () => {}, onEvent =
           settle(inbox.size);
           // Keep telling the relay the app is open (e.g. while it is locked),
           // so it doesn't start answering in its place.
-          await pullRelay();
+          if (cfg?.server) await flushServerAcks().catch(() => {});
+          else await pullRelay();
           await sleep(15000);
           if (inbox.size) onUpdates([...inbox.values()]);
           continue;
         }
         if (cfg?.chatId) setMenu();
+        if (cfg?.server && cfg.chatId) {
+          const n = await pullServer();
+          if (my !== gen) break;
+          if (n === null) continue;
+          lastError = '';
+          lastCode = '';
+          lastCheck = Date.now();
+          backoff = 2000;
+          settle(n);
+          continue;
+        }
         const fromRelay = await pullRelay(waiters.length > 0);
         if (inbox.size && fromRelay) { settle(fromRelay); continue; }
         // A "load now" while waiting cuts the long wait short.
@@ -211,6 +275,16 @@ function createTelegram({ app, net, safeStorage, onUpdates = () => {}, onEvent =
         // The relay read Telegram at the same moment (right after the app
         // opened): not a problem, it keeps those messages for the app.
         if (e.code === 409 && cfg?.relay) { await sleep(1500); continue; }
+        if (cfg?.server) {
+          serverError = e.message;
+          lastCode = 'server';
+          lastError = `Your bot server doesn't answer (${e.message}). Your messages wait there safely; trying again…`;
+          onEvent({ type: 'error', message: lastError });
+          settle(-1);
+          await sleep(backoff);
+          backoff = Math.min(backoff * 2, 60000);
+          continue;
+        }
         lastCode = e.code === 401 || e.code === 404 ? 'token' : e.code === 409 ? 'conflict' : e.code ? 'telegram' : 'network';
         lastError = lastCode === 'token' ? 'Telegram doesn\'t accept the bot token any more (it was revoked or changed in @BotFather). Paste the new token in Settings → Telegram.'
           : lastCode === 'conflict' ? 'Another program (or a second copy of this app) is reading this bot. Close it; only one app can read a bot.'
@@ -238,7 +312,8 @@ function createTelegram({ app, net, safeStorage, onUpdates = () => {}, onEvent =
     start,
     stop,
     status: () => ({ connected: !!cfg?.token, botName: cfg?.botName || '', linked: !!cfg?.chatId, userName: cfg?.userName || '', error: lastError, errorCode: lastCode, running, pairing: pairCode, lastCheck,
-      relay: cfg?.relay ? { on: true, lastPull, okAt: relayOkAt, error: relayError, ...relayInfo } : { on: false } }),
+      relay: cfg?.relay ? { on: true, lastPull, okAt: relayOkAt, error: relayError, ...relayInfo } : { on: false },
+      server: cfg?.server ? { on: true, url: cfg.server.url, okAt: serverOkAt, error: serverError, ...serverInfo } : { on: false } }),
     // "Load from Telegram": check right now. Resolves with how many messages
     // came (or are waiting for the app), -1 on an error.
     loadNow() {
@@ -260,7 +335,7 @@ function createTelegram({ app, net, safeStorage, onUpdates = () => {}, onEvent =
       // A new token for the same bot (after revoking the old one): keep the
       // linked chat, nothing to link again.
       const same = cfg?.chatId && cfg.token && t.split(':')[0] === cfg.token.split(':')[0];
-      const next = { token: t, botName: me.username, chatId: same ? cfg.chatId : null, ...(same ? { userName: cfg.userName || '', relay: cfg.relay, relayKey: cfg.relayKey } : {}) };
+      const next = { token: t, botName: me.username, chatId: same ? cfg.chatId : null, ...(same ? { userName: cfg.userName || '', relay: cfg.relay, relayKey: cfg.relayKey, server: cfg.server } : {}) };
       store.write(next); // throws when the computer can't store it safely
       stop();
       cfg = next;
@@ -272,6 +347,7 @@ function createTelegram({ app, net, safeStorage, onUpdates = () => {}, onEvent =
       start();
       // The always-on script needs the new token too.
       if (same && cfg.relay) await relayCall({ k: cfg.relay.key, a: 'setup', token: t, chat: cfg.chatId, from: offset }, { post: true }).catch((e) => { relayError = e.message; });
+      if (same && cfg.server) await serverCall({ a: 'setup', token: t, chat: cfg.chatId }).catch((e) => { serverError = e.message; });
       return { botName: me.username, kept: !!same };
     },
     // A fresh one-time code to link your Telegram account.
@@ -284,6 +360,7 @@ function createTelegram({ app, net, safeStorage, onUpdates = () => {}, onEvent =
       for (const id of ids || []) {
         inbox.delete(id);
         handled.add(id);
+        if (cfg?.server) { serverAcks.add(id); continue; } // kept by your server: confirm it there
         if (relayIds.delete(id)) relayAcks.add(id); // kept by the relay: confirm it there
         else {
           offset = Math.max(offset, id + 1);
@@ -292,6 +369,7 @@ function createTelegram({ app, net, safeStorage, onUpdates = () => {}, onEvent =
       }
       if (handled.size > 500) for (const id of [...handled].slice(0, handled.size - 500)) handled.delete(id);
       if (relayAcks.size) { lastPull = 0; wake?.(); }
+      if (serverAcks.size) poll?.abort(); // confirm now, then wait again
       if (!inbox.size) wake?.();
       return true;
     },
@@ -342,7 +420,55 @@ function createTelegram({ app, net, safeStorage, onUpdates = () => {}, onEvent =
       relayError = '';
       return true;
     },
+    // Your own server: it becomes the bot's only reader.
+    async serverConnect(url, key) {
+      const u = String(url || '').trim().replace(/\/+$/, '');
+      const k = String(key || '').trim();
+      if (!cfg?.chatId) throw new Error('Link your Telegram first.');
+      if (!SERVER_URL.test(u)) throw new Error('Use https://your-domain, or http:// only for a private address (Tailscale, e.g. http://my-server:8787).');
+      if (k.length < 16) throw new Error('Paste the key the server printed (docker compose logs finance-bot).');
+      // Stop reading Telegram here first: from now on only the server reads it.
+      const wasRunning = running;
+      stop();
+      poll?.abort();
+      let j;
+      try {
+        j = await serverCall({ a: 'setup', token: cfg.token, chat: cfg.chatId, from: offset }, { url: u, key: k });
+      } catch (e) {
+        if (wasRunning) start();
+        throw e;
+      }
+      if (cfg.relay) await relayCall({ k: cfg.relay.key, a: 'off' }).catch(() => {});
+      const { relay, ...rest } = cfg;
+      cfg = { ...rest, server: { url: u, key: k } };
+      store.write(cfg);
+      relayInfo = {};
+      serverInfo = serverFields(j);
+      serverError = '';
+      serverOkAt = Date.now();
+      if (wasRunning) start();
+      return { ok: true };
+    },
+    async serverOff() {
+      if (!cfg?.server) return true;
+      await serverCall({ a: 'off' }).catch(() => {});
+      const { server, ...rest } = cfg;
+      cfg = rest;
+      store.write(cfg);
+      serverInfo = {};
+      serverError = '';
+      poll?.abort();
+      wake?.();
+      return true;
+    },
+    // A short summary of your numbers, so the bot can answer while the PC is off.
+    async snapshot(snap) {
+      if (!cfg?.server) return false;
+      await serverCall({ a: 'snapshot', snapshot: snap });
+      return true;
+    },
     async disconnect() {
+      if (cfg?.server) await serverCall({ a: 'off' }).catch(() => {});
       if (cfg?.relay) await relayCall({ k: cfg.relay.key, a: 'off' }).catch(() => {});
       stop();
       store.remove();

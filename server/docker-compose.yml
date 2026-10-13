@@ -1,0 +1,16 @@
+# Finance Helper bot server, next to Hermes on the same machine.
+#   docker compose up -d --build
+#   docker compose logs finance-bot      (shows your key the first time)
+services:
+  finance-bot:
+    build: .
+    restart: unless-stopped
+    environment:
+      - TZ=Europe/Chisinau
+      # - FH_KEY=...   (optional: set your own key instead of the generated one)
+    volumes:
+      - ./data:/data
+    ports:
+      # Only on this machine. Reach it from the PC through Tailscale or a
+      # reverse proxy with HTTPS (see README.md), never as plain http on the internet.
+      - "127.0.0.1:8787:8787"

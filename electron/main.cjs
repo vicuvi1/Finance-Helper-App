@@ -343,4 +343,7 @@ ipcMain.handle('tg-load-now', () => telegram.loadNow());
 ipcMain.handle('tg-relay-script', () => telegram.relayScript());
 ipcMain.handle('tg-relay-connect', (_e, url) => telegram.relayConnect(url));
 ipcMain.handle('tg-relay-off', () => telegram.relayOff());
+ipcMain.handle('tg-server-connect', (_e, url, key) => telegram.serverConnect(String(url || ''), String(key || '')));
+ipcMain.handle('tg-server-off', () => telegram.serverOff());
+ipcMain.handle('tg-snapshot', (_e, snap) => telegram.snapshot(snap && typeof snap === 'object' ? snap : {}));
 ipcMain.handle('open-external', (_e, url) => { if (/^https:\/\/(t\.me|script\.google\.com)\//.test(url)) shell.openExternal(url); return true; });
