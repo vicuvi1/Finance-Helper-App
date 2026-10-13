@@ -19,15 +19,17 @@ const isSaving = (a) => a.savings || a.kind === 'savings';
 
 
 // Savings in MDL at the end of each of the last 12 months.
-function savingsHistory(state) {
+function savingsHistory(state, range = 12) {
   const now = monthKey(todayISO());
   const ids = new Set(state.settings.accounts.filter((a) => isSaving(a) && !a.archived).map((a) => a.id));
   const out = [];
-  for (let i = 11; i >= 0; i--) {
+  const first = state.tx.reduce((m, t) => t.date < m ? t.date : m, todayISO()).slice(0, 7);
+  const months = range === 120 ? Math.max(1, Math.min(120, (Number(now.slice(0, 4)) - Number(first.slice(0, 4))) * 12 + Number(now.slice(5)) - Number(first.slice(5)) + 1)) : range;
+  for (let i = months - 1; i >= 0; i--) {
     const k = addMonths(now, -i);
     const end = i === 0 ? todayISO() : `${k}-${String(daysInMonth(k)).padStart(2, '0')}`;
     const v = M.accountValues(state, end).filter((x) => ids.has(x.account.id)).reduce((a, x) => a + (x.inBase || 0), 0);
-    out.push({ label: monthLabel(k, true).slice(0, 3), value: v });
+    out.push({ label: monthLabel(k, true).slice(0, 3), date: end, value: v, snap: i === 0 });
   }
   return out;
 }
@@ -36,17 +38,21 @@ function savingsHistory(state) {
 function netWorthCard(state) {
   const range = ctx.ui.nwRange || 12;
   const today = todayISO();
-  const pts = M.netWorthSeries(state, today, range).map((p) => ({ ...p, value: Math.round(p.value / 100) * 100 })); // whole lei
-  if (pts.length < 2) return '';
+  const pts = M.netWorthSeries(state, today, range).map((p) => {
+    const snapshot = p.snap && p.key !== monthKey(today) ? (state.netWorth || []).filter((x) => x.date.startsWith(p.key) && x.date <= p.date).sort((a, b) => a.date.localeCompare(b.date)).at(-1) : null;
+    return { ...p, date: snapshot?.date || p.date, value: Math.round(p.value / 100) * 100 };
+  }); // whole lei
+  if (!pts.length) return '';
   const last = pts.at(-1).value;
   const delta = (i) => (pts.length > i ? last - pts.at(-1 - i).value : null);
   const sign = (c) => (c == null ? '–' : `<b class="${c >= 0 ? 'income' : 'expense'}">${ctx.money(c, { sign: true })}</b>`);
   const firstSnap = pts.slice(0, -1).find((p) => p.snap);
   const chip = (n, label) => `<button class="chip" aria-pressed="${range === n}" data-act="nw-range" data-n="${n}">${label}</button>`;
-  return `<section class="card"><h2>Net worth <span class="right">${chip(12, '1 year')}${chip(120, 'All')}</span></h2>
+  return `<section class="card"><h2>Net worth <span class="right">${chip(3, '3 months')}${chip(6, '6 months')}${chip(12, '1 year')}${chip(120, 'All')}</span></h2>
     <div class="kv"><span>Since last month</span>${sign(delta(1))}</div>
     <div class="kv"><span>Since ${esc(monthLabel(pts[0].key, true))}</span>${sign(last - pts[0].value)}</div>
-    ${lineChart(pts.map((p) => ({ label: monthLabel(p.key, true).slice(0, 3) + (range > 12 && p.key.endsWith('-01') ? ` ${p.key.slice(2, 4)}` : ''), value: p.value })), (c) => ctx.money(c))}
+    ${lineChart(pts.map((p) => ({ ...p, label: monthLabel(p.key, true).slice(0, 3) + (range > 12 && p.key.endsWith('-01') ? ` ${p.key.slice(2, 4)}` : ''), value: p.value })), (c) => ctx.money(c), { label: 'Net worth over time' })}
+    <div class="chart-legend"><span class="reconstructed">Reconstructed</span><span>Recorded balance</span></div>
     <p class="muted small" style="margin:6px 0 0">${firstSnap && firstSnap === pts[0] ? 'From daily snapshots.' : `Earlier months are rebuilt from your records at today's rates, without crypto${firstSnap ? `; daily snapshots from ${esc(monthLabel(firstSnap.key))}` : '. A snapshot is saved every day from now on'}.`}</p>
   </section>`;
 }
@@ -67,7 +73,10 @@ export function view() {
   const savingTotal = saving.reduce((a, v) => a + (v.inBase || 0), 0);
   const byCur = new Map();
   for (const v of active) if (!(v.account.kind === 'crypto' && v.account.holdings?.length)) byCur.set(v.account.currency, (byCur.get(v.account.currency) || 0) + v.own);
-  const hist = savingsHistory(state);
+  const range = ctx.ui.nwRange || 12;
+  const hist = savingsHistory(state, range);
+  const savingChange = hist.at(-1).value - hist[0].value;
+  const savingsChip = (n, label) => `<button class="chip" aria-pressed="${range === n}" data-act="nw-range" data-n="${n}">${label}</button>`;
 
   return `<header class="top"><div><h1>Accounts</h1><div class="sub">${active.length} account${active.length === 1 ? '' : 's'} · ${[...byCur.keys()].join(', ')}</div></div>
     <div class="btns top-btns">${active.length > 1 ? `<button class="btn${reorder ? ' primary' : ''}" data-act="acc-reorder" aria-pressed="${reorder}">${reorder ? 'Done' : '⇄ Reorder'}</button>` : ''}<button class="btn primary" data-act="acc-new">+ Add account</button></div></header>
@@ -99,7 +108,10 @@ export function view() {
   ${archived.length ? `<details class="card"><summary>Archived (${archived.length})</summary><div class="bcards" style="margin:14px 0 0">${archived.map((v) => card(v)).join('')}</div></details>` : ''}
   <div class="acc-charts">
     ${netWorthCard(state) || ''}
-    <section class="card"><h2>Savings over 12 months</h2>${lineChart(hist, (c) => ctx.money(c))}</section>  </div>`;
+    <section class="card"><h2>Savings history <span class="right">${savingsChip(3, '3 months')}${savingsChip(6, '6 months')}${savingsChip(12, '1 year')}${savingsChip(120, 'All')}</span></h2>
+    <div class="kv"><span>Change over selected period</span><b>${ctx.money(savingChange, { sign: true })}</b></div>
+    ${lineChart(hist, (c) => ctx.money(c))}<div class="chart-legend"><span class="reconstructed">Reconstructed</span><span>Current balance</span></div>
+    <p class="muted small">Historical savings are rebuilt from records at today's exchange rates. Hover or focus a point for its date and amount.</p></section>  </div>`;
 }
 
 // ---------- Account detail and editor ----------

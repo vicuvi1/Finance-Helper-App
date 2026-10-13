@@ -1,6 +1,7 @@
 // Tiny inline-SVG charts. Colors come from CSS variables so both themes work.
 
 import { monthLabel } from './dates.js';
+const escapeText = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 // Income vs spending per month, side by side.
 export function trendChart(rows, fmt) {
@@ -61,7 +62,7 @@ export function dailyChart(days, fmt) {
 
 // A value over time (e.g. savings at the end of each month): line with a soft
 // area under it and the last point marked.
-export function lineChart(points, fmt, { color = 'var(--gold)' } = {}) {
+export function lineChart(points, fmt, { color = 'var(--gold)', label = 'Savings over time' } = {}) {
   const W = 620;
   const H = 150;
   const top = 16;
@@ -73,18 +74,22 @@ export function lineChart(points, fmt, { color = 'var(--gold)' } = {}) {
   const min = Math.min(0, ...vals);
   const span = max - min || 1;
   const step = points.length > 1 ? (W - 8) / (points.length - 1) : 0;
-  const xy = points.map((p, i) => [4 + i * step, top + plotH - ((p.value - min) / span) * plotH]);
+  const xy = points.map((p, i) => [points.length === 1 ? W / 2 : 4 + i * step, top + plotH - ((p.value - min) / span) * plotH]);
   const line = xy.map(([x, y], i) => `${i ? 'L' : 'M'}${x.toFixed(1)} ${y.toFixed(1)}`).join(' ');
   const area = `${line} L${xy.at(-1)[0].toFixed(1)} ${top + plotH} L${xy[0][0].toFixed(1)} ${top + plotH} Z`;
   const [lx, ly] = xy.at(-1);
   const every = Math.ceil(points.length / 6);
   const labels = points.map((p, i) => ((i % every === 0 && points.length - 1 - i >= every / 2) || i === points.length - 1
-    ? `<text x="${xy[i][0].toFixed(1)}" y="${H - 5}" text-anchor="${i === 0 ? 'start' : i === points.length - 1 ? 'end' : 'middle'}">${p.label}</text>` : '')).join('');
-  const dots = points.map((p, i) => `<circle cx="${xy[i][0].toFixed(1)}" cy="${xy[i][1].toFixed(1)}" r="9" style="fill:transparent"><title>${p.label}: ${fmt(p.value)}</title></circle>`).join('');
-  return `<svg class="chart line-chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Savings over time">
+    ? `<text x="${xy[i][0].toFixed(1)}" y="${H - 5}" text-anchor="${points.length === 1 ? 'middle' : i === 0 ? 'start' : i === points.length - 1 ? 'end' : 'middle'}">${escapeText(p.label)}</text>` : '')).join('');
+  const segments = xy.slice(1).map(([x, y], i) => `<path d="M${xy[i][0].toFixed(1)} ${xy[i][1].toFixed(1)} L${x.toFixed(1)} ${y.toFixed(1)}" style="fill:none;stroke:${color};stroke-width:2;${points[i].snap === false || points[i + 1].snap === false ? 'stroke-dasharray:5 4;' : ''}"/>`).join('');
+  const dots = points.map((p, i) => {
+    const tip = escapeText(`${p.date || p.label}: ${fmt(p.value)}${p.snap === false ? ' · Reconstructed' : p.snap === true ? ' · Recorded balance' : ''}`);
+    return `<g class="chart-point" tabindex="0" aria-label="${tip}"><circle cx="${xy[i][0].toFixed(1)}" cy="${xy[i][1].toFixed(1)}" r="12" fill="transparent"><title>${tip}</title></circle><circle class="point-mark" cx="${xy[i][0].toFixed(1)}" cy="${xy[i][1].toFixed(1)}" r="4" style="fill:${color}"/><text class="point-tip" x="${i < points.length / 2 ? 8 : W - 8}" y="12" text-anchor="${i < points.length / 2 ? 'start' : 'end'}">${tip}</text></g>`;
+  }).join('');
+  return `<svg class="chart line-chart" viewBox="0 0 ${W} ${H}" role="group" aria-label="${escapeText(label)}">
     <path d="${area}" style="fill:${color};opacity:.12"/>
-    <path d="${line}" class="draw" pathLength="1" style="fill:none;stroke:${color};stroke-width:2;stroke-linejoin:round;stroke-linecap:round"/>
+    ${segments}
     <circle cx="${lx.toFixed(1)}" cy="${ly.toFixed(1)}" r="4" style="fill:${color}"/>
-    <text x="${Math.min(lx, W - 4).toFixed(1)}" y="${Math.max(12, ly - 10).toFixed(1)}" text-anchor="end" style="fill:var(--text);font-weight:600">${fmt(points.at(-1).value)}</text>
+    <text x="${Math.min(lx, W - 4).toFixed(1)}" y="${Math.max(12, ly - 10).toFixed(1)}" text-anchor="${points.length === 1 ? 'middle' : 'end'}" style="fill:var(--text);font-weight:600">${escapeText(fmt(points.at(-1).value))}</text>
     ${labels}${dots}</svg>`;
 }

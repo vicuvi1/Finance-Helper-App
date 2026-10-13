@@ -4,7 +4,7 @@
 import { load, save, backupText, restoreJSON, requestPersistence, isSealed, openImported, wipeStore, hasSession, reopen, STORAGE_KEYS } from './store.js';
 import * as M from './model.js';
 import { formatMoney, evalAmount, centsToPlain } from './money.js';
-import { todayISO, monthKey, monthLabel, addMonths, dayLabel, dowIndex, DOW_LONG, MONTHS } from './dates.js';
+import { todayISO, monthKey, monthLabel, addMonths, daysInMonth, dayLabel, dowIndex, DOW_LONG, MONTHS } from './dates.js';
 import { convert, pairRate } from './fx.js';
 import { parseCSV, toCSV } from './csv.js';
 import { importRows, importWorkbook, importCheck, exportRows, toTSV, monthSheet, overviewSheet, detectColumns } from './importer.js';
@@ -41,7 +41,6 @@ import { planSplit, splitTransfers, splitPrefs, isSplit } from './split.js';
 import { openBankImport, rowsFromFile, decodeText } from './screens/bankimport.js';
 import { guessMapping } from './bank.js';
 import { forecast } from './forecast.js';
-import { safeToSpend } from './safespend.js';
 import { bindTilt } from './cards.js';
 import { FREQS, markDone, dueItems } from './recurring.js';
 import { invoiceStatus } from './invoices.js';
@@ -405,42 +404,19 @@ function homeStrip(s, key) {
   return `<section class="m-strip" aria-label="${esc(monthLabel(key))}">
     <div class="ms-cell"><span class="k">Earned</span><b class="${s.income ? 'income' : ''}">${countUp(s.income, 'm-in')}</b></div>
     <div class="ms-cell"><span class="k">Spent</span><b class="${s.expense ? 'expense' : ''}">${countUp(s.expense, 'm-out')}</b>${w ? `<span class="work-time" title="What it cost in your work time (Settings → Your hour)">≈ ${w} of your work</span>` : ''}</div>
-    <div class="ms-cell"><span class="k">Kept</span><b>${countUp(s.net, 'm-net')}</b></div>
+    <div class="ms-cell"><span class="k">Monthly balance</span><b>${countUp(s.net, 'm-net')}</b></div>
     ${rate}
   </section>`;
 }
 
-// Your accounts as tiles under the strip (wide screens; phones show the list).
-function accountTiles(values) {
-  if (!values.length) return '';
-  const shown = values.slice(0, values.length > 4 ? 3 : 4);
-  return `<section class="acc-tiles" aria-label="Accounts">${shown.map(({ account: a, own, coins }) => {
-    const v = a.kind === 'crypto' && (a.holdings || []).length ? money(coins + (convert(own, a.currency, state.settings.currency, state.rates) || 0)) : formatMoney(own, a.currency);
-    return `<button type="button" class="acc-tile" style="--tc:var(--c${a.color || 1})" data-act="acc-open" data-id="${esc(a.id)}" title="Open ${esc(a.name)}"><span>${esc(a.name)}${a.currency !== state.settings.currency ? ` · ${esc(a.currency)}` : ''}</span><b class="${own < 0 ? 'neg' : ''}">${v}</b></button>`;
-  }).join('')}${values.length > shown.length ? `<button type="button" class="acc-tile more" data-go="accounts">+${values.length - shown.length} more accounts →</button>` : ''}</section>`;
-}
-
-// Safe to spend today: what you can spend without touching bills or savings.
-function safeCard(today) {
-  if (!state.tx.length) return '';
-  const r = safeToSpend(state, today);
-  const until = `${dayLabel(r.payday)}${r.paydayFrom ? ` · ${esc(r.paydayFrom)}` : ' · end of month'}`;
-  const why = `<div class="ss-why">
-      <span>Cards &amp; cash <b>${money(r.liquid + r.spentToday)}</b></span>
-      ${r.billsTotal ? `<span>− bills before then <b>${money(r.billsTotal)}</b></span>` : ''}
-      ${r.savingsLeft ? `<span>− still to save this month <b>${money(r.savingsLeft)}</b></span>` : ''}
-      <span>= <b>${money(Math.max(0, r.pool))}</b> for ${r.days} day${r.days === 1 ? '' : 's'}</span></div>`;
-  if (r.pool <= 0) {
-    return `<section class="ss bad" aria-label="Safe to spend today"><div class="ss-main"><span class="k">Safe to spend today</span><b class="ss-fig">0 ${esc(state.settings.currency)}</b>
-      <span class="ss-sub">Bills and savings need ${money(r.short)} more than you have until ${until}.</span></div>${why}</section>`;
-  }
-  const over = r.leftToday < 0;
-  const used = r.perDay ? Math.min(1, r.spentToday / r.perDay) : 1;
-  return `<section class="ss ${over ? 'over' : r.leftToday < r.perDay / 4 ? 'low' : ''}" aria-label="Safe to spend today">
-    <div class="ss-main"><span class="k">Safe to spend today</span><b class="ss-fig">${countUp(Math.max(0, r.leftToday), 'safe')}</b>
-      <span class="ss-sub">${over ? `${money(-r.leftToday)} over today's ${money(r.perDay)}. From tomorrow: <b>${money(r.tomorrow)}</b> a day` : `${r.spentToday ? `${money(r.spentToday)} spent of ` : ''}${money(r.perDay)} a day`} until ${until}</span>
-      <div class="ss-bar" aria-hidden="true"><i style="width:${(used * 100).toFixed(1)}%"></i></div></div>
-    ${why}</section>`;
+// Compare identical elapsed days in the current and previous months.
+function monthComparison(today) {
+  const current = monthKey(today), previous = addMonths(current, -1);
+  const day = Number(today.slice(8));
+  const totals = (key) => M.monthSummary({ ...state, tx: state.tx.filter((t) => Number(t.date.slice(8)) <= day) }, key);
+  const now = totals(current), before = totals(previous);
+  const comparison = (label, amount, was) => '<span>' + label + ': <b>' + (was ? (amount >= was ? '+' : '−') + Math.round(Math.abs(amount - was) / Math.abs(was) * 100) + '%' : 'No prior activity') + '</b></span>';
+  return '<div class="month-comparison"><span>Days 1–' + day + ' vs ' + esc(monthLabel(previous)) + ', through day ' + Math.min(day, daysInMonth(previous)) + '</span>' + comparison('Income', now.income, before.income) + comparison('Spending', now.expense, before.expense) + '</div>';
 }
 
 // The page title on Home says how the month is going.
@@ -463,8 +439,6 @@ function quickRow() {
 function viewHome() {
   const today = todayISO();
   const key = monthKey(today);
-  const values = M.accountValues(state).filter((v) => !v.account.archived);
-  const { total, missing } = M.totalBalance(state);
   const s = M.monthSummary(state, key);
   const recent = M.sortTx(state.tx).slice(0, 5);
   const fc = forecast(state, today, { days: 45 });
@@ -492,25 +466,15 @@ function viewHome() {
     <p class="muted small" style="margin-bottom:0">Already have money in the wallet or safe? Set it under Settings → Accounts.</p>
   </section>`;
 
-  return `<header class="top"><div><div class="eyebrow">${esc(monthLabel(key))}</div><h1>${esc(headline)}</h1></div><div class="sub">${headline === hello ? '' : `${hello} · `}${dayLabel(today)}</div></header>
+  return `<header class="top"><div><div class="eyebrow">${esc(monthLabel(key))}</div><h1>Your goals, your progress</h1></div><div class="sub">${headline === hello ? '' : `${hello} · `}${dayLabel(today)}</div></header>
   ${Updates.updateBanner()}
   ${DEMO ? '<div class="banner"><p>Live preview with <b>example data</b> (a made-up month). What you add here stays in this browser only.</p></div>' : ''}
   ${Telegram.alertBanner()}
   ${!DEMO && needsBackup ? `<div class="banner"><p>Your data lives only on this device. Make a backup.</p><button class="btn primary" data-act="export-json">Back up</button></div>` : ''}
   ${welcome}
-  <section class="hero">
-    <div class="hero-main">
-      <div class="label">All my money</div>
-      <div class="big ${total < 0 ? 'expense' : ''}">${bigMoney(total)}</div>
-      <div class="accounts">
-        ${values.map(({ account: a, own, coins }) => `<button class="acc ${own < 0 ? 'neg' : ''}" data-act="acc-open" data-id="${esc(a.id)}" title="Open ${esc(a.name)}"><span class="n">${dot(`var(--c${a.color || 1})`)}${esc(a.name)}</span><b class="money">${a.kind === 'crypto' && (a.holdings || []).length ? money(coins + (convert(own, a.currency, state.settings.currency, state.rates) || 0)) : formatMoney(own, a.currency)}</b></button>`).join('')}
-      </div>
-      ${missing.length ? `<p class="muted small" style="margin:10px 0 0">Not counted yet (no exchange rate): ${missing.map((v) => esc(v.account.name)).join(', ')}.</p>` : ''}
-    </div>
-  </section>
-  ${safeCard(today)}
+  ${Goals.homeCard({ featured: true })}
   ${homeStrip(s, key)}
-  ${accountTiles(values)}
+  ${monthComparison(today)}
   ${quickRow()}
   <div class="dash">
     <div class="dash-main">
@@ -518,8 +482,8 @@ function viewHome() {
       ${recent.length ? `<section class="card"><h2>Recent <button class="card-link right" data-go="log">Open log</button></h2><div class="list">${recent.map((t) => txRow(t, { showDate: true })).join('')}</div></section>` : ''}
     </div>
     <div class="dash-side">
+      ${Goals.otherGoalsCard()}
       ${Plan.homeCard()}
-      ${Goals.homeCard()}
       ${tips.length ? `<section class="card"><h2>Heads up <button class="card-link right" data-go="reports">Reports</button></h2>${tips.map(tipCard).join('')}</section>` : ''}
       ${jarsCard(key)}
     </div>
