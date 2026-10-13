@@ -56,10 +56,13 @@ test('bot server: PC off → answers at once, keeps the message; snapshot answer
   await api({ a: 'snapshot', snapshot: { today: '📊 <b>Today</b>: spent 35 MDL', safe: '🟢 Safe to spend today: <b>300 MDL</b> left' } });
   tg.say('/today');
   assert.ok(await until(() => /Today<\/b>: spent 35 MDL[\s\S]*PC is off/.test(tg.sent.at(-1)?.text || '')));
+  await api({ a: 'snapshot', snapshot: { today: '📊 <b>Today</b>: spent 35 MDL', goals: '🎯 <b>Goals</b>: Car 36%' } });
+  tg.say('/goals');
+  assert.ok(await until(() => /Goals<\/b>: Car 36%/.test(tg.sent.at(-1)?.text || '')));
   tg.tap('cat:x:food');
   await new Promise((r) => setTimeout(r, 600));
   const pulled = await api({ a: 'pull' });
-  assert.deepEqual(pulled.updates.map((u) => u.message?.text ?? u.callback_query?.data), ['coffee 35', '/today', 'cat:x:food']);
+  assert.deepEqual(pulled.updates.map((u) => u.message?.text ?? u.callback_query?.data), ['coffee 35', '/today', '/goals', 'cat:x:food']);
   assert.ok(pulled.updates[0].relayReply);
   await api({ a: 'ack', ids: pulled.updates.map((u) => u.update_id) });
   assert.equal((await api({ a: 'pull' })).updates.length, 0);

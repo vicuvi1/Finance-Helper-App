@@ -195,7 +195,7 @@ async function api(q) {
   if (q.a === 'snapshot') {
     const s = q.snapshot || {};
     const pick = (k) => (typeof s[k] === 'string' ? s[k].slice(0, 3500) : '');
-    st.snapshot = { at: Date.now(), today: pick('today'), balance: pick('balance'), month: pick('month'), last: pick('last'), safe: pick('safe') };
+    st.snapshot = { at: Date.now(), today: pick('today'), balance: pick('balance'), month: pick('month'), last: pick('last'), safe: pick('safe'), goals: pick('goals'), rates: pick('rates') };
     save();
     return { ok: true };
   }

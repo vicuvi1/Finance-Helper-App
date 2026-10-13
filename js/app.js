@@ -469,7 +469,7 @@ function safeCard(today) {
     <div style="min-width:220px;">
       <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
         <span class="label" style="margin:0;">Safe to spend today</span>
-        <span class="badge ${statusCls}" style="font-size:11px; padding:2px 8px; border-radius:12px; background:var(--surface2); font-weight:600;">${statusLabel}</span>
+        <span class="badge ${statusCls}" style="font-size:11px; padding:2px 8px; border-radius:12px; background:var(--surface-2); font-weight:600;">${statusLabel}</span>
       </div>
       <div style="display:flex; align-items:baseline; gap:10px;">
         <b class="${statusCls}" style="font-family:var(--display); font-size:32px; line-height:1.1;">${money(Math.max(0, left))}</b>
