@@ -2021,3 +2021,63 @@ body.locked .theme-atmosphere, body.printing .theme-atmosphere { display: none; 
 .other-goal:last-child { border-bottom: 0; }
 .other-goal small { display: block; color: var(--muted); margin-top: 4px; font-size: 13px; }
 .other-goal:hover { color: var(--gold); }
+/* Forest: crimson lacquer, warm ivory, and a quieter metal finish. */
+:root[data-design="forest"] {
+  --bg: #0d1512; --surface: #16221c; --surface-2: #202e26; --surface-3: #2b3b31;
+  --side-bg: #101b15; --text: #f3efe3; --muted: #b9c1b4; --faint: #a0aa9b;
+  --line: #34443a; --line-strong: #4a5b4f;
+  --brand: #a9454d; --brand-bright: #d07b7f; --brand-soft: rgb(169 69 77 / 14%);
+  --metal: #85938a; --sun-dark: #642f35; --sun-light: #b34e55;
+  --chart-secondary: #9cae8b;
+}
+:root[data-design="forest"] .top h1 { display: flex; align-items: center; gap: 14px; }
+:root[data-design="forest"] .top h1::before { content: ''; width: 4px; height: .85em; background: var(--brand); border-radius: 2px; flex: none; }
+:root[data-design="forest"] .tabbar a[aria-current="page"] { background: var(--brand-soft); box-shadow: inset 3px 0 0 var(--brand); }
+:root[data-design="forest"] .tabbar a[aria-current="page"] .ni { color: var(--brand-bright); }
+:root[data-design="forest"] .card h2 { color: var(--text); }
+:root[data-design="forest"] .goal-feature { border-top: 2px solid var(--brand); }
+.account-overview { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 28px; align-items: stretch; padding: 26px 30px; margin-bottom: 24px; border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--surface); }
+.account-overview .hero-main { min-width: 0; align-self: center; }
+.account-overview .hero-month { background: transparent; border: 0; border-left: 1px solid var(--line-strong); border-radius: 0; padding: 6px 0 6px 28px; align-self: center; }
+.account-overview .label { font-size: 13px; letter-spacing: .04em; color: var(--muted); }
+.account-overview .fig { font-size: clamp(36px, 4vw, 62px); }
+.account-overview .big { margin-bottom: 18px; flex-wrap: wrap; }
+.account-overview .stat b { font-size: clamp(22px, 2.4vw, 32px); }
+.account-overview .stat .k { font-size: 13px; margin-bottom: 6px; }
+.account-overview .hero-month .label { margin-bottom: 18px; }
+.account-overview .acc { background: var(--surface-2); border-color: var(--line); }
+.account-emblem { display: none; }
+:root[data-design="forest"] .account-overview .hero-main { display: grid; grid-template-columns: minmax(0, 1fr) 112px; gap: 16px; align-items: center; }
+:root[data-design="forest"] .account-emblem { display: grid; place-items: center; gap: 7px; padding: 8px; }
+.emblem-sun { width: 90px; height: 90px; display: block; border-radius: 50%; background: linear-gradient(140deg, var(--sun-light), var(--sun-dark)); box-shadow: inset 0 1px 0 var(--brand-bright); margin-bottom: 5px; }
+.emblem-line { width: 90px; height: 1px; background: var(--metal); opacity: .45; transform: skewY(-7deg); }
+.emblem-line:nth-child(3) { width: 65px; opacity: .3; }
+.emblem-line:nth-child(4) { width: 40px; opacity: .2; }
+.account-overview-values { min-width: 0; }
+.view-accounts > .bcards { gap: 16px; margin-bottom: 24px; }
+.view-accounts .acc-charts { gap: 20px; }
+.view-accounts .networth-card { border-color: var(--line-strong); padding: 24px; }
+.view-accounts .networth-card h2 { font-size: 18px; color: var(--text); }
+.view-accounts .networth-card h2::before { content: ''; width: 3px; height: 16px; background: var(--gold); border-radius: 2px; }
+:root[data-design="forest"] .view-accounts .networth-card h2::before { background: var(--brand); }
+.view-accounts .savings-history-card { padding: 24px; }
+.view-accounts .savings-history-card .line-chart { margin-top: 14px; }
+:root[data-design="forest"] .savings-history-card { --gold: var(--chart-secondary); }
+@media (min-width: 1100px) {
+  .view-accounts .acc-charts { grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); }
+}
+@media (min-width: 720px) {
+  .view-accounts > .bcards { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+  .view-accounts > .bcards .bcard { min-height: 176px; padding: 14px 16px; gap: 4px; }
+}
+@media (max-width: 1099px) {
+  :root[data-design="forest"] .account-overview .hero-main { grid-template-columns: minmax(0, 1fr); }
+  :root[data-design="forest"] .account-emblem { display: none; }
+}
+@media (max-width: 719px) {
+  .account-overview { grid-template-columns: minmax(0, 1fr); gap: 22px; padding: 22px 20px; }
+  .account-overview .hero-month { border-left: 0; border-top: 1px solid var(--line-strong); padding: 22px 0 0; }
+  .account-overview .fig { font-size: 42px; }
+  .view-accounts .networth-card, .view-accounts .savings-history-card { padding: 18px; }
+  :root[data-design="forest"] .tabbar a[aria-current="page"] { box-shadow: inset 0 -2px 0 var(--brand); }
+}

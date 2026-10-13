@@ -48,7 +48,7 @@ function netWorthCard(state) {
   const sign = (c) => (c == null ? '–' : `<b class="${c >= 0 ? 'income' : 'expense'}">${ctx.money(c, { sign: true })}</b>`);
   const firstSnap = pts.slice(0, -1).find((p) => p.snap);
   const chip = (n, label) => `<button class="chip" aria-pressed="${range === n}" data-act="nw-range" data-n="${n}">${label}</button>`;
-  return `<section class="card"><h2>Net worth <span class="right">${chip(3, '3 months')}${chip(6, '6 months')}${chip(12, '1 year')}${chip(120, 'All')}</span></h2>
+  return `<section class="card networth-card"><h2>Net worth <span class="right">${chip(3, '3 months')}${chip(6, '6 months')}${chip(12, '1 year')}${chip(120, 'All')}</span></h2>
     <div class="kv"><span>Since last month</span>${sign(delta(1))}</div>
     <div class="kv"><span>Since ${esc(monthLabel(pts[0].key, true))}</span>${sign(last - pts[0].value)}</div>
     ${lineChart(pts.map((p) => ({ ...p, label: monthLabel(p.key, true).slice(0, 3) + (range > 12 && p.key.endsWith('-01') ? ` ${p.key.slice(2, 4)}` : ''), value: p.value })), (c) => ctx.money(c), { label: 'Net worth over time' })}
@@ -80,16 +80,19 @@ export function view() {
 
   return `<header class="top"><div><h1>Accounts</h1><div class="sub">${active.length} account${active.length === 1 ? '' : 's'} · ${[...byCur.keys()].join(', ')}</div></div>
     <div class="btns top-btns">${active.length > 1 ? `<button class="btn${reorder ? ' primary' : ''}" data-act="acc-reorder" aria-pressed="${reorder}">${reorder ? 'Done' : '⇄ Reorder'}</button>` : ''}<button class="btn primary" data-act="acc-new">+ Add account</button></div></header>
-  <section class="hero">
+  <section class="hero account-overview" aria-label="Account balances and savings">
     <div class="hero-main">
+      <div class="account-overview-values">
       <div class="label">All my money</div>
       <div class="big">${ctx.bigMoney(total)}</div>
       <div class="accounts">${[...byCur.entries()].map(([c, v]) => `<span class="acc static"><span class="n">${esc(c)}</span><b class="money">${formatMoney(v, '')}</b></span>`).join('')}</div>
       ${missing.length ? `<p class="muted small" style="margin:10px 0 0">Not counted yet (no rate): ${missing.map((v) => esc(v.account.name)).join(', ')}.</p>` : ''}
+      </div>
+      <div class="account-emblem" aria-hidden="true"><span class="emblem-sun"></span><span class="emblem-line"></span><span class="emblem-line"></span><span class="emblem-line"></span></div>
     </div>
     <div class="hero-month">
       <div class="label">Savings</div>
-      <div class="stats" style="grid-template-columns:repeat(2,minmax(0,1fr))">
+      <div class="stats" style="grid-template-columns:minmax(0,1.6fr) minmax(0,1fr)">
         <div class="stat"><span class="k">In savings</span><b class="gold">${ctx.countUp(savingTotal, 'sav-total')}</b></div>
         <div class="stat"><span class="k">Share of all money</span><b>${total > 0 ? Math.round((savingTotal / total) * 100) : 0}%</b></div>
       </div>
@@ -103,12 +106,12 @@ export function view() {
         <button type="button" class="icon-btn" data-act="acc-move" data-id="${esc(v.account.id)}" data-dir="-1" aria-label="Move ${esc(v.account.name)} earlier" ${i ? '' : 'disabled'}>←</button>
         <button type="button" class="icon-btn" data-act="acc-move" data-id="${esc(v.account.id)}" data-dir="1" aria-label="Move ${esc(v.account.name)} later" ${i < active.length - 1 ? '' : 'disabled'}>→</button></div></div>`
     : card(v, { attrs: `draggable="true" data-drag-id="${esc(v.account.id)}"` }))).join('')}
-    ${reorder ? '' : '<button type="button" class="bcard-add" data-act="acc-new"><span>+</span>Add a card or account</button>'}
   </div>
+  ${active.length ? '' : '<section class="card empty"><b>No active accounts</b>Add an account using the button above to start tracking your balances.</section>'}
   ${archived.length ? `<details class="card"><summary>Archived (${archived.length})</summary><div class="bcards" style="margin:14px 0 0">${archived.map((v) => card(v)).join('')}</div></details>` : ''}
   <div class="acc-charts">
     ${netWorthCard(state) || ''}
-    <section class="card"><h2>Savings history <span class="right">${savingsChip(3, '3 months')}${savingsChip(6, '6 months')}${savingsChip(12, '1 year')}${savingsChip(120, 'All')}</span></h2>
+    <section class="card savings-history-card"><h2>Savings history <span class="right">${savingsChip(3, '3 months')}${savingsChip(6, '6 months')}${savingsChip(12, '1 year')}${savingsChip(120, 'All')}</span></h2>
     <div class="kv"><span>Change over selected period</span><b>${ctx.money(savingChange, { sign: true })}</b></div>
     ${lineChart(hist, (c) => ctx.money(c))}<div class="chart-legend"><span class="reconstructed">Reconstructed</span><span>Current balance</span></div>
     <p class="muted small">Historical savings are rebuilt from records at today's exchange rates. Hover or focus a point for its date and amount.</p></section>  </div>`;
