@@ -2,12 +2,13 @@
 // so it is all tested in Node without a browser.
 
 import { splitByPercent, formatMoney } from './money.js';
-import { monthKey, addMonths, daysInMonth, monthLabel, addDays } from './dates.js';
+import { monthKey, addMonths, daysInMonth, monthLabel, addDays, isValidISO } from './dates.js';
 import { convert, coinValue } from './fx.js';
 
 // v1: first release. v2: custom multi-currency accounts, people, loans,
 // per-record timestamps and deletion markers for sync.
-export const SCHEMA_VERSION = 2;
+// v3: independent goal reservations, merged and undone record by record.
+export const SCHEMA_VERSION = 3;
 
 // What an account can be. Order is the order they are grouped on screen.
 export const ACCOUNT_KINDS = [
@@ -76,6 +77,7 @@ export function defaultState() {
     invoices: [],
     // Money goals (see goalStatus). The old single settings.goal becomes the first one.
     goals: [{ id: 'g-main', name: 'Safe goal', emoji: '🏦', target: 10000000, account: 'savings', saved: 0, history: [], deadline: null, doneAt: null, theme: 'gold', updatedAt: 0 }],
+    goalAllocations: [],
     // One net-worth snapshot per day (id nw-YYYY-MM-DD), so crypto and
     // exchange rates of the day are kept; older history is rebuilt from records.
     netWorth: [],
@@ -131,7 +133,8 @@ export function normalizeState(raw) {
       // The untouched starter "Safe goal" used to count all money: it is about the safe.
       .map((g) => (g.id === 'g-main' && !g.updatedAt && g.account === 'all' && g.name === 'Safe goal' ? { ...g, account: 'savings' } : g))
     : [{ id: 'g-main', name: settings.goal.name || 'Safe goal', emoji: '🏦', target: settings.goal.target || 0, account: settings.goal.account || 'all', saved: 0, history: [], deadline: null, doneAt: null, theme: 'gold', updatedAt: 0 }];
-  return { version: SCHEMA_VERSION, settings, tx, people, recurring, invoices, netWorth, goals, deleted, rates: raw.rates || null, meta: { ...base.meta, ...(raw.meta || {}) } };
+  const goalAllocations = (Array.isArray(raw.goalAllocations) ? raw.goalAllocations : []).filter((a) => a && typeof a.id === 'string' && typeof a.goalId === 'string' && Number.isSafeInteger(a.amount) && a.amount > 0 && isValidISO(a.date || '')).map((a) => ({ ...a, currency: a.currency || baseCur, updatedAt: a.updatedAt || 0 }));
+  return { version: SCHEMA_VERSION, settings, tx, people, recurring, invoices, netWorth, goals, goalAllocations, deleted, rates: raw.rates || null, meta: { ...base.meta, ...(raw.meta || {}) } };
 }
 
 function validTx(t) {
@@ -452,9 +455,72 @@ function jarFallback(state) {
 
 export const mainGoal = (state) => (state.goals || []).find((g) => !g.doneAt && !g.archived) || (state.goals || [])[0] || { ...state.settings.goal, id: 'g-main' };
 
+// Reservations share one cash/bank pool. Stable ordering prevents concurrent
+// offline allocations from funding the same income or account balance twice.
+export function goalAllocationSummary(state, asOf = null) {
+  const base = state.settings.currency;
+  const cash = Math.max(0, accountValues(state, asOf).filter((v) => !v.account.archived && v.account.kind !== 'crypto').reduce((sum, v) => sum + (v.inBase || 0), 0));
+  const rows = (state.goalAllocations || []).filter((a) => !asOf || a.date <= asOf).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0) || a.id.localeCompare(b.id));
+  const byGoal = {}, byIncome = {}, effectiveById = {}, unpriced = [];
+  let reserved = 0, requested = 0;
+  for (const a of rows) {
+    const amount = a.currency && a.currency !== base ? convert(a.amount, a.currency, base, state.rates) : a.amount;
+    if (amount == null) unpriced.push(a.id);
+    const validAmount = Number.isSafeInteger(amount) && amount > 0 ? amount : 0;
+    const goal = (state.goals || []).find((g) => g.id === a.goalId);
+    const income = a.incomeId ? state.tx.find((t) => t.id === a.incomeId && t.type === 'income' && !t.loan && (!asOf || t.date <= asOf)) : null;
+    const incomeLeft = a.incomeId ? Math.max(0, (income ? B(income) : 0) - (byIncome[a.incomeId] || 0)) : Infinity;
+    const funded = goal?.account === 'allocated' ? Math.min(validAmount, Math.max(0, cash - reserved), incomeLeft) : 0;
+    requested += validAmount;
+    effectiveById[a.id] = funded;
+    byGoal[a.goalId] = (byGoal[a.goalId] || 0) + funded;
+    if (a.incomeId) byIncome[a.incomeId] = (byIncome[a.incomeId] || 0) + validAmount;
+    reserved += funded;
+  }
+  return { cash, reserved, requested, unallocated: Math.max(0, cash - reserved), unfunded: requested - reserved, byGoal, byIncome, effectiveById, unpriced };
+}
+
+export function allocateToGoals(state, entries, { incomeId = null, date, now = Date.now() } = {}) {
+  if (!entries.length || !isValidISO(date || '')) throw new Error('Choose a date and at least one goal.');
+  const summary = goalAllocationSummary(state);
+  if (summary.unpriced.length) throw new Error('Update exchange rates for existing reservations before allocating more.');
+  if (summary.unfunded > 0) throw new Error('Review and release unfunded reservations before allocating more.');
+  let total = 0;
+  for (const entry of entries) {
+    const g = (state.goals || []).find((g) => g.id === entry.goalId && !g.doneAt && !g.archived);
+    if (!g) throw new Error('Choose an active goal.');
+    if (!Number.isSafeInteger(entry.amount) || entry.amount <= 0) throw new Error('Enter amounts greater than zero.');
+    total += entry.amount;
+  }
+  if (!Number.isSafeInteger(total) || total > summary.unallocated) throw new Error('The total exceeds your unallocated cash and bank balances.');
+  if (incomeId) {
+    const income = state.tx.find((t) => t.id === incomeId && t.type === 'income' && !t.loan);
+    if (!income || total > Math.max(0, B(income) - (summary.byIncome[incomeId] || 0))) throw new Error('The total exceeds the unallocated amount of this income.');
+  }
+  // Validate the whole batch before changing anything.
+  const records = entries.map((e) => ({ id: `ga-${uid()}`, goalId: e.goalId, amount: e.amount, currency: state.settings.currency, incomeId, date, createdAt: now, updatedAt: now }));
+  for (const e of entries) {
+    const g = state.goals.find((g) => g.id === e.goalId);
+    g.account = 'allocated';
+    touch(g, now);
+  }
+  (state.goalAllocations ||= []).push(...records);
+  return records;
+}
+
+export function releaseGoalAllocation(state, id, amount, now = Date.now()) {
+  const a = (state.goalAllocations || []).find((a) => a.id === id);
+  if (!a || !Number.isSafeInteger(amount) || amount <= 0 || amount > a.amount) throw new Error('Release an amount within this reservation.');
+  if (amount === a.amount) {
+    state.goalAllocations = state.goalAllocations.filter((x) => x.id !== id);
+    state.deleted[id] = now;
+  } else { a.amount -= amount; touch(a, now); }
+}
+
 // The goal's money in the base currency at the end of a day (null = now).
 // Past values use today's rates; good enough for a pace estimate.
 function goalValueAt(state, iso, goal = mainGoal(state)) {
+  if (goal.account === 'allocated') return goalAllocationSummary(state, iso).byGoal[goal.id] || 0;
   if (goal.account === 'manual') return goal.saved || 0;
   const vals = accountValues(state, iso);
   const isSaving = (a) => a.savings || a.kind === 'savings';
@@ -472,7 +538,7 @@ export function goalStatus(state, today, goal = mainGoal(state)) {
   const target = goal.target || 0;
   const thisMonth = monthKey(today);
   const end = (k) => `${k}-${String(daysInMonth(k)).padStart(2, '0')}`;
-  const active = new Set(state.tx.map((t) => monthKey(t.date)));
+  const active = new Set((goal.account === 'allocated' ? (state.goalAllocations || []).filter((a) => a.goalId === goal.id) : state.tx).map((t) => monthKey(t.date)));
   const months = [...active].filter((k) => k < thisMonth).sort().slice(-3);
   let pace = null;
   if (goal.account !== 'manual') {

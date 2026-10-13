@@ -5,7 +5,7 @@
 // and the reverse becomes the redo. Device-only things (meta, rates, theme,
 // the Log view) are never undone. Kept in memory only, for this session.
 
-const LISTS = ['tx', 'people', 'recurring', 'invoices', 'netWorth', 'goals'];
+const LISTS = ['tx', 'people', 'recurring', 'invoices', 'netWorth', 'goals', 'goalAllocations'];
 const SETTING_LISTS = ['accounts', 'categories', 'jars'];
 const NOT_UNDONE = new Set(['theme', 'themeMotion', 'logView', 'updatedAt', ...SETTING_LISTS]);
 
@@ -16,6 +16,7 @@ const WORDS = {
   invoices: ['invoice', 'invoices'],
   netWorth: ['net worth entry', 'net worth entries'],
   goals: ['goal', 'goals'],
+  goalAllocations: ['goal reservation', 'goal reservations'],
   'settings.accounts': ['account', 'accounts'],
   'settings.categories': ['category', 'categories'],
   'settings.jars': ['jar', 'jars'],

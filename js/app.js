@@ -1097,6 +1097,7 @@ function openTxSheet(existing = null, preset = {}) {
       <div class="btns">
         ${existing ? '<button type="button" class="btn danger" data-act="tx-delete">Delete</button>' : ''}
         ${existing && draft.type === 'income' && !existing.loan ? '<button type="button" class="btn" data-act="tx-split">Split</button>' : ''}
+        ${existing?.type === 'income' && draft.type === 'income' && !existing.loan ? '<button type="button" class="btn" data-act="tx-allocate">Allocate to goals</button>' : ''}
         ${existing && !isT ? `<button type="button" class="btn" data-act="tx-fav" aria-pressed="${M.isFavorite(state, existing)}">${M.isFavorite(state, existing) ? '★ Favorite' : '☆ Make favorite'}</button>` : ''}
         <button type="submit" class="btn primary">${existing ? 'Save' : 'Add'}</button>
       </div>
@@ -1335,6 +1336,7 @@ function openTxSheet(existing = null, preset = {}) {
       }
       if (e.target.closest('[data-act="tx-delete"]')) deleteTx(existing.id);
       if (e.target.closest('[data-act="tx-split"]')) { closeSheet(); setTimeout(() => openSplitSheet(existing), 200); }
+      if (e.target.closest('[data-act="tx-allocate"]')) { closeSheet(); setTimeout(() => Goals.openAllocationSheet(existing.id), 200); }
     });
     paint(sheet);
   });
@@ -1370,8 +1372,9 @@ function openSplitSheet(tx) {
   openSheet(`<h3>Split ${fm(tx.amount)} <button type="button" class="icon-btn" data-close aria-label="Close">✕</button></h3>
     <p class="muted small" style="margin-top:0">${esc(tx.note || catOf(tx.category).name)} · ${esc(from.name)} · ${dayLabel(tx.date)}</p>
     <div id="split-body"></div>
-    <div class="btns" style="margin-top:14px"><button class="btn" data-close>Not now</button><button class="btn primary" id="split-go">Split it</button></div>`, (sheet) => {
+    <div class="btns" style="margin-top:14px"><button class="btn" data-close>Not now</button><button class="btn" id="split-goals">Allocate to goals</button><button class="btn primary" id="split-go">Split it</button></div>`, (sheet) => {
     paint(sheet);
+    sheet.querySelector('#split-goals').addEventListener('click', () => { closeSheet(); setTimeout(() => Goals.openAllocationSheet(tx.id), 200); });
     sheet.addEventListener('change', (e) => {
       if (e.target.id === 'split-tax') taxPct = Math.max(0, Math.min(100, Number(e.target.value) || 0));
       else if (e.target.dataset.split) accounts[e.target.dataset.split] = e.target.value;
