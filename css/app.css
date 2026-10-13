@@ -2021,3 +2021,12 @@ body.locked .theme-atmosphere, body.printing .theme-atmosphere { display: none; 
 .other-goal:last-child { border-bottom: 0; }
 .other-goal small { display: block; color: var(--muted); margin-top: 4px; font-size: 13px; }
 .other-goal:hover { color: var(--gold); }
+/* Goal reservations use the existing theme tokens. */
+.allocation-input { display: grid; grid-template-columns: minmax(0, 1fr) 140px; gap: 16px; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.allocation-input small, .reservation-row small { display: block; color: var(--muted); font-size: 12px; margin-top: 4px; }
+.allocation-input input { width: 100%; text-align: right; }
+.allocation-totals { padding: 14px; margin: 16px 0 8px; background: var(--surface-2); border-radius: var(--radius-sm); font-size: 13px; line-height: 1.7; }
+.reservation-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.reservation-row > span:first-child { flex: 1; min-width: 140px; }
+.allocation-warning { padding: 12px; background: var(--expense-soft); border: 1px solid var(--expense); border-radius: var(--radius-sm); font-size: 13px; line-height: 1.6; }
+@media (max-width: 520px) { .allocation-input { grid-template-columns: minmax(0, 1fr) 110px; gap: 10px; } }

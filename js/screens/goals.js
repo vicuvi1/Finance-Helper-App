@@ -6,7 +6,7 @@
 import { ctx, esc } from '../ctx.js';
 import * as M from '../model.js';
 import { todayISO, monthLabel, dayLabel } from '../dates.js';
-import { evalAmount, centsToPlain } from '../money.js';
+import { evalAmount, centsToPlain, formatMoney } from '../money.js';
 import { CARD_THEMES } from '../cards.js';
 
 const TEMPLATES = [
@@ -21,7 +21,7 @@ const TEMPLATES = [
 ];
 
 const lei = (c) => Math.round(c / 100) * 100;
-const sourceLabel = (g) => (g.account === 'manual' ? 'added by hand' : g.account === 'savings' ? 'your savings accounts' : g.account === 'all' || !g.account ? 'all your money' : M.account(ctx.state, g.account)?.name || 'an account');
+const sourceLabel = (g) => (g.account === 'allocated' ? 'money reserved for this goal' : g.account === 'manual' ? 'added by hand' : g.account === 'savings' ? 'your savings accounts' : g.account === 'all' || !g.account ? 'all your money' : M.account(ctx.state, g.account)?.name || 'an account');
 
 function ring(st, g, size = 132) {
   const r = (size - 14) / 2;
@@ -44,11 +44,12 @@ function goalCard(g, today) {
     <div class="gc-ring">${ring(st, g)}</div>
     <div class="gc-body">
       <h3>${esc(g.name)}</h3>
-      <div class="gc-amt"><b>${ctx.money(lei(st.current))}</b><span> of ${ctx.money(st.target)}</span></div>
+      <div class="gc-amt"><b>${ctx.money(g.account === 'allocated' ? st.current : lei(st.current))}</b><span> of ${ctx.money(st.target)}</span></div>
       <div class="gc-ms">${[25, 50, 75, 100].map((m) => `<span class="${st.milestone >= m ? 'on' : ''}">${m}%</span>`).join('')}</div>
       <p class="gc-msg">${esc(M.goalMessage(st))}</p>
       <p class="muted small" style="margin:0">${when} · counts ${esc(sourceLabel(g))}</p>
       ${dl}
+      ${!g.doneAt ? `<button type="button" class="btn sm gc-add" data-act="goal-allocate" data-id="${esc(g.id)}">Reserve money</button>` : ''}
       ${g.account === 'manual' && !done ? `<button type="button" class="btn sm gc-add" data-act="goal-money" data-id="${esc(g.id)}">+ Add money</button>` : ''}
     </div>
   </article>`;
@@ -61,16 +62,17 @@ export function view() {
   const active = goals.filter((g) => !g.doneAt);
   const finished = goals.filter((g) => g.doneAt);
   const stats = active.map((g) => ({ g, st: M.goalStatus(state, today, g) }));
-  const saved = stats.reduce((a, x) => a + Math.min(x.st.current, x.st.target), 0);
-  const target = stats.reduce((a, x) => a + x.st.target, 0);
+  const allocation = M.goalAllocationSummary(state);
+  const saved = allocation.reserved;
   const near = stats.filter((x) => x.st.ratio < 1).sort((a, b) => b.st.ratio - a.st.ratio)[0];
   return `<header class="top"><div><h1>Goals</h1><div class="sub">What you're saving for, filling up by itself</div></div>
-    <button class="btn primary" data-act="goal-new">+ New goal</button></header>
+    <div class="btns top-btns"><button class="btn" data-act="goal-allocate">Allocate money</button><button class="btn primary" data-act="goal-new">+ New goal</button></div></header>
   <section class="hero">
     <div class="hero-main">
-      <div class="label">Saved toward your goals</div>
-      <div class="big">${ctx.bigMoney(lei(saved))}</div>
-      <p class="muted" style="margin:0">${target ? `of ${ctx.money(target)} · ${Math.round((saved / target) * 100)}% overall` : 'Set your first goal and watch it fill up.'}</p>
+      <div class="label">Reserved for goals</div>
+      <div class="big">${ctx.bigMoney(saved)}</div>
+      <p class="muted" style="margin:0">${ctx.money(allocation.unallocated)} unallocated · cash and bank balances</p>
+      <p class="muted small">Balance-tracking and manual goals are shown below; their balances are not added to reserved money.</p>
     </div>
     <div class="hero-month">
       <div class="label">Next up</div>
@@ -81,6 +83,7 @@ export function view() {
       </div>
     </div>
   </section>
+  ${allocationCard()}
   ${active.length ? `<div class="goal-grid">${active.map((g) => goalCard(g, today)).join('')}<button type="button" class="goal-add" data-act="goal-new"><span>+</span>New goal</button></div>`
     : `<div class="empty"><b>No goals yet</b>An emergency fund is a great first one: six months of your usual spending, kept in your savings.<div class="btns" style="justify-content:center;margin-top:12px"><button class="btn primary" data-act="goal-new">Set a goal</button></div></div>`}
   ${finished.length ? `<h2 class="section-h">Reached 🎉</h2><div class="goal-grid">${finished.map((g) => goalCard(g, today)).join('')}</div>` : ''}`;
@@ -93,13 +96,13 @@ export function homeCard({ featured = false } = {}) {
   const line = st.ratio >= 1 ? 'Goal reached. Time to set a bigger one.' : st.eta ? `At your pace you get there in <b>${monthLabel(st.eta)}</b>.` : esc(M.goalMessage(st));
   if (featured) return `<section class="card goal-feature theme-${esc(g.theme || 'gold')}" aria-label="Main goal">
     <div class="gc-ring">${ring(st, g)}</div><div class="goal-feature-body"><span class="label">Your main goal</span>
-    <h2>${esc(g.name)}</h2><div class="gc-amt"><b>${ctx.money(lei(st.current))}</b><span> of ${ctx.money(st.target)}</span></div>
-    <p>${st.target ? `${ctx.money(lei(st.remaining))} remaining · ${Math.round(st.ratio * 100)}% complete` : 'Set a target to start tracking your progress.'}</p>
+    <h2>${esc(g.name)}</h2><div class="gc-amt"><b>${ctx.money(g.account === 'allocated' ? st.current : lei(st.current))}</b><span> of ${ctx.money(st.target)}</span></div>
+    <p>${st.target ? `${ctx.money(g.account === 'allocated' ? st.remaining : lei(st.remaining))} remaining · ${Math.round(st.ratio * 100)}% complete` : 'Set a target to start tracking your progress.'}</p>
     <span class="muted small">Tracks ${esc(sourceLabel(g))}</span></div>
     <div class="goal-feature-action"><button class="btn" data-go="goals">View goals →</button><p class="muted small">${st.eta && st.ratio < 1 ? `Estimated finish: ${monthLabel(st.eta)}` : esc(M.goalMessage(st))}</p></div></section>`;
   return `<section class="card goal-mini theme-${esc(g.theme || 'gold')}" data-go="goals"><h2>${esc(g.name)} <button class="card-link right" data-go="goals">All goals</button></h2>
     <div class="gm-row"><div class="gc-ring sm">${ring(st, g, 96)}</div>
-    <div><div class="gc-amt"><b>${ctx.money(lei(st.current))}</b><span> of ${ctx.money(st.target)}</span></div><p class="gc-msg" style="margin:6px 0 0">${line}</p></div></div></section>`;
+    <div><div class="gc-amt"><b>${ctx.money(g.account === 'allocated' ? st.current : lei(st.current))}</b><span> of ${ctx.money(st.target)}</span></div><p class="gc-msg" style="margin:6px 0 0">${line}</p></div></div></section>`;
 }
 
 export function otherGoalsCard() {
@@ -108,7 +111,7 @@ export function otherGoalsCard() {
   if (!others.length) return '';
   return `<section class="card"><h2>Other goals <button class="card-link right" data-go="goals">All goals</button></h2>${others.map((g) => {
     const st = M.goalStatus(ctx.state, todayISO(), g);
-    return `<button class="other-goal" data-act="goal-open" data-id="${esc(g.id)}"><span><b>${esc(g.name)}</b><small>${ctx.money(lei(st.remaining))} remaining</small></span><b>${Math.round(st.ratio * 100)}%</b></button>`;
+    return `<button class="other-goal" data-act="goal-open" data-id="${esc(g.id)}"><span><b>${esc(g.name)}</b><small>${ctx.money(g.account === 'allocated' ? st.remaining : lei(st.remaining))} remaining</small></span><b>${Math.round(st.ratio * 100)}%</b></button>`;
   }).join('')}</section>`;
 }
 
@@ -151,8 +154,8 @@ export function checkMilestones() {
 function goalSheet(existing = null) {
   const { state } = ctx;
   const today = todayISO();
-  const g = existing ? { ...existing } : { emoji: '🎯', name: '', target: 0, account: 'all', saved: 0, deadline: null, theme: 'gold', history: [] };
-  const accOpts = () => [['all', 'All my money'], ['savings', 'My savings accounts'], ...M.activeAccounts(state).map((a) => [a.id, `${a.name} only`]), ['manual', 'Money I add by hand']]
+  const g = existing ? { ...existing } : { emoji: '🎯', name: '', target: 0, account: 'allocated', saved: 0, deadline: null, theme: 'gold', history: [] };
+  const accOpts = () => [['allocated', 'Money reserved for this goal'], ['all', 'Track all my money'], ['savings', 'Track my savings accounts'], ...M.activeAccounts(state).map((a) => [a.id, `${a.name} only`]), ['manual', 'Money I add by hand']]
     .map(([v, l]) => `<option value="${esc(v)}" ${g.account === v ? 'selected' : ''}>${esc(l)}</option>`).join('');
   const html = () => `<div class="grab"></div><h3>${existing ? 'Edit goal' : 'New goal'} <button type="button" class="icon-btn" data-close aria-label="Close">✕</button></h3>
     <form id="goal-form" novalidate>
@@ -207,6 +210,7 @@ function goalSheet(existing = null) {
       if (!b) return;
       const live = state.goals.find((x) => x.id === existing.id);
       if (b.dataset.g === 'delete') {
+        for (const a of (state.goalAllocations || []).filter((a) => a.goalId === existing.id)) M.releaseGoalAllocation(state, a.id, a.amount);
         state.goals = state.goals.filter((x) => x.id !== existing.id);
         state.deleted[existing.id] = Date.now();
         ctx.commit();
@@ -230,6 +234,7 @@ function goalSheet(existing = null) {
       const msg = sheet.querySelector('#g-msg');
       if (!g.name) { msg.textContent = 'Give the goal a name.'; return; }
       if (!(g.target > 0)) { msg.textContent = 'Set a target bigger than 0.'; return; }
+      if (existing && g.account !== 'allocated' && (state.goalAllocations || []).some((a) => a.goalId === existing.id)) { msg.textContent = 'Release this goal’s reservations before changing how it is tracked.'; return; }
       const now = Date.now();
       const list = state.goals || (state.goals = []);
       if (existing) Object.assign(list.find((x) => x.id === existing.id), g, { updatedAt: now });
@@ -265,9 +270,74 @@ function moneySheet(goal) {
   });
 }
 
+function allocationCard() {
+  const s = M.goalAllocationSummary(ctx.state);
+  const rows = ctx.state.goalAllocations || [];
+  return `<section class="card goal-reservations"><h2>Your reservations</h2>
+    ${s.unfunded ? `<p class="allocation-warning" role="status">${ctx.money(s.unfunded)} of requested reservations cannot be funded. Balances or income may have changed, or another device may have allocated the same funds. Review and release the affected reservations below.</p>` : ''}
+    ${s.unpriced.length ? '<p class="allocation-warning" role="status">Some reservations need an exchange rate. Update Rates or release those reservations before allocating more.</p>' : ''}
+    <p class="muted small">Reserving money labels part of your cash and bank balances. It does not create an expense or transfer. Crypto and accounts without exchange rates are excluded. Reached goals keep their reservations until you release them.</p>
+    ${rows.length ? `<details><summary>Manage ${rows.length} reservations</summary>${rows.map((a) => {
+      const goal = (ctx.state.goals || []).find((g) => g.id === a.goalId);
+      const income = a.incomeId && ctx.state.tx.find((t) => t.id === a.incomeId);
+      return `<div class="reservation-row"><span><b>${esc(goal?.name || 'Deleted goal')}</b><small>${esc(a.date)} · ${a.incomeId ? esc(income?.note || (income ? 'Income' : 'Deleted income')) : 'Existing funds'}</small><small>Funded: ${ctx.money(s.effectiveById[a.id] || 0)}</small></span><span class="money">${formatAllocation(a)}</span><button class="btn sm" data-act="goal-release" data-id="${esc(a.id)}">Release</button></div>`;
+    }).join('')}</details>` : '<p class="muted small">No money reserved yet. Allocate existing funds or part of an income to your goals.</p>'}</section>`;
+}
+
+function formatAllocation(a) { return formatMoney(a.amount, a.currency || ctx.state.settings.currency); }
+
+export function openAllocationSheet(incomeId = null, goalId = null) {
+  const { state } = ctx;
+  const goals = (state.goals || []).filter((g) => !g.doneAt && !g.archived);
+  if (!goals.length) { ctx.toast('Create a goal first.'); return; }
+  const summary = M.goalAllocationSummary(state);
+  const incomes = M.sortTx(state.tx.filter((t) => t.type === 'income' && !t.loan));
+  ctx.openSheet(`<h3>Allocate money to goals <button type="button" class="icon-btn" data-close aria-label="Close">✕</button></h3>
+    <form id="goal-allocation-form" novalidate><label class="field"><span>Allocate from</span><select id="allocation-source"><option value="">Existing unallocated funds</option>${incomes.map((t) => `<option value="${esc(t.id)}" ${incomeId === t.id ? 'selected' : ''}>${esc(t.date)} · ${esc(t.note || 'Income')} · ${ctx.money(Math.max(0, M.B(t) - (summary.byIncome[t.id] || 0)))} left</option>`).join('')}</select></label>
+    <p class="muted small">All amounts are in ${esc(state.settings.currency)}. Foreign income uses its recorded exchange rate. Allocating to a balance-tracking goal switches its progress to reserved money; existing balances are not automatically reserved.</p>
+    ${goals.map((g) => `<label class="allocation-input"><span><b>${esc(g.emoji || '🎯')} ${esc(g.name)}</b><small>${g.account === 'allocated' ? `${ctx.money(summary.byGoal[g.id] || 0)} reserved` : `Currently tracks ${esc(sourceLabel(g))}`}</small></span><input type="text" inputmode="decimal" data-allocation-goal="${esc(g.id)}" placeholder="0" aria-label="Amount for ${esc(g.name)}"></label>`).join('')}
+    <div id="allocation-totals" class="allocation-totals" aria-live="polite"></div><p id="allocation-error" class="lock-msg" role="alert"></p><div class="btns"><button type="button" class="btn" data-close>Cancel</button><button type="submit" class="btn primary" id="allocation-save">Reserve money</button></div></form>`, (sheet) => {
+      const read = () => [...sheet.querySelectorAll('[data-allocation-goal]')].filter((el) => el.value.trim()).map((el) => ({ goalId: el.dataset.allocationGoal, amount: evalAmount(el.value) }));
+      const update = () => {
+        const s = M.goalAllocationSummary(ctx.state);
+        const id = sheet.querySelector('#allocation-source').value;
+        const income = id && ctx.state.tx.find((t) => t.id === id && t.type === 'income' && !t.loan);
+        const limit = Math.min(s.unallocated, id ? Math.max(0, (income ? M.B(income) : 0) - (s.byIncome[id] || 0)) : s.unallocated);
+        const entries = read(), valid = entries.every((e) => Number.isSafeInteger(e.amount) && e.amount > 0);
+        const total = entries.reduce((sum, e) => sum + (e.amount || 0), 0);
+        sheet.querySelector('#allocation-totals').textContent = `Available: ${ctx.money(limit)} · Reserving: ${ctx.money(total)} · Remaining: ${ctx.money(Math.max(0, limit - total))}`;
+        sheet.querySelector('#allocation-save').disabled = !entries.length || !valid || total > limit || s.unfunded > 0 || s.unpriced.length > 0;
+        sheet.querySelector('#allocation-error').textContent = s.unpriced.length ? 'Update exchange rates for existing reservations first.' : s.unfunded ? 'Review unfunded reservations on Goals before allocating more.' : !valid ? 'Enter positive amounts.' : total > limit ? 'The total exceeds the available amount.' : '';
+      };
+      sheet.addEventListener('input', update); sheet.addEventListener('change', update);
+      sheet.querySelector('#goal-allocation-form').addEventListener('submit', (e) => {
+        e.preventDefault();
+        try { M.allocateToGoals(ctx.state, read(), { incomeId: sheet.querySelector('#allocation-source').value || null, date: todayISO() }); ctx.commit(); ctx.closeSheet(); ctx.toast('Money reserved for your goals'); }
+        catch (err) { sheet.querySelector('#allocation-error').textContent = err.message; }
+      });
+      update();
+      (goalId ? [...sheet.querySelectorAll('[data-allocation-goal]')].find((el) => el.dataset.allocationGoal === goalId) : sheet.querySelector('[data-allocation-goal]'))?.focus();
+    });
+}
+
+function releaseSheet(id) {
+  const a = (ctx.state.goalAllocations || []).find((a) => a.id === id);
+  if (!a) return;
+  ctx.openSheet(`<h3>Release reserved money <button type="button" class="icon-btn" data-close aria-label="Close">✕</button></h3><form id="release-allocation-form"><label class="field"><span>Amount (${esc(a.currency || ctx.state.settings.currency)})</span><input id="release-allocation-amount" type="text" inputmode="decimal" value="${esc(centsToPlain(a.amount))}"></label><p class="muted small">This money becomes unallocated again. Your account balances stay the same.</p><p id="release-allocation-error" class="lock-msg" role="alert"></p><div class="btns"><button type="button" class="btn" data-close>Cancel</button><button type="submit" class="btn primary">Release</button></div></form>`, (sheet) => {
+    sheet.querySelector('#release-allocation-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      try { M.releaseGoalAllocation(ctx.state, id, evalAmount(sheet.querySelector('#release-allocation-amount').value)); ctx.commit(); ctx.closeSheet(); ctx.toast('Reservation released'); }
+      catch (err) { sheet.querySelector('#release-allocation-error').textContent = err.message; }
+    });
+    sheet.querySelector('#release-allocation-amount').focus();
+  });
+}
+
 export function onClick(act, el) {
   const find = () => (ctx.state.goals || []).find((g) => g.id === el.dataset.id);
   if (act === 'goal-new') { goalSheet(); return true; }
+  if (act === 'goal-allocate') { openAllocationSheet(null, el.dataset.id); return true; }
+  if (act === 'goal-release') { releaseSheet(el.dataset.id); return true; }
   if (act === 'goal-money') { const g = find(); if (g) moneySheet(g); return true; }
   if (act === 'goal-open') { const g = find(); if (g) goalSheet(g); return true; }
   return false;
