@@ -114,6 +114,38 @@ test('reports screen embeds interactive cash flow sankey flowchart', async () =>
   assert.match(viewHtml, /rep-sankey-card/);
   assert.match(viewHtml, /Cash flow flowchart/);
   assert.match(viewHtml, /rep-sankey-mode/);
+  assert.match(viewHtml, /rep-kpi-grid/);
+  assert.match(viewHtml, /rep-row-visuals/);
+  assert.match(viewHtml, /rep-row-tables/);
 });
+
+test('reports screen handles deficit cleanly without negative savings percentages', async () => {
+  const { ctx } = await import('../js/ctx.js');
+  const { defaultState } = await import('../js/model.js');
+  const ReportsScreen = await import('../js/screens/reports.js');
+  const st = defaultState();
+  // Earn 200, spend 800 -> deficit of 600
+  const d = new Date().toISOString().slice(0, 10);
+  st.tx = [
+    { id: 't1', date: d, amount: 20000, type: 'income', category: 'work', account: 'wallet' },
+    { id: 't2', date: d, amount: 80000, type: 'expense', category: 'food', account: 'wallet' },
+  ];
+  ctx.state = st;
+  ctx.money = (v) => `${Math.round(v / 100)} MDL`;
+  ctx.countUp = (v) => `${Math.round(v / 100)} MDL`;
+  ctx.catColor = () => 'var(--c1)';
+  ctx.dot = () => '';
+  ctx.tipCard = () => '';
+  ctx.txRow = (t) => `<div class="tx">${t.id}</div>`;
+  const viewHtml = ReportsScreen.view();
+  // Should NOT show negative percentage like -300%
+  assert.doesNotMatch(viewHtml, /-300%/);
+  // Should display 0% with deficit notice and deficit class
+  assert.match(viewHtml, />0%<\/b>/);
+  assert.match(viewHtml, /Deficit: 600 MDL/);
+  assert.match(viewHtml, /rep-kpi-card deficit/);
+  assert.match(viewHtml, /Net Deficit/);
+});
+
 
 
