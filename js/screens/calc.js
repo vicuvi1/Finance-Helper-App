@@ -9,6 +9,7 @@
 
 import { ctx, esc } from '../ctx.js';
 import { calc, formatCalc, plainAmount } from '../calc.js';
+import { sound } from '../audio.js';
 
 const KEY = 'finance-helper.calc';
 const load = () => { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch { return {}; } };
@@ -122,6 +123,7 @@ function onClick(e) {
   const k = e.target.closest('[data-k]')?.dataset.k;
   const input = $('#fc-in');
   if (k) {
+    sound.click(ctx.state);
     if (k === 'clear') { input.value = ''; update(); }
     else if (k === 'back') {
       const a = input.selectionStart ?? input.value.length;

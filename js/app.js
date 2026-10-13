@@ -930,7 +930,8 @@ function viewSettings() {
     look: `<section class="card look-card"><h2>Look</h2>
     ${themePicker(st)}
     <label class="motion-setting"><span><b>Living atmosphere</b><small>Leaves, bubbles and starlight. Follows your device’s reduced-motion preference.</small></span><input type="checkbox" data-set="themeMotion" ${st.themeMotion !== false ? 'checked' : ''} aria-label="Living atmosphere"></label>
-    <label class="motion-setting"><span><b>Tactile sounds</b><small>Subtle coin clink and click feedback on logging.</small></span><input type="checkbox" data-set="sound" ${st.sound !== false ? 'checked' : ''} aria-label="Tactile sounds"></label>
+    <label class="motion-setting"><span><b>Tactile sounds</b><small>Mechanical micro-click on buttons, keys and coin chime on logging.</small></span><input type="checkbox" data-set="sound" ${st.sound !== false ? 'checked' : ''} aria-label="Tactile sounds"></label>
+    <div style="margin:4px 0 10px"><button type="button" class="btn sm" data-act="test-sound">🔊 Test sounds</button></div>
     <label class="field"><span>Currency</span><input type="text" data-set="currency" value="${esc(st.currency)}" maxlength="5"></label>
   </section>`,
     danger: `<section class="card"><h2>Danger zone</h2>
@@ -1926,8 +1927,9 @@ function onSettingsChange(el) {
     else if (key === 'savingsAccount') st.savingsAccount = v;
     else if (key === 'theme') { st.theme = v; applyTheme(); }
     else if (key === 'themeMotion') { st.themeMotion = el.checked; applyAtmosphere(); }
+    else if (key === 'sound') { st.sound = el.checked; if (st.sound) sound.test(state); }
     else if (key === 'currency') st.currency = v.trim().toUpperCase() || 'MDL';
-    if (!['theme', 'themeMotion'].includes(key)) st.updatedAt = Date.now();
+    if (!['theme', 'themeMotion', 'sound'].includes(key)) st.updatedAt = Date.now();
   } else if (el.dataset.jar) {
     const j = M.touch(M.jar(state, el.dataset.jar));
     if (el.dataset.field === 'pct') j.pct = Math.max(0, Math.min(100, Math.round(Number(v) || 0)));
@@ -1952,6 +1954,10 @@ function onSettingsChange(el) {
 document.addEventListener('click', (e) => {
   // Table dates: the weekday text is on top; a click opens the date picker.
   if (e.target.matches?.('.dpick')) { try { e.target.showPicker?.(); } catch { /* not supported */ } }
+  const btn = e.target.closest('button, .btn, .chip, .fab, .tabbar a, .subtabs a, [data-act], [data-go], .seg button, .tgb-main, .calc-keys button');
+  if (btn && !btn.disabled) {
+    sound.click(state);
+  }
   if (e.target.matches('[data-close]') || e.target.closest('button[data-close]')) {
     if (e.target.classList.contains('sheet-backdrop') || e.target.closest('button[data-close]')) closeSheet();
     return;
@@ -1961,6 +1967,11 @@ document.addEventListener('click', (e) => {
   const el = e.target.closest('[data-act]');
   if (!el || el.closest('.sheet')) return;
   const act = el.dataset.act;
+  if (act === 'test-sound') {
+    sound.test(state);
+    toast('Playing sound test 🔊');
+    return;
+  }
   if (SCREENS[ui.tab]?.onClick?.(act, el)) return;
   if (act === 'acc-open') AccountsScreen.openAccount(el.dataset.id);
   else if (act === 'person-open') PeopleScreen.openPerson(el.dataset.id);
