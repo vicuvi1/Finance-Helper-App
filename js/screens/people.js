@@ -539,6 +539,7 @@ function openPerson(id) {
   const openEntries = r ? Object.entries(r.owes).filter(([, v]) => v !== 0) : [];
   const primaryOpen = openEntries[0];
   const hasOpen = Boolean(primaryOpen);
+  const otherPeople = state.people.filter((x) => x.id !== id);
 
   ctx.openSheet(`<h3>${personAvatar(p, { size: 'sm', cls: 'pp-sheet-av-header' })} ${esc(p.name)} <button type="button" class="icon-btn" data-close aria-label="Close">✕</button></h3>
     ${openEntries.length ? `
@@ -617,7 +618,10 @@ function openPerson(id) {
     </div>
     <div class="pp-sheet-stats"><span>Received <b class="income">${ctx.money(r.received)}</b></span><span>Given <b>${ctx.money(r.given)}</b></span><span>${r.count} records</span></div>
     ${items.length ? `<div class="list">${items.map((t) => ctx.txRow(t, { showDate: true })).join('')}</div>` : '<p class="muted">No records with this person yet.</p>'}
-    <div class="pp-danger" id="pp-danger"><button class="btn danger" data-p="delete">Delete ${esc(p.name)}</button></div>`, (sheet) => {
+    <div class="pp-person-footer" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-top:14px; padding-top:12px; border-top:1px solid var(--line);">
+      <div class="pp-danger" id="pp-danger"><button class="btn danger" data-p="delete">Delete ${esc(p.name)}</button></div>
+      ${otherPeople.length ? `<div class="pp-merge-wrap" id="pp-merge-wrap"><button type="button" class="btn sm" data-p="merge-ask">🔗 Merge with contact...</button></div>` : ''}
+    </div>`, (sheet) => {
     const save = () => {
       const name = sheet.querySelector('#p-name').value.trim();
       const next = { name: name || p.name, note: sheet.querySelector('#p-note').value.trim(), group: sheet.querySelector('#p-group').value.trim(), currency: sheet.querySelector('#p-cur').value };
@@ -795,6 +799,39 @@ function openPerson(id) {
         ctx.commit();
         ctx.closeSheet();
         ctx.toast(`${p.name} deleted`, 'Undo', () => ctx.undo?.());
+        return;
+      }
+      if (k === 'merge-ask') {
+        const wrap = sheet.querySelector('#pp-merge-wrap');
+        if (wrap) {
+          const others = state.people.filter((x) => x.id !== id);
+          wrap.innerHTML = `<div class="pp-merge-box" style="display:grid; gap:8px; padding:10px; background:var(--surface-2); border:1px solid var(--line); border-radius:10px;">
+            <span class="small font-bold">Merge all records of ${esc(p.name)} into:</span>
+            <select id="p-merge-target" style="padding:4px 8px; font-size:13px; border-radius:8px; background:var(--surface); border:1px solid var(--line); color:var(--text);">${others.map((x) => `<option value="${esc(x.id)}">${esc(x.name)} (${esc(groupOf(x))})</option>`).join('')}</select>
+            <div class="btns-inline">
+              <button type="button" class="btn sm" data-p="merge-cancel">Cancel</button>
+              <button type="button" class="btn sm primary" data-p="merge-do">Confirm Merge</button>
+            </div>
+          </div>`;
+        }
+        return;
+      }
+      if (k === 'merge-cancel') {
+        const wrap = sheet.querySelector('#pp-merge-wrap');
+        if (wrap) {
+          wrap.innerHTML = `<button type="button" class="btn sm" data-p="merge-ask">🔗 Merge with contact...</button>`;
+        }
+        return;
+      }
+      if (k === 'merge-do') {
+        const targetId = sheet.querySelector('#p-merge-target')?.value;
+        if (!targetId) return;
+        const res = M.mergePeople(ctx.state, id, targetId);
+        if (res) {
+          ctx.commit();
+          ctx.closeSheet();
+          ctx.toast(`Merged ${res.source.name} into ${res.target.name} (${res.count} record${res.count === 1 ? '' : 's'} moved)`, 'Undo', () => ctx.undo?.());
+        }
         return;
       }
       ctx.closeSheet();

@@ -191,3 +191,48 @@ test('open loan card: delete button prompts in-place confirmation and removes lo
   assert.match(toastMsg, /Deleted loan:/);
   assert.equal(typeof toastAction, 'function', 'undo callback supplied');
 });
+
+test('mergePeople reassigns transactions, removes source person, and marks sync deletion', async () => {
+  const { mergePeople, defaultState } = await import('../js/model.js');
+  const s = defaultState();
+  s.people = [
+    { id: 'p-brother', name: 'Brother', updatedAt: 100 },
+    { id: 'p-oliviu', name: 'Oliviu', updatedAt: 100 },
+  ];
+  s.tx = [
+    { id: 'tx-1', type: 'income', amount: 465000, date: '2026-08-02', person: 'p-brother', category: 'other-in', account: 'wallet' },
+    { id: 'tx-2', type: 'income', amount: 40000, date: '2026-01-16', person: 'p-oliviu', category: 'other-in', account: 'wallet' },
+  ];
+
+  const res = mergePeople(s, 'p-oliviu', 'p-brother', 2000);
+  assert.equal(res.count, 1);
+  assert.equal(s.people.length, 1);
+  assert.equal(s.people[0].id, 'p-brother');
+  assert.equal(s.deleted['p-oliviu'], 2000);
+  assert.equal(s.tx[1].person, 'p-brother');
+  assert.equal(s.tx[1].updatedAt, 2000);
+});
+
+test('normalizeState automatically merges Oliviu into Brother if both exist', async () => {
+  const { normalizeState } = await import('../js/model.js');
+  const raw = {
+    settings: {},
+    people: [
+      { id: 'p-brother', name: 'Brother', group: 'Family' },
+      { id: 'p-oliviu', name: 'Oliviu', group: 'Other' },
+    ],
+    tx: [
+      { id: 't1', type: 'income', amount: 465000, date: '2026-08-02', person: 'p-brother', category: 'other-in', account: 'wallet' },
+      { id: 't2', type: 'income', amount: 40000, date: '2026-01-16', person: 'p-oliviu', category: 'other-in', account: 'wallet' },
+    ],
+  };
+
+  const s = normalizeState(raw);
+  assert.equal(s.people.length, 1, 'only Brother remains');
+  assert.equal(s.people[0].name, 'Brother');
+  assert.equal(s.people[0].id, 'p-brother');
+  assert.ok(s.deleted['p-oliviu'], 'oliviu marked in deleted');
+  assert.equal(s.tx[0].person, 'p-brother');
+  assert.equal(s.tx[1].person, 'p-brother', 't2 moved to brother');
+});
+

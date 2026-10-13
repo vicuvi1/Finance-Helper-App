@@ -135,6 +135,22 @@ export function normalizeState(raw) {
       .map((g) => (g.id === 'g-main' && !g.updatedAt && g.account === 'all' && g.name === 'Safe goal' ? { ...g, account: 'savings' } : g))
     : [{ id: 'g-main', name: settings.goal.name || 'Safe goal', emoji: '🏦', target: settings.goal.target || 0, account: settings.goal.account || 'all', saved: 0, history: [], deadline: null, doneAt: null, theme: 'gold', updatedAt: 0 }];
   const goalAllocations = (Array.isArray(raw.goalAllocations) ? raw.goalAllocations : []).filter((a) => a && typeof a.id === 'string' && typeof a.goalId === 'string' && Number.isSafeInteger(a.amount) && a.amount > 0 && isValidISO(a.date || '')).map((a) => ({ ...a, currency: a.currency || baseCur, updatedAt: a.updatedAt || 0 }));
+  // Automatic migration: merge Oliviu into Brother if both exist (the user confirmed they are the same person)
+  const oliviu = people.find((p) => p.name?.trim().toLowerCase() === 'oliviu');
+  const brother = people.find((p) => p.name?.trim().toLowerCase() === 'brother');
+  if (oliviu && brother && oliviu.id !== brother.id) {
+    const now = Date.now();
+    for (const t of tx) {
+      if (t.person === oliviu.id) {
+        t.person = brother.id;
+        t.updatedAt = now;
+      }
+    }
+    const oIdx = people.findIndex((p) => p.id === oliviu.id);
+    if (oIdx !== -1) people.splice(oIdx, 1);
+    deleted[oliviu.id] = now;
+    brother.updatedAt = now;
+  }
   return { version: SCHEMA_VERSION, settings, tx, people, recurring, invoices, netWorth, goals, goalAllocations, deleted, rates: raw.rates || null, meta: { ...base.meta, ...(raw.meta || {}) } };
 }
 
@@ -1052,6 +1068,27 @@ export function deletePerson(state, id, now = Date.now()) {
     touch(t, now);
   }
   return p;
+}
+
+// Merges sourcePerson into targetPerson: reassigns all records, removes source,
+// updates sync markers.
+export function mergePeople(state, sourceId, targetId, now = Date.now()) {
+  if (sourceId === targetId) return null;
+  const src = state.people.find((x) => x.id === sourceId);
+  const tgt = state.people.find((x) => x.id === targetId);
+  if (!src || !tgt) return null;
+  let remapped = 0;
+  for (const t of state.tx) {
+    if (t.person === sourceId) {
+      t.person = targetId;
+      touch(t, now);
+      remapped++;
+    }
+  }
+  state.people = state.people.filter((x) => x.id !== sourceId);
+  state.deleted[sourceId] = now;
+  touch(tgt, now);
+  return { source: src, target: tgt, count: remapped };
 }
 
 // Finds a person by name (any case) or adds them. Returns the id.
