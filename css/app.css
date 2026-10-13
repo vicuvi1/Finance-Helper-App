@@ -2255,3 +2255,96 @@ body.locked .theme-atmosphere, body.printing .theme-atmosphere { display: none; 
   color: var(--expense);
   font-weight: 600;
 }
+
+/* Cash Flow Sankey Diagram */
+.sankey-chart {
+  width: 100%;
+  height: auto;
+  display: block;
+  overflow: visible;
+  font-family: var(--font);
+  user-select: none;
+}
+.sankey-col-hdr {
+  fill: var(--faint);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.sankey-node {
+  cursor: pointer;
+  outline: none;
+  transition: opacity 0.2s var(--ease-out);
+}
+.sankey-node rect {
+  transition: filter 0.2s var(--ease-out), stroke 0.2s var(--ease-out);
+  stroke: transparent;
+  stroke-width: 1.5px;
+}
+.sankey-node:hover rect,
+.sankey-node:focus-visible rect,
+.sankey-node.highlight rect {
+  filter: drop-shadow(0 0 6px rgba(227, 185, 95, 0.5));
+  stroke: var(--text);
+}
+.sankey-label {
+  fill: var(--text);
+  font-size: 11px;
+  font-weight: 500;
+  font-feature-settings: "tnum";
+  paint-order: stroke;
+  stroke: var(--surface);
+  stroke-width: 3.5px;
+  stroke-linejoin: round;
+}
+.sankey-label .sankey-name {
+  fill: var(--text);
+  font-weight: 600;
+}
+.sankey-label .sankey-val {
+  fill: var(--muted);
+  font-size: 10px;
+}
+.sankey-center-label {
+  paint-order: stroke;
+  stroke: var(--surface);
+  stroke-width: 4px;
+  stroke-linejoin: round;
+  font-size: 11px;
+}
+.sankey-center-label .sankey-name {
+  fill: var(--text);
+  font-weight: 600;
+}
+.sankey-center-label .sankey-val {
+  fill: var(--muted);
+  font-size: 10px;
+}
+.sankey-ribbon {
+  cursor: pointer;
+  transition: opacity 0.2s var(--ease-out), filter 0.2s var(--ease-out);
+  outline: none;
+}
+.sankey-ribbon:hover,
+.sankey-ribbon:focus-visible,
+.sankey-ribbon.highlight {
+  opacity: 0.92 !important;
+  filter: drop-shadow(0 0 4px var(--gold));
+}
+.sankey-ribbon.dimmed {
+  opacity: 0.06 !important;
+}
+.rep-sankey-card {
+  position: relative;
+  overflow: hidden;
+}
+.rep-sankey-card .rep-card-header h2 {
+  font-family: var(--display);
+  font-size: 19px;
+  letter-spacing: -0.01em;
+}
+.rep-sankey-card .rep-card-header .sub {
+  font-size: 12px;
+}
+

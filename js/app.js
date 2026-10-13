@@ -51,6 +51,7 @@ import { searchTx, searchSummary, SEARCH_HINT } from './search.js';
 import { safeToSpend, shortDay } from './safespend.js';
 import { sound } from './audio.js';
 import { openPalette, closePalette, isPaletteOpen } from './palette.js';
+import { bindSankeyHover } from './charts.js';
 
 let state = load();
 // Undo / redo for this session (js/history.js).
@@ -2393,6 +2394,7 @@ async function seedDemo() {
 }
 
 Spending.bindHover(app);
+bindSankeyHover(app);
 bindTilt(document);
 requestPersistence();
 if (!DEMO) Security.initLock();

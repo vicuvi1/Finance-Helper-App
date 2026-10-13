@@ -46,6 +46,7 @@ function getCommands(ctx) {
     { id: 'plan', icon: '🔁', title: 'Plan & Recurring', shortcut: '5', desc: 'Bills due and cash-flow forecast', run: () => ctx.go('plan') },
     { id: 'clients', icon: '👥', title: 'Clients & Invoices', shortcut: '6', desc: 'Client tracking, hours, and invoicing', run: () => ctx.go('clients') },
     { id: 'reports', icon: '📊', title: 'Reports & Year in Review', shortcut: '7', desc: 'Spending breakdown and tax summary', run: () => ctx.go('reports') },
+    { id: 'sankey', icon: '🌊', title: 'Cash Flow Flowchart (Sankey)', desc: 'Visual distribution of income into jars and spending', run: () => ctx.go('reports') },
     { id: 'settings', icon: '⚙️', title: 'Settings', shortcut: 'S', desc: 'Themes, sync, backups, and bot settings', run: () => ctx.go('settings') },
     { id: 'export-xlsx', icon: '📥', title: 'Export to Excel', desc: 'Download current data as .xlsx workbook', run: () => ctx.exportExcel() },
     { id: 'export-json', icon: '💾', title: 'Backup JSON', desc: 'Download full encrypted device backup', run: () => ctx.backupJSON() },

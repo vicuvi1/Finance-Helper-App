@@ -6,7 +6,7 @@ import { ctx, esc } from '../ctx.js';
 import * as M from '../model.js';
 import { formatMoney } from '../money.js';
 import { todayISO, monthKey, monthLabel, addMonths, daysInMonth, isValidISO } from '../dates.js';
-import { trendChart, dailyChart } from '../charts.js';
+import { trendChart, dailyChart, sankeyChart } from '../charts.js';
 import { monthSheet } from '../importer.js';
 import { workbook } from '../xlsx.js';
 import * as Spending from './spending.js';
@@ -20,7 +20,7 @@ const PRESETS = [
   { id: 'custom', name: 'Custom' },
 ];
 
-const rs = { preset: 'month', month: null, from: null, to: null };
+const rs = { preset: 'month', month: null, from: null, to: null, sankeyMode: 'jars' };
 
 function range() {
   const today = todayISO();
@@ -78,6 +78,33 @@ export function view() {
   const tips = rs.preset === 'month' ? M.insights(state, r0.from.slice(0, 7), today) : [];
   const year = rs.preset === 'year' || rs.preset === 'lastyear' ? M.yearOverview(state, Number(r0.from.slice(0, 4))) : null;
 
+  const sankeyData = {
+    income: r.income,
+    expense: r.expense,
+    sources: r.sources.rows.map((x) => ({
+      id: x.id,
+      name: cat(x.id),
+      amount: x.amount,
+      color: ctx.catColor(x.id),
+    })),
+    jars: state.settings.jars.map((j, i) => ({
+      id: j.id,
+      name: j.name,
+      emoji: j.emoji,
+      pct: j.pct,
+      savings: j.savings,
+      color: j.savings ? 'var(--gold)' : `var(--c${(i % 8) + 1})`,
+    })),
+    categories: r.spending.rows.map((x) => ({
+      id: x.id,
+      name: cat(x.id),
+      amount: x.amount,
+      jarId: M.jarOf(state, x.id),
+      color: ctx.catColor(x.id),
+    })),
+  };
+  const sankey = sankeyChart(sankeyData, (c) => money(c), { mode: rs.sankeyMode || 'jars' });
+
   return `<header class="top"><div><h1>Reports</h1><div class="sub">${esc(r0.label)} · ${r.days} day${r.days === 1 ? '' : 's'} · ${r.count} record${r.count === 1 ? '' : 's'}</div></div>
     <button class="btn" data-act="rep-export">Export to Excel</button></header>
   <div class="rep-bar">
@@ -96,6 +123,19 @@ export function view() {
   </section>
   <section class="card"><h2>${series.unit === 'day' ? 'Spending per day' : 'Earned and spent per month'}</h2>${chart}
     ${series.unit === 'month' ? '<div class="legend"><span><i style="background:var(--income)"></i>Earned</span><span><i style="background:var(--expense)"></i>Spent</span></div>' : ''}</section>
+  <section class="card rep-sankey-card">
+    <div class="rep-card-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:12px;">
+      <div>
+        <h2 style="margin:0;">Cash flow flowchart</h2>
+        <span class="sub muted">Visual money flow across income, smart jars, and spending</span>
+      </div>
+      <div class="chips small">
+        <button class="chip" data-act="rep-sankey-mode" data-mode="jars" aria-pressed="${(rs.sankeyMode || 'jars') === 'jars'}">Smart Jars</button>
+        <button class="chip" data-act="rep-sankey-mode" data-mode="direct" aria-pressed="${rs.sankeyMode === 'direct'}">Direct</button>
+      </div>
+    </div>
+    ${sankey}
+  </section>
   ${tips.length ? `<section class="card"><h2>What your money says</h2>${tips.map(ctx.tipCard).join('')}</section>` : ''}
   <section class="card"><h2>Spending by category <span class="right muted">${money(r.expense)}</span></h2>
     ${table(['Category', 'Spent', 'Share', 'Before', 'Records'], r.spending.rows.map((x) => {
@@ -155,6 +195,11 @@ export function onClick(act, el) {
   if (act === 'rep-cat') {
     const r0 = range();
     Spending.openCategory(el.dataset.cat, r0, el.dataset.type);
+    return true;
+  }
+  if (act === 'rep-sankey-mode') {
+    rs.sankeyMode = el.dataset.mode;
+    ctx.render({ enter: true });
     return true;
   }
   if (act === 'rep-export') { exportReport(); return true; }
