@@ -55,6 +55,8 @@ const SHELL = [
   './js/blocks.js',
   './js/motion.js',
   './js/calc.js',
+  './js/audio.js',
+  './js/palette.js',
   './js/screens/calc.js',
   './js/screens/reports.js',
   './js/screens/security.js',

@@ -2030,3 +2030,228 @@ body.locked .theme-atmosphere, body.printing .theme-atmosphere { display: none; 
 .reservation-row > span:first-child { flex: 1; min-width: 140px; }
 .allocation-warning { padding: 12px; background: var(--expense-soft); border: 1px solid var(--expense); border-radius: var(--radius-sm); font-size: 13px; line-height: 1.6; }
 @media (max-width: 520px) { .allocation-input { grid-template-columns: minmax(0, 1fr) 110px; gap: 10px; } }
+
+/* ==========================================================================
+   Pro Command Palette (Ctrl+K)
+   ========================================================================== */
+.cmd-palette-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 12vh 16px 24px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.cmd-palette-backdrop.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+.cmd-palette-dialog {
+  width: 100%;
+  max-width: 580px;
+  background: var(--surface);
+  border: 1px solid var(--line-strong, var(--line));
+  box-shadow: 0 24px 48px -12px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  border-radius: var(--radius);
+  overflow: hidden;
+  transform: translateY(-8px) scale(0.98);
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.cmd-palette-backdrop.open .cmd-palette-dialog {
+  transform: translateY(0) scale(1);
+}
+.cmd-palette-search {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+.cmd-search-icon {
+  font-size: 18px;
+  color: var(--gold);
+}
+#cmd-input {
+  flex: 1;
+  background: transparent;
+  border: 0;
+  outline: none;
+  font-size: 16px;
+  color: var(--text);
+  font-family: inherit;
+}
+#cmd-input::placeholder {
+  color: var(--muted);
+}
+.cmd-kbd-esc {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  background: var(--surface-2);
+  padding: 3px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+}
+.cmd-palette-list {
+  max-height: 380px;
+  overflow-y: auto;
+  padding: 8px;
+}
+.cmd-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+.cmd-item:hover, .cmd-item.selected {
+  background: color-mix(in srgb, var(--gold) 15%, var(--surface-2));
+}
+.cmd-icon {
+  font-size: 20px;
+  width: 24px;
+  text-align: center;
+}
+.cmd-text {
+  flex: 1;
+  min-width: 0;
+}
+.cmd-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+}
+.cmd-desc {
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cmd-kbd {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--gold);
+  background: var(--surface-2);
+  padding: 2px 7px;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+}
+.cmd-empty {
+  padding: 24px;
+  text-align: center;
+  color: var(--muted);
+}
+
+/* ==========================================================================
+   Animated Liquid Jars (Home)
+   ========================================================================== */
+.liquid-jars-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+.liquid-jar-card {
+  position: relative;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 14px 12px 12px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 126px;
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.05);
+  cursor: pointer;
+  transition: transform 0.18s ease, border-color 0.18s ease;
+}
+.liquid-jar-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--gold);
+}
+.liquid-jar-fluid {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  transition: height 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+  opacity: 0.85;
+}
+.liquid-jar-fluid.gold {
+  background: linear-gradient(180deg, rgba(200, 160, 80, 0.35) 0%, rgba(200, 160, 80, 0.7) 100%);
+}
+.liquid-jar-fluid.emerald {
+  background: linear-gradient(180deg, rgba(46, 196, 120, 0.3) 0%, rgba(46, 196, 120, 0.65) 100%);
+}
+.liquid-jar-fluid.crimson {
+  background: linear-gradient(180deg, rgba(230, 75, 75, 0.35) 0%, rgba(230, 75, 75, 0.75) 100%);
+}
+.liquid-jar-wave {
+  position: absolute;
+  top: -7px;
+  left: 0;
+  width: 100%;
+  height: 8px;
+}
+.liquid-jar-header {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.liquid-jar-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.liquid-jar-pct {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--muted);
+  background: rgba(0, 0, 0, 0.25);
+  padding: 1px 5px;
+  border-radius: 8px;
+}
+.liquid-jar-content {
+  position: relative;
+  z-index: 2;
+  margin-top: 10px;
+}
+.liquid-jar-fig {
+  font-family: var(--display);
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.1;
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.liquid-jar-sub {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 4px;
+  display: block;
+}
+.liquid-jar-sub.bad {
+  color: var(--expense);
+  font-weight: 600;
+}

@@ -49,6 +49,8 @@ import { sheetHTML, monthTabs } from './sheetview.js';
 import { createHistory } from './history.js';
 import { searchTx, searchSummary, SEARCH_HINT } from './search.js';
 import { safeToSpend, shortDay } from './safespend.js';
+import { sound } from './audio.js';
+import { openPalette, closePalette, isPaletteOpen } from './palette.js';
 
 let state = load();
 // Undo / redo for this session (js/history.js).
@@ -373,23 +375,48 @@ function jarsCard(key) {
   const body = rows.map((j) => {
     if (j.savings) {
       const r = j.budget ? Math.min(1, j.used / j.budget) : 0;
-      return `<div class="jar">
-        <div class="row"><span>${dot(jarColor(j.jar))}${esc(j.jar.name)} <span class="muted">${j.jar.pct}%</span></span><span class="money">${money(j.used)}</span></div>
-        <div class="bar"><i style="width:${(r * 100).toFixed(1)}%"></i></div>
-        <div class="foot">${!j.budget ? 'Waiting for this month\'s income' : j.left >= 0 ? `Plan ${money(j.budget)} reached ✓` : `Plan ${money(j.budget)}, ${money(-j.left)} to go`}</div>
+      const pctVal = Math.round(r * 100);
+      return `<div class="liquid-jar-card" data-go="accounts" title="Deposit / Safe Jar">
+        <div class="liquid-jar-fluid gold" style="height:${Math.max(12, pctVal)}%;">
+          <svg class="liquid-jar-wave" viewBox="0 0 100 20" preserveAspectRatio="none"><path d="M0 10 Q 25 18, 50 10 T 100 10 V 20 H 0 Z" fill="rgba(200, 160, 80, 0.7)"/></svg>
+        </div>
+        <div class="liquid-jar-header">
+          <span class="liquid-jar-title">${j.jar.emoji || '🏦'} ${esc(j.jar.name)}</span>
+          <span class="liquid-jar-pct">${j.jar.pct}%</span>
+        </div>
+        <div class="liquid-jar-content">
+          <span class="liquid-jar-fig">${money(j.used)}</span>
+          <span class="liquid-jar-sub">${!j.budget ? 'Waiting for income' : j.left >= 0 ? 'Target reached ✓' : `${money(-j.left)} to goal`}</span>
+        </div>
       </div>`;
     }
     const over = j.used > j.budget;
     const r = j.budget ? Math.min(1, j.used / j.budget) : j.used ? 1 : 0;
-    return `<div class="jar">
-      <div class="row"><span>${dot(jarColor(j.jar))}${esc(j.jar.name)} <span class="muted">${j.jar.pct}%</span></span><span class="money">${money(j.used)} <span class="muted">/ ${money(j.budget, { compact: true })}</span></span></div>
-      <div class="bar ${over ? 'over' : 'gold'}"><i style="width:${(r * 100).toFixed(1)}%"></i></div>
-      <div class="foot ${over ? 'bad' : ''}">${over ? `Over by ${money(j.used - j.budget)}` : `${money(j.left)} left`}</div>
+    const pctVal = Math.round(r * 100);
+    const fluidColor = over ? 'crimson' : 'emerald';
+    const waveFill = over ? 'rgba(230, 75, 75, 0.75)' : 'rgba(46, 196, 120, 0.65)';
+    return `<div class="liquid-jar-card" data-go="log" data-jar="${esc(j.jar.id)}" title="${esc(j.jar.name)}">
+      <div class="liquid-jar-fluid ${fluidColor}" style="height:${Math.min(100, Math.max(12, pctVal))}%;">
+        <svg class="liquid-jar-wave" viewBox="0 0 100 20" preserveAspectRatio="none"><path d="M0 10 Q 25 18, 50 10 T 100 10 V 20 H 0 Z" fill="${waveFill}"/></svg>
+      </div>
+      <div class="liquid-jar-header">
+        <span class="liquid-jar-title">${j.jar.emoji || '🫙'} ${esc(j.jar.name)}</span>
+        <span class="liquid-jar-pct">${j.jar.pct}%</span>
+      </div>
+      <div class="liquid-jar-content">
+        <span class="liquid-jar-fig">${over ? money(j.used - j.budget) : money(j.left)}</span>
+        <span class="liquid-jar-sub ${over ? 'bad' : ''}">${over ? 'Over budget leak' : `${money(j.budget, { compact: true })} plan`}</span>
+      </div>
     </div>`;
   }).join('');
-  return `<section class="card"><h2>Smart split</h2>
-    ${income ? '' : '<p class="muted small" style="margin-top:0">Log your income this month and each jar gets its share.</p>'}
-    ${body}</section>`;
+  return `<section class="card">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <h2 style="margin:0;">Smart split jars</h2>
+      <button class="card-link" data-go="settings" data-sub="categories">Rules</button>
+    </div>
+    ${income ? '' : '<p class="muted small" style="margin-top:6px; margin-bottom:0;">Log your income this month and each jar gets its share.</p>'}
+    <div class="liquid-jars-grid">${body}</div>
+  </section>`;
 }
 
 
@@ -902,6 +929,7 @@ function viewSettings() {
     look: `<section class="card look-card"><h2>Look</h2>
     ${themePicker(st)}
     <label class="motion-setting"><span><b>Living atmosphere</b><small>Leaves, bubbles and starlight. Follows your device’s reduced-motion preference.</small></span><input type="checkbox" data-set="themeMotion" ${st.themeMotion !== false ? 'checked' : ''} aria-label="Living atmosphere"></label>
+    <label class="motion-setting"><span><b>Tactile sounds</b><small>Subtle coin clink and click feedback on logging.</small></span><input type="checkbox" data-set="sound" ${st.sound !== false ? 'checked' : ''} aria-label="Tactile sounds"></label>
     <label class="field"><span>Currency</span><input type="text" data-set="currency" value="${esc(st.currency)}" maxlength="5"></label>
   </section>`,
     danger: `<section class="card"><h2>Danger zone</h2>
@@ -1314,6 +1342,8 @@ function openTxSheet(existing = null, preset = {}) {
     if (existing) state.tx = state.tx.map((t) => (t.id === existing.id ? tx : t));
     else state.tx.push(tx);
     ui.flashId = tx.id;
+    if (tx.type === 'income' || (tx.type === 'transfer' && tx.to === state.settings.savingsAccount)) sound.income(state);
+    else if (tx.type === 'expense') sound.expense(state);
     commit();
     closeSheet();
     // Changed the category: offer to always file records like this there.
@@ -2049,6 +2079,21 @@ document.addEventListener('input', (e) => {
 
 // Desktop shortcuts: N = new record, / = search, 1-9 and 0 = sections, Esc = close.
 document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && isPaletteOpen()) { e.preventDefault(); closePalette(); return; }
+  if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
+    e.preventDefault();
+    if (isPaletteOpen()) closePalette();
+    else openPalette({
+      state,
+      go: (tab) => { location.hash = `#${tab}`; },
+      openNew: (draft = {}) => openTxSheet(draft),
+      openCalc: () => Calc.toggle(),
+      lock: () => { if (Security.hasLock()) Security.lock(); },
+      exportExcel: () => exportExcel(),
+      backupJSON: () => exportJSON(),
+    });
+    return;
+  }
   if (e.key === 'Escape' && sheetRoot.firstChild) { closeSheet(); return; }
   if (e.key === 'Escape' && ui.selected.size && !e.target.closest('input:not(.sel), select, textarea')) { ui.selected.clear(); refreshSelection(); return; }
   if (e.key === 'Enter' && e.target.closest('#sheet-grid') && e.target.matches('input')) {
