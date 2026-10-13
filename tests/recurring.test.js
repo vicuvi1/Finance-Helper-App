@@ -81,3 +81,51 @@ test('a one-time scheduled payment happens once', () => {
   assert.equal(nextDate(once, '2026-10-20'), null);
   assert.equal(perMonth(once), 0);
 });
+
+test('getSubGroup classifies subscriptions into recognizable categories', async () => {
+  const { getSubGroup } = await import('../js/screens/plan.js');
+  assert.equal(getSubGroup({ note: 'ChatGPT Plus' }).id, 'ai');
+  assert.equal(getSubGroup({ note: 'Claude Pro' }).id, 'ai');
+  assert.equal(getSubGroup({ note: 'Cursor' }).id, 'ai');
+  assert.equal(getSubGroup({ note: 'Midjourney v6' }).id, 'ai');
+  assert.equal(getSubGroup({ note: 'Netflix Premium' }).id, 'media');
+  assert.equal(getSubGroup({ note: 'Spotify' }).id, 'media');
+  assert.equal(getSubGroup({ note: 'Moldtelecom Fiber' }).id, 'utilities');
+  assert.equal(getSubGroup({ note: 'Rent Apartment' }).id, 'living');
+  assert.equal(getSubGroup({ note: 'Gym Premier' }).id, 'health');
+});
+
+test('PRESET_SUBS contains top AI services and popular tools', async () => {
+  const { PRESET_SUBS } = await import('../js/screens/plan.js');
+  const names = PRESET_SUBS.map((p) => p.name);
+  assert.ok(names.includes('ChatGPT Plus'));
+  assert.ok(names.includes('Claude Pro'));
+  assert.ok(names.includes('Cursor Pro'));
+  assert.ok(names.includes('GitHub Copilot'));
+  assert.ok(names.includes('Midjourney'));
+  assert.ok(names.includes('Netflix'));
+});
+
+test('Plan screen renders Subscriptions Hub, What-If simulator, and tabs', async () => {
+  const { ctx } = await import('../js/ctx.js');
+  const PlanScreen = await import('../js/screens/plan.js');
+  const s = defaultState();
+  s.recurring = [
+    { id: 'sub-gpt', type: 'expense', amount: 2000, currency: 'USD', note: 'ChatGPT Plus', every: 'month', start: '2026-10-01', category: 'work', account: 'card', auto: true, paused: false },
+    { id: 'sub-net', type: 'expense', amount: 1199, currency: 'EUR', note: 'Netflix', every: 'month', start: '2026-10-05', category: 'fun', account: 'card', auto: true, paused: false },
+  ];
+  ctx.state = s;
+  ctx.money = (v) => `${v} MDL`;
+  ctx.countUp = (v) => `${v}`;
+  ctx.catColor = () => 'var(--c1)';
+  ctx.ui = { planTab: 'subs' };
+
+  const html = PlanScreen.view();
+  assert.match(html, /Plan &amp; Subscriptions/);
+  assert.match(html, /ChatGPT Plus/);
+  assert.match(html, /Netflix/);
+  assert.match(html, /sub-kpi-grid/);
+  assert.match(html, /sub-dist-bar/);
+  assert.match(html, /plan-tabs/);
+});
+

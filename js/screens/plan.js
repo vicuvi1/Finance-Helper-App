@@ -1,6 +1,5 @@
-// Plan: recurring payments and income (rent, subscriptions, salary, client
-// retainers). Shows what is due now, what is coming in the next 30 days and
-// what your regular costs add up to; logs them with one tap or by itself.
+// Plan & Subscriptions: Manage recurring subscriptions, AI tools, scheduled bills,
+// and cash flow. Includes interactive What-If simulator, category breakdowns, and quick presets.
 
 import { ctx, esc } from '../ctx.js';
 import * as M from '../model.js';
@@ -16,7 +15,7 @@ const catOf = (id) => M.category(ctx.state, id) || { name: 'Other', emoji: '•'
 const titleOf = (r) => r.note || catOf(r.category).name;
 const freq = (r) => R.FREQS.find((f) => f.id === r.every) || R.FREQS[2];
 const base = () => ctx.state.settings.currency;
-const inBase = (r, cents = r.amount) => (r.currency === base() ? cents : convert(cents, r.currency, base(), ctx.state.rates));
+const inBase = (r, cents = r.amount) => (r.currency === base() ? cents : (convert(cents, r.currency, base(), ctx.state.rates) ?? cents));
 const sum = (items) => items.reduce((a, x) => a + (inBase(x.rule) || 0), 0);
 const when = (date, today) => {
   const d = daysBetween(today, date);
@@ -24,6 +23,44 @@ const when = (date, today) => {
 };
 const ruleMoney = (r) => (r.type === 'income' ? formatMoney(r.amount, r.currency, { sign: true }) : formatMoney(-r.amount, r.currency));
 const txId = (rule, date) => `rec-${rule.id}-${date}`;
+const shortDay = (iso) => dayLabel(iso).replace(/^\w+, /, '');
+
+export const PRESET_SUBS = [
+  { name: 'ChatGPT Plus', amount: 2000, currency: 'USD', every: 'month', emoji: '🤖', group: 'ai', cat: 'work' },
+  { name: 'Claude Pro', amount: 2000, currency: 'USD', every: 'month', emoji: '🧠', group: 'ai', cat: 'work' },
+  { name: 'Cursor Pro', amount: 2000, currency: 'USD', every: 'month', emoji: '💻', group: 'ai', cat: 'work' },
+  { name: 'GitHub Copilot', amount: 1000, currency: 'USD', every: 'month', emoji: '🐙', group: 'ai', cat: 'work' },
+  { name: 'Midjourney', amount: 1000, currency: 'USD', every: 'month', emoji: '🎨', group: 'ai', cat: 'work' },
+  { name: 'Perplexity Pro', amount: 2000, currency: 'USD', every: 'month', emoji: '🔍', group: 'ai', cat: 'work' },
+  { name: 'Netflix', amount: 1199, currency: 'EUR', every: 'month', emoji: '🎬', group: 'media', cat: 'fun' },
+  { name: 'Spotify Premium', amount: 999, currency: 'EUR', every: 'month', emoji: '🎵', group: 'media', cat: 'fun' },
+  { name: 'YouTube Premium', amount: 1399, currency: 'USD', every: 'month', emoji: '▶️', group: 'media', cat: 'fun' },
+  { name: 'Home Fiber Internet', amount: 20000, currency: 'MDL', every: 'month', emoji: '🌐', group: 'utilities', cat: 'home' },
+  { name: 'Mobile Carrier', amount: 15000, currency: 'MDL', every: 'month', emoji: '📱', group: 'utilities', cat: 'home' },
+  { name: 'Gym Membership', amount: 65000, currency: 'MDL', every: 'month', emoji: '🏋️', group: 'health', cat: 'care' },
+  { name: 'iCloud+ Storage', amount: 299, currency: 'USD', every: 'month', emoji: '☁️', group: 'utilities', cat: 'home' },
+];
+
+export function getSubGroup(rule, categoryName = '') {
+  const note = String(rule.note || '').toLowerCase();
+  const cat = String(categoryName || '').toLowerCase();
+  if (/chatgpt|claude|openai|cursor|copilot|midjourney|perplexity|anthropic|runway|elevenlabs|deepseek|hugging|mistral|suno|kling|ideogram|\bai\b|llm|gpt/i.test(note)) {
+    return { id: 'ai', label: 'AI & Tools', emoji: '🤖', color: 'var(--c7)' };
+  }
+  if (/netflix|spotify|youtube|disney|apple tv|hbo|prime|music|steam|playstation|game|sub|tv|cinema/i.test(note) || /entertain|media|film|movie|distract|fun/i.test(cat)) {
+    return { id: 'media', label: 'Media & Streaming', emoji: '🎬', color: 'var(--c5)' };
+  }
+  if (/internet|phone|fiber|orange|moldtelecom|moldcell|vodafone|wifi|t-mobile|mobile|telecom|server|domain|hosting|cloud|icloud|google one|aws|vps|digitalocean/i.test(note) || /utilit|bill|net|tel/i.test(cat)) {
+    return { id: 'utilities', label: 'Utilities & Cloud', emoji: '⚡', color: 'var(--c1)' };
+  }
+  if (/rent|mortgage|apartment|house|parking|cleaning|maintenance|chirie|gaz|electric|caldura|ap[aă]|intretinere/i.test(note) || /home|house|living|locuint/i.test(cat)) {
+    return { id: 'living', label: 'Housing & Living', emoji: '🏠', color: 'var(--c2)' };
+  }
+  if (/gym|fitness|sport|medical|doctor|supplement|spa|pool|antren|sanatate/i.test(note) || /health|care|sport/i.test(cat)) {
+    return { id: 'health', label: 'Health & Fitness', emoji: '🏋️', color: 'var(--c3)' };
+  }
+  return { id: 'other', label: 'Other Recurring', emoji: '🔁', color: 'var(--c4)' };
+}
 
 function itemRow(it, today, { due = false } = {}) {
   const r = it.rule;
@@ -46,64 +83,243 @@ function ruleRow(r, today) {
   </button>`;
 }
 
-export function view() {
-  const { state } = ctx;
-  const today = todayISO();
-  const due = R.dueItems(state, today);
-  const up = R.upcomingItems(state, today, 30);
-  const all = [...(state.recurring || [])];
-  // One-time scheduled payments get their own list; done ones disappear.
-  const scheduled = all.filter((r) => r.every === 'once' && !r.lastDone).sort((a, b) => a.start.localeCompare(b.start));
-  const rules = all.filter((r) => r.every !== 'once').sort((a, b) => Number(a.paused) - Number(b.paused) || a.type.localeCompare(b.type) || b.amount - a.amount);
-  const act = rules.filter((r) => !r.paused);
-  const monthlyOut = act.filter((r) => r.type === 'expense').reduce((a, r) => a + (inBase(r, R.perMonth(r)) || 0), 0);
-  const monthlyIn = act.filter((r) => r.type === 'income').reduce((a, r) => a + (inBase(r, R.perMonth(r)) || 0), 0);
-  const outSoon = sum([...due, ...up].filter((x) => x.rule.type === 'expense'));
-  const inSoon = sum([...due, ...up].filter((x) => x.rule.type === 'income'));
-  const sugg = R.suggestions(state, today).slice(0, 5);
+// Subscriptions & Bills Tab: Interactive selection, What-If simulator, and categorization
+function subscriptionsTab(state, today, rules, scheduled) {
+  const expenseRules = rules.filter((r) => r.type === 'expense');
+  
+  if (!ctx.ui.planSelection) {
+    ctx.ui.planSelection = new Set();
+    for (const r of expenseRules) {
+      if (!r.paused) ctx.ui.planSelection.add(r.id);
+    }
+  }
 
-  return `<header class="top"><div><h1>Plan</h1><div class="sub">Budgets, bills, subscriptions and regular income</div></div>
-    <div class="top-actions"><button class="btn" data-act="rec-once">+ Schedule payment</button><button class="btn primary" data-act="rec-new">+ Add recurring</button></div></header>
-  <section class="hero">
-    <div class="hero-main">
-      <div class="label">To pay in the next 30 days</div>
-      <div class="big">${ctx.bigMoney(outSoon)}</div>
-      <p class="muted" style="margin:0">${inSoon ? `${ctx.money(inSoon)} expected to come in.` : 'No regular income planned yet.'}${due.length ? ` <b class="expense">${due.length} due now.</b>` : ''}</p>
-    </div>
-    <div class="hero-month">
-      <div class="label">Every month, on average</div>
-      <div class="stats" style="grid-template-columns:repeat(2,minmax(0,1fr))">
-        <div class="stat"><span class="k">Regular costs</span><b class="expense">${ctx.countUp(monthlyOut, 'rec-out')}</b></div>
-        <div class="stat"><span class="k">Regular income</span><b class="income">${ctx.countUp(monthlyIn, 'rec-in')}</b></div>
+  const activeRules = expenseRules.filter((r) => !r.paused);
+  const pausedRules = expenseRules.filter((r) => r.paused);
+  const selectedRules = expenseRules.filter((r) => ctx.ui.planSelection.has(r.id) && !r.paused);
+  const unselectedRules = activeRules.filter((r) => !ctx.ui.planSelection.has(r.id));
+
+  const monthlySelected = selectedRules.reduce((sum, r) => sum + (inBase(r, R.perMonth(r)) || 0), 0);
+  const annualSelected = monthlySelected * 12;
+  const simSavedMonthly = unselectedRules.reduce((sum, r) => sum + (inBase(r, R.perMonth(r)) || 0), 0);
+  const simSavedAnnual = simSavedMonthly * 12;
+
+  // Next renewal
+  let nextRenewal = null;
+  for (const r of activeRules) {
+    const next = R.nextDate(r, r.lastDone && r.lastDone >= today ? r.lastDone : addDays(today, -1));
+    if (next && (!nextRenewal || next < nextRenewal.date)) {
+      nextRenewal = { rule: r, date: next };
+    }
+  }
+
+  // Category distribution among selected rules
+  const groupTotals = new Map();
+  for (const r of selectedRules) {
+    const grp = getSubGroup(r, catOf(r.category).name);
+    const m = inBase(r, R.perMonth(r)) || 0;
+    const cur = groupTotals.get(grp.id) || { grp, amount: 0 };
+    cur.amount += m;
+    groupTotals.set(grp.id, cur);
+  }
+  const groupList = [...groupTotals.values()].filter((g) => g.amount > 0).sort((a, b) => b.amount - a.amount);
+  const totalGroupAmount = groupList.reduce((sum, g) => sum + g.amount, 0) || 1;
+
+  // Group filter
+  const filter = ctx.ui.planGroupFilter || 'all';
+  let filtered = expenseRules;
+  if (filter === 'paused') {
+    filtered = pausedRules;
+  } else if (filter !== 'all') {
+    filtered = expenseRules.filter((r) => getSubGroup(r, catOf(r.category).name).id === filter);
+  }
+
+  const aiCount = expenseRules.filter((r) => getSubGroup(r, catOf(r.category).name).id === 'ai').length;
+  const mediaCount = expenseRules.filter((r) => getSubGroup(r, catOf(r.category).name).id === 'media').length;
+  const utilCount = expenseRules.filter((r) => getSubGroup(r, catOf(r.category).name).id === 'utilities').length;
+  const livingCount = expenseRules.filter((r) => getSubGroup(r, catOf(r.category).name).id === 'living').length;
+
+  return `
+    <!-- Top KPIs -->
+    <div class="sub-kpi-grid">
+      <div class="sub-kpi-card">
+        <span class="k">Selected Monthly Burn</span>
+        <b class="v">${ctx.money(monthlySelected)}</b>
+        <span class="sub-sub">${selectedRules.length} of ${activeRules.length} active items selected</span>
+      </div>
+      <div class="sub-kpi-card">
+        <span class="k">Annual Total</span>
+        <b class="v">${ctx.money(annualSelected)}</b>
+        <span class="sub-sub">${ctx.money(Math.round(annualSelected / 365))}/day average</span>
+      </div>
+      <div class="sub-kpi-card">
+        <span class="k">Active Subscriptions</span>
+        <b class="v">${activeRules.length}</b>
+        <span class="sub-sub">${pausedRules.length} currently paused</span>
+      </div>
+      <div class="sub-kpi-card">
+        <span class="k">Next Renewal</span>
+        <b class="v" style="font-size:18px">${nextRenewal ? esc(titleOf(nextRenewal.rule)) : 'None'}</b>
+        <span class="sub-sub">${nextRenewal ? `${dayLabel(nextRenewal.date)} (${when(nextRenewal.date, today)})` : 'All caught up'}</span>
       </div>
     </div>
-  </section>
-  <div class="dash">
-    <div class="dash-main">
-      ${forecastCard()}
-      ${due.length ? `<section class="card"><h2>Due now <span class="right muted">${due.length}</span></h2><div class="list">${due.map((x) => itemRow(x, today, { due: true })).join('')}</div>
-        <p class="muted small" style="margin-bottom:0">"Paid" logs the planned amount on its date. Tap the name to change the amount first.</p></section>` : ''}
-      <section class="card"><h2>Coming up · 30 days</h2>
-        ${up.length ? `<div class="list">${up.map((x) => itemRow(x, today)).join('')}</div>` : '<p class="muted" style="margin:0">Nothing planned in the next 30 days.</p>'}</section>
+
+    <!-- What-If Simulator Alert -->
+    ${unselectedRules.length ? `
+      <div class="sub-sim-banner">
+        <div class="sub-sim-info">
+          <span class="sub-sim-icon">💡</span>
+          <div>
+            <b>What-If Simulator: ${unselectedRules.length} subscription${unselectedRules.length === 1 ? '' : 's'} unselected</b>
+            <div class="sub-sim-sub">You would save <b class="income">${ctx.money(simSavedMonthly)}/mo</b> (<b class="income">${ctx.money(simSavedAnnual)}/year</b>) if you pause or cancel these.</div>
+          </div>
+        </div>
+        <div class="sub-sim-btns">
+          <button class="btn sm primary" data-act="plan-apply-pause">Apply: Pause in App</button>
+          <button class="btn sm" data-act="plan-select-all">Reset (Select all)</button>
+        </div>
+      </div>
+    ` : ''}
+
+    <!-- Category Distribution Bar -->
+    ${groupList.length ? `
+      <div class="sub-dist-card">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <h3 style="margin:0; font-size:14px; font-weight:600;">Spending by Category</h3>
+          <span class="muted small">${ctx.money(monthlySelected)} total</span>
+        </div>
+        <div class="sub-dist-bar">
+          ${groupList.map((g) => `<i style="width:${((g.amount / totalGroupAmount) * 100).toFixed(1)}%; background:${g.grp.color};" title="${esc(g.grp.label)}: ${Math.round((g.amount / totalGroupAmount) * 100)}%"></i>`).join('')}
+        </div>
+        <div class="sub-dist-legend">
+          ${groupList.map((g) => `<span><i style="width:8px;height:8px;border-radius:50%;background:${g.grp.color};display:inline-block;"></i>${g.grp.emoji} ${esc(g.grp.label)}: <b>${Math.round((g.amount / totalGroupAmount) * 100)}%</b> (${ctx.money(g.amount)}/mo)</span>`).join('')}
+        </div>
+      </div>
+    ` : ''}
+
+    <!-- Quick Presets Drawer -->
+    ${ctx.ui.showPresets || expenseRules.length === 0 ? `
+      <div class="sub-presets-card">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div>
+            <h3 style="margin:0; font-size:14px; font-weight:600;">⚡ Quick Add Subscriptions & AI Presets</h3>
+            <span class="muted small">Tap to add in one click with pre-filled price and frequency</span>
+          </div>
+          <button class="card-link" data-act="plan-toggle-presets">Hide</button>
+        </div>
+        <div class="sub-presets-grid">
+          ${PRESET_SUBS.map((p) => `<button class="sub-preset-btn" data-act="plan-use-preset" data-name="${esc(p.name)}">
+            <span>${p.emoji}</span>
+            <b>${esc(p.name)}</b>
+            <span class="badge-price">${p.currency === 'MDL' ? `${p.amount / 100} MDL` : `${p.currency === 'EUR' ? '€' : '$'}${centsToPlain(p.amount)}`}</span>
+          </button>`).join('')}
+        </div>
+      </div>
+    ` : ''}
+
+    <!-- Toolbar: Filter and Batch Actions -->
+    <div class="sub-toolbar">
+      <div class="chips" style="margin:0;">
+        <button class="chip" data-act="plan-filter-group" data-group="all" aria-pressed="${filter === 'all'}">All (${expenseRules.length})</button>
+        ${aiCount ? `<button class="chip" data-act="plan-filter-group" data-group="ai" aria-pressed="${filter === 'ai'}">🤖 AI (${aiCount})</button>` : ''}
+        ${mediaCount ? `<button class="chip" data-act="plan-filter-group" data-group="media" aria-pressed="${filter === 'media'}">🎬 Media (${mediaCount})</button>` : ''}
+        ${utilCount ? `<button class="chip" data-act="plan-filter-group" data-group="utilities" aria-pressed="${filter === 'utilities'}">⚡ Utilities (${utilCount})</button>` : ''}
+        ${livingCount ? `<button class="chip" data-act="plan-filter-group" data-group="living" aria-pressed="${filter === 'living'}">🏠 Living (${livingCount})</button>` : ''}
+        ${pausedRules.length ? `<button class="chip" data-act="plan-filter-group" data-group="paused" aria-pressed="${filter === 'paused'}">⏸️ Paused (${pausedRules.length})</button>` : ''}
+      </div>
+      <div class="sub-batch-actions">
+        <button class="card-link" data-act="plan-select-all">Select all</button>
+        <button class="card-link" data-act="plan-deselect-all">Deselect all</button>
+        ${aiCount ? `<button class="card-link" data-act="plan-select-ai">Only AI</button>` : ''}
+      </div>
     </div>
-    <div class="dash-side">
-      ${budgetCard()}
-      ${scheduled.length ? `<section class="card"><h2>Scheduled <span class="right muted">${scheduled.length}</span></h2><div class="list">${scheduled.map((r) => ruleRow(r, today)).join('')}</div></section>` : ''}
-      <section class="card"><h2>Your recurring <span class="right muted">${rules.length}</span></h2>
-        ${rules.length ? `<div class="list">${rules.map((r) => ruleRow(r, today)).join('')}</div>` : '<p class="muted" style="margin-top:0">Add rent, phone, internet, subscriptions, salary or a client who pays every month. You can also tick "Repeat" when you log a record.</p><button class="btn primary block" data-act="rec-new">Add the first one</button>'}
+
+    <!-- Subscriptions List -->
+    ${filtered.length ? `
+      <div class="sub-list">
+        ${filtered.map((r) => {
+          const isSelected = ctx.ui.planSelection.has(r.id) && !r.paused;
+          const grp = getSubGroup(r, catOf(r.category).name);
+          const nextDate = R.nextDate(r, r.lastDone && r.lastDone >= today ? r.lastDone : addDays(today, -1));
+          const dueNow = R.dueItems({ recurring: [r] }, today)[0]?.date;
+          const nextLabel = r.paused ? 'paused' : dueNow ? `due ${dayLabel(dueNow)}` : nextDate ? `next ${dayLabel(nextDate)} (${when(nextDate, today)})` : 'ended';
+          const monthlyInBase = inBase(r, R.perMonth(r));
+          return `
+            <div class="sub-item-card ${isSelected ? '' : 'unselected'} ${r.paused ? 'paused' : ''}">
+              <input type="checkbox" class="sub-checkbox" data-act="plan-toggle-select" data-id="${esc(r.id)}" ${isSelected ? 'checked' : ''} aria-label="Toggle ${esc(titleOf(r))} in simulation">
+              <div class="sub-icon" style="color:${grp.color}">${grp.emoji}</div>
+              <div class="sub-meta">
+                <div class="sub-meta-title">
+                  <span>${esc(titleOf(r))}</span>
+                  <span class="sub-tag" style="color:${grp.color}; background:color-mix(in srgb, ${grp.color} 14%, transparent)">${grp.label}</span>
+                  ${r.auto ? '<span class="pill pill-gold">auto</span>' : ''}
+                  ${r.paused ? '<span class="pill pill-out">paused</span>' : ''}
+                </div>
+                <div class="sub-meta-details">
+                  <span>${esc(freq(r).label)}</span> ·
+                  <span>${esc(nextLabel)}</span> ·
+                  <span>${esc(M.account(state, r.account)?.name || '')}</span>
+                </div>
+              </div>
+              <div class="sub-price-col">
+                <div class="sub-price-primary">${formatMoney(r.amount, r.currency)}</div>
+                ${r.currency !== base() ? `<div class="sub-price-secondary">~${ctx.money(monthlyInBase)}/mo</div>` : ''}
+              </div>
+              <div class="sub-actions-col">
+                <button class="icon-btn" data-act="plan-toggle-pause" data-id="${esc(r.id)}" title="${r.paused ? 'Resume subscription' : 'Pause subscription'}" aria-label="${r.paused ? 'Resume' : 'Pause'}">${r.paused ? '▶️' : '⏸️'}</button>
+                <button class="icon-btn" data-act="rec-edit" data-id="${esc(r.id)}" title="Edit subscription" aria-label="Edit">✏️</button>
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    ` : `
+      <section class="card empty">
+        <b>No subscriptions found</b>
+        <p class="muted">Add a recurring expense, or pick one from the quick presets above.</p>
+        <button class="btn primary" data-act="rec-new">+ Add subscription</button>
       </section>
-      ${sugg.length ? `<section class="card"><h2>Looks regular</h2><p class="muted small" style="margin-top:0">These show up every month in your log.</p>
-        <div class="list">${sugg.map((s) => `<div class="tx rec-row"><span class="av" style="--c:${ctx.catColor(s.tx.category)}" aria-hidden="true">${initial(catOf(s.tx.category).name)}</span>
-          <span class="t"><b>${esc(s.tx.note)}</b><span>${s.months} of the last 4 months · ${formatMoney(s.tx.amount, s.tx.currency || base())}</span></span>
-          <button class="btn sm" data-act="rec-from" data-id="${esc(s.tx.id)}">Make recurring</button></div>`).join('')}</div></section>` : ''}
-    </div>
-  </div>`;
+    `}
+
+    <!-- Scheduled One-Time Bills (if any) -->
+    ${scheduled.length ? `
+      <section class="card" style="margin-top:18px;">
+        <h2>Scheduled one-time payments <span class="right muted">${scheduled.length}</span></h2>
+        <div class="list">${scheduled.map((r) => ruleRow(r, today)).join('')}</div>
+      </section>
+    ` : ''}
+  `;
 }
 
-// ---------- Cash-flow forecast ----------
+// Payment Timeline Tab
+function calendarTab(state, today, due, up, sugg) {
+  return `
+    ${due.length ? `
+      <section class="card">
+        <h2>Due now <span class="right muted">${due.length}</span></h2>
+        <div class="list">${due.map((x) => itemRow(x, today, { due: true })).join('')}</div>
+        <p class="muted small" style="margin-bottom:0">"Paid" logs the planned amount on its date. Tap the name to change the amount first.</p>
+      </section>
+    ` : ''}
 
-const shortDay = (iso) => dayLabel(iso).replace(/^\w+, /, '');
+    <section class="card">
+      <h2>Coming up · 30 days</h2>
+      ${up.length ? `<div class="list">${up.map((x) => itemRow(x, today)).join('')}</div>` : '<p class="muted" style="margin:0">Nothing planned in the next 30 days.</p>'}
+    </section>
 
+    ${sugg.length ? `
+      <section class="card">
+        <h2>Looks regular</h2>
+        <p class="muted small" style="margin-top:0">These show up every month in your log.</p>
+        <div class="list">${sugg.map((s) => `<div class="tx rec-row"><span class="av" style="--c:${ctx.catColor(s.tx.category)}" aria-hidden="true">${initial(catOf(s.tx.category).name)}</span>
+          <span class="t"><b>${esc(s.tx.note)}</b><span>${s.months} of the last 4 months · ${formatMoney(s.tx.amount, s.tx.currency || base())}</span></span>
+          <button class="btn sm" data-act="rec-from" data-id="${esc(s.tx.id)}">Make recurring</button></div>`).join('')}</div>
+      </section>
+    ` : ''}
+  `;
+}
+
+// Cash-Flow Forecast Tab
 function forecastCard() {
   const days = ctx.ui.fcDays || 60;
   const f = forecast(ctx.state, todayISO(), { days });
@@ -124,8 +340,7 @@ function forecastCard() {
   </section>`;
 }
 
-// ---------- Budgets ----------
-
+// Budgets Tab
 function budgetCard() {
   const today = todayISO();
   const key = monthKey(today);
@@ -206,6 +421,63 @@ export function homeCard() {
     ${due.length > 4 ? `<p class="muted small" style="margin-bottom:0">${due.length - 4} more due on the Plan screen.</p>` : ''}</section>`;
 }
 
+// ---------- Main View ----------
+
+export function view() {
+  const { state } = ctx;
+  const today = todayISO();
+  const due = R.dueItems(state, today);
+  const up = R.upcomingItems(state, today, 30);
+  const all = [...(state.recurring || [])];
+  const scheduled = all.filter((r) => r.every === 'once' && !r.lastDone).sort((a, b) => a.start.localeCompare(b.start));
+  const rules = all.filter((r) => r.every !== 'once').sort((a, b) => Number(a.paused) - Number(b.paused) || a.type.localeCompare(b.type) || b.amount - a.amount);
+  const sugg = R.suggestions(state, today).slice(0, 5);
+
+  const tab = ctx.ui.planTab || 'subs';
+  const expenseRules = rules.filter((r) => r.type === 'expense');
+
+  let tabContent = '';
+  switch (tab) {
+    case 'calendar':
+      tabContent = calendarTab(state, today, due, up, sugg);
+      break;
+    case 'forecast':
+      tabContent = forecastCard();
+      break;
+    case 'budgets':
+      tabContent = budgetCard();
+      break;
+    default:
+      tabContent = subscriptionsTab(state, today, rules, scheduled);
+      break;
+  }
+
+  return `
+    <header class="top">
+      <div>
+        <h1>Plan &amp; Subscriptions</h1>
+        <div class="sub">Recurring subscriptions, AI tools, scheduled bills, and cash flow</div>
+      </div>
+      <div class="top-actions">
+        <button class="btn" data-act="plan-toggle-presets">⚡ AI &amp; Popular Subs</button>
+        <button class="btn" data-act="rec-once">+ Schedule payment</button>
+        <button class="btn primary" data-act="rec-new">+ Add recurring</button>
+      </div>
+    </header>
+
+    <div class="chips plan-tabs">
+      <button class="chip" data-act="plan-tab" data-tab="subs" aria-pressed="${tab === 'subs'}">✨ Subscriptions &amp; Bills <span class="tab-badge">${expenseRules.length}</span></button>
+      <button class="chip" data-act="plan-tab" data-tab="calendar" aria-pressed="${tab === 'calendar'}">📅 Payment Timeline ${due.length ? `<span class="tab-badge bad">${due.length} due</span>` : ''}</button>
+      <button class="chip" data-act="plan-tab" data-tab="forecast" aria-pressed="${tab === 'forecast'}">📈 Cash-Flow Forecast</button>
+      <button class="chip" data-act="plan-tab" data-tab="budgets" aria-pressed="${tab === 'budgets'}">🎯 Monthly Budgets</button>
+    </div>
+
+    <div class="plan-tab-body">
+      ${tabContent}
+    </div>
+  `;
+}
+
 // ---------- Logging ----------
 
 function logNow(rule, date) {
@@ -242,8 +514,7 @@ function skip(rule, date) {
   ctx.toast(`Skipped ${titleOf(rule)} on ${dayLabel(date)}`);
 }
 
-// Rules set to "log by itself": add every due date (same record id on every
-// device, so syncing two devices never doubles it).
+// Rules set to "log by itself": add every due date
 export function runAuto() {
   const { state } = ctx;
   if (ctx.DEMO || state._sealed) return 0;
@@ -273,18 +544,31 @@ export function initPlan() {
 export function editRule(existing = null, preset = {}) {
   const { state } = ctx;
   const accounts = M.activeAccounts(state);
-  const r = existing ? { ...existing } : { type: 'expense', every: 'month', start: todayISO(), account: accounts[0]?.id, category: null, note: '', auto: false, amount: 0, ...preset };
+  const matchingAccount = preset.currency ? accounts.find((a) => a.currency === preset.currency) : null;
+  const defaultAccount = matchingAccount?.id || accounts[0]?.id;
+
+  const r = existing ? { ...existing } : {
+    type: 'expense',
+    every: 'month',
+    start: todayISO(),
+    account: defaultAccount,
+    category: null,
+    note: '',
+    auto: false,
+    amount: 0,
+    ...preset,
+  };
   let amountText = r.amount ? centsToPlain(r.amount) : '';
 
   const html = () => {
     const cats = state.settings.categories.filter((c) => c.type === r.type);
     if (!cats.some((c) => c.id === r.category)) r.category = cats.find((c) => c.id === (r.type === 'income' ? 'work' : 'home'))?.id || cats[0]?.id;
-    const cur = M.account(state, r.account)?.currency || base();
+    const cur = r.currency || M.account(state, r.account)?.currency || base();
     return `<div class="grab"></div><form id="rec-form" novalidate>
-      <h3>${r.every === 'once' ? (existing ? 'Edit scheduled payment' : 'Schedule a payment') : existing ? 'Edit recurring' : 'New recurring'} <button type="button" class="icon-btn" data-close aria-label="Close">✕</button></h3>
-      <div class="seg two" role="group" aria-label="Type"><button type="button" data-type="expense" aria-pressed="${r.type === 'expense'}">I pay</button><button type="button" data-type="income" aria-pressed="${r.type === 'income'}">I get paid</button></div>
+      <h3>${r.every === 'once' ? (existing ? 'Edit scheduled payment' : 'Schedule a payment') : existing ? 'Edit subscription / recurring' : 'New subscription / recurring'} <button type="button" class="icon-btn" data-close aria-label="Close">✕</button></h3>
+      <div class="seg two" role="group" aria-label="Type"><button type="button" data-type="expense" aria-pressed="${r.type === 'expense'}">I pay (Subscription / Bill)</button><button type="button" data-type="income" aria-pressed="${r.type === 'income'}">I get paid (Income / Retainer)</button></div>
       <div class="amount-input"><input id="rec-amount" type="text" inputmode="decimal" autocomplete="off" placeholder="0" value="${esc(amountText)}" aria-label="Amount"><span class="cur">${esc(cur)}</span></div>
-      <label class="field"><span>Name</span><input id="rec-note" type="text" value="${esc(r.note)}" placeholder="${r.type === 'income' ? 'e.g. salary, US client retainer' : 'e.g. rent, internet, Netflix'}"></label>
+      <label class="field"><span>Name</span><input id="rec-note" type="text" value="${esc(r.note)}" placeholder="${r.type === 'income' ? 'e.g. salary, US client retainer' : 'e.g. ChatGPT Plus, Claude, Netflix, Rent'}"></label>
       <div class="row2">
         <label class="field"><span>Category</span><select id="rec-cat">${cats.map((c) => `<option value="${esc(c.id)}" ${c.id === r.category ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></label>
         <label class="field"><span>${r.type === 'income' ? 'Into' : 'Paid from'}</span><select id="rec-acc">${accounts.map((a) => `<option value="${esc(a.id)}" ${a.id === r.account ? 'selected' : ''}>${esc(a.name)} · ${esc(a.currency)}</option>`).join('')}</select></label>
@@ -338,9 +622,9 @@ export function editRule(existing = null, preset = {}) {
       if (!amount || amount <= 0) { msg.textContent = 'Enter an amount bigger than 0.'; return; }
       if (r.end && r.end < r.start) { msg.textContent = 'The end date is before the first date.'; return; }
       const now = Date.now();
-      const rule = { ...r, amount, note: r.note.trim(), currency: M.account(state, r.account)?.currency || base(), updatedAt: now };
+      const chosenCur = M.account(state, r.account)?.currency || r.currency || base();
+      const rule = { ...r, amount, note: r.note.trim(), currency: chosenCur, updatedAt: now };
       if (existing) {
-        // A new start date restarts the count from there.
         if (rule.start !== existing.start || rule.every !== existing.every) rule.lastDone = null;
         state.recurring = state.recurring.map((x) => (x.id === existing.id ? rule : x));
       } else {
@@ -360,6 +644,94 @@ export function editRule(existing = null, preset = {}) {
 const findRule = (id) => (ctx.state.recurring || []).find((r) => r.id === id);
 
 export function onClick(act, el) {
+  if (act === 'plan-tab') {
+    ctx.ui.planTab = el.dataset.tab;
+    ctx.render();
+    return true;
+  }
+  if (act === 'plan-toggle-presets') {
+    ctx.ui.showPresets = !ctx.ui.showPresets;
+    ctx.render();
+    return true;
+  }
+  if (act === 'plan-use-preset') {
+    const p = PRESET_SUBS.find((x) => x.name === el.dataset.name);
+    if (p) {
+      const cats = ctx.state.settings.categories.filter((c) => c.type === 'expense');
+      const matchedCat = cats.find((c) => c.id === p.cat) || cats[0];
+      editRule(null, {
+        note: p.name,
+        amount: p.amount,
+        currency: p.currency,
+        every: p.every,
+        category: matchedCat?.id,
+        auto: true,
+        start: todayISO(),
+      });
+    }
+    return true;
+  }
+  if (act === 'plan-toggle-select') {
+    const id = el.dataset.id;
+    if (!ctx.ui.planSelection) ctx.ui.planSelection = new Set();
+    if (ctx.ui.planSelection.has(id)) {
+      ctx.ui.planSelection.delete(id);
+    } else {
+      ctx.ui.planSelection.add(id);
+    }
+    ctx.render();
+    return true;
+  }
+  if (act === 'plan-select-all') {
+    const expRules = (ctx.state.recurring || []).filter((r) => r.type === 'expense' && r.every !== 'once');
+    ctx.ui.planSelection = new Set(expRules.map((r) => r.id));
+    ctx.render();
+    return true;
+  }
+  if (act === 'plan-deselect-all') {
+    ctx.ui.planSelection = new Set();
+    ctx.render();
+    return true;
+  }
+  if (act === 'plan-select-ai') {
+    const aiRules = (ctx.state.recurring || []).filter((r) => r.type === 'expense' && r.every !== 'once' && getSubGroup(r, catOf(r.category).name).id === 'ai');
+    ctx.ui.planSelection = new Set(aiRules.map((r) => r.id));
+    ctx.render();
+    return true;
+  }
+  if (act === 'plan-filter-group') {
+    ctx.ui.planGroupFilter = el.dataset.group;
+    ctx.render();
+    return true;
+  }
+  if (act === 'plan-toggle-pause') {
+    const r = findRule(el.dataset.id);
+    if (r) {
+      r.paused = !r.paused;
+      r.updatedAt = Date.now();
+      ctx.commit();
+      ctx.toast(r.paused ? `Paused ${titleOf(r)}` : `Resumed ${titleOf(r)}`);
+      ctx.render();
+    }
+    return true;
+  }
+  if (act === 'plan-apply-pause') {
+    const expRules = (ctx.state.recurring || []).filter((r) => r.type === 'expense' && r.every !== 'once');
+    let count = 0;
+    for (const r of expRules) {
+      if (!ctx.ui.planSelection.has(r.id) && !r.paused) {
+        r.paused = true;
+        r.updatedAt = Date.now();
+        count++;
+      }
+    }
+    if (count > 0) {
+      ctx.commit();
+      ctx.toast(`Paused ${count} unselected subscription${count === 1 ? '' : 's'}`);
+      ctx.render();
+    }
+    return true;
+  }
   if (act === 'budget-set') { budgetSheet(); return true; }
   if (act === 'fc-days') { ctx.ui.fcDays = Number(el.dataset.n); ctx.render(); return true; }
   if (act === 'rec-new') { editRule(); return true; }

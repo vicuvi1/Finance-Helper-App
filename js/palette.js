@@ -43,7 +43,7 @@ function getCommands(ctx) {
     { id: 'accounts', icon: '💳', title: 'Accounts & Net Worth', shortcut: '2', desc: 'Cards, cash, balances and crypto', run: () => ctx.go('accounts') },
     { id: 'goals', icon: '🎯', title: 'Goals', shortcut: '3', desc: 'Savings targets and progress', run: () => ctx.go('goals') },
     { id: 'log', icon: '📋', title: 'Log', shortcut: '4', desc: 'All transactions, spreadsheet & table', run: () => ctx.go('log') },
-    { id: 'plan', icon: '🔁', title: 'Plan & Recurring', shortcut: '5', desc: 'Bills due and cash-flow forecast', run: () => ctx.go('plan') },
+    { id: 'plan', icon: '✨', title: 'Plan & Subscriptions', shortcut: '5', desc: 'Subscriptions, AI tools, What-If simulator, and bills', run: () => ctx.go('plan') },
     { id: 'clients', icon: '👥', title: 'Clients & Invoices', shortcut: '6', desc: 'Client tracking, hours, and invoicing', run: () => ctx.go('clients') },
     { id: 'reports', icon: '📊', title: 'Reports & Year in Review', shortcut: '7', desc: 'Spending breakdown and tax summary', run: () => ctx.go('reports') },
     { id: 'sankey', icon: '🌊', title: 'Cash Flow Flowchart (Sankey)', desc: 'Visual distribution of income into jars and spending', run: () => ctx.go('reports') },
