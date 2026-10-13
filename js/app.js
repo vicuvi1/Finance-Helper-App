@@ -283,7 +283,7 @@ function renderSidebar() {
   const g = M.mainGoal(state);
   const gs = M.goalStatus(state, today, g);
   badge('plan', due ? String(due) : '', 'alert');
-  badge('clients', overdue ? String(overdue) : open ? String(open) : '', overdue ? 'alert' : '');
+  badge('people', overdue ? String(overdue) : open ? String(open) : '', overdue ? 'alert' : '');
   badge('log', todayCount ? `${todayCount} today` : '', 'soft');
   badge('goals', gs.target && gs.ratio > 0 ? `${Math.round(gs.ratio * 100)}%` : '', 'gold');
   const r = 15;
@@ -2124,7 +2124,7 @@ document.addEventListener('keydown', (e) => {
   if (e.target.closest('input, select, textarea')) return;
   if ((e.key === 'l' || e.key === 'L') && Security.hasLock()) { Security.lock(); return; }
   if (ui.tab === 'log' && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) { e.preventDefault(); goToMonth(addMonths(ui.month, e.key === 'ArrowLeft' ? -1 : 1)); return; }
-  const tabs = { 1: 'home', 2: 'log', 3: 'accounts', 4: 'goals', 5: 'plan', 6: 'clients', 7: 'reports', 0: 'settings' };
+  const tabs = { 1: 'home', 2: 'log', 3: 'accounts', 4: 'goals', 5: 'plan', 6: 'people', 7: 'reports', 0: 'settings' };
   if (e.key === 'n' || e.key === 'N') { e.preventDefault(); openTxSheet(); }
   else if (e.key === '/') {
     e.preventDefault();
@@ -2135,14 +2135,14 @@ document.addEventListener('keydown', (e) => {
 
 // ---------- Screens ----------
 
-// Rates live under Accounts, People under Clients, Year in review under
+// Rates live under Accounts, Clients under People, Year in review under
 // Reports: one sidebar item each, with tabs on the screen.
 const SUB_TABS = [
   [{ tab: 'accounts', label: 'Cards & accounts' }, { tab: 'rates', label: 'Rates & converter' }],
-  [{ tab: 'clients', label: 'Clients & invoices' }, { tab: 'people', label: 'People & loans' }],
+  [{ tab: 'people', label: 'People & loans' }, { tab: 'clients', label: 'Clients & invoices' }],
   [{ tab: 'reports', label: 'Reports' }, { tab: 'review', label: 'Year in review' }],
 ];
-const NAV_PARENT = { rates: 'accounts', people: 'clients', review: 'reports' };
+const NAV_PARENT = { rates: 'accounts', clients: 'people', review: 'reports' };
 
 const SCREENS = {
   home: { view: viewHome, onClick: (a, el) => Plan.onClick(a, el) },
@@ -2164,7 +2164,7 @@ function openMoreSheet() {
     <div class="list more-list">
       ${item('goals', 'Goals', 'What you are saving for, filling up by itself')}
       ${item('plan', 'Plan', 'Budgets, bills, subscriptions, regular income')}
-      ${item('clients', 'Clients & people', 'Invoices, payments, who gave you money, loans')}
+      ${item('people', 'People & loans', 'Track who owes you, debts, IOUs & client invoices')}
       ${item('reports', 'Reports', 'Any period, year in review, income for taxes')}
       ${item('rates', 'Rates & converter', 'Exchange rates, good day to convert USD?')}
       ${item('settings', 'Settings', 'Goal, smart split, categories, backups')}

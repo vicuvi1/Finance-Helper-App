@@ -1488,25 +1488,53 @@ table.grid tr.selected td { background: var(--gold-soft); }
 .sync-adv summary { cursor: pointer; color: var(--muted); font-size: 13px; }
 .sync-adv[open] summary { margin-bottom: 8px; }
 
-/* People */
+/* People & Loans */
 .pp-sum { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-bottom: 16px; }
-.pp-tile { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; display: grid; gap: 6px; }
-.pp-tile > span { color: var(--muted); font-size: 12.5px; }
+.pp-tile { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; display: grid; gap: 6px; position: relative; }
+.pp-tile-head { display: flex; align-items: center; justify-content: space-between; font-size: 12.5px; color: var(--muted); }
+.pp-tile-icon { font-size: 16px; opacity: 0.9; }
+.pp-tile-sub { font-size: 11.5px; color: var(--muted); }
+.pp-tile.highlight-in { border-color: color-mix(in srgb, var(--income) 35%, var(--line)); }
+.pp-tile.highlight-out { border-color: color-mix(in srgb, var(--expense) 35%, var(--line)); }
 .pp-big { font-size: 22px; font-weight: 650; font-feature-settings: "tnum"; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 6px; }
 .pp-big b { font-weight: 650; }
+
+/* Active Loans & Debts Hub */
+.loans-hub { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 20px; margin-bottom: 18px; }
+.loans-hub-head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }
+.loans-hub-title { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 700; color: var(--text); }
+.loans-hub-actions { display: flex; gap: 8px; }
+.loans-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 12px; }
+.open-loan-card { background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; display: grid; gap: 10px; position: relative; transition: border-color .15s, transform .15s; }
+.open-loan-card:hover { border-color: var(--gold); transform: translateY(-1px); }
+.open-loan-card.incoming { border-left: 4px solid var(--income); }
+.open-loan-card.outgoing { border-left: 4px solid var(--expense); }
+.olc-top { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.olc-meta { display: grid; gap: 2px; flex: 1; min-width: 0; }
+.olc-name { background: none; border: none; padding: 0; font: inherit; text-align: left; cursor: pointer; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.olc-name:hover b { color: var(--gold); text-decoration: underline; }
+.olc-group { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.olc-pill { font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 99px; white-space: nowrap; }
+.olc-amount { font-size: 21px; font-weight: 750; font-feature-settings: "tnum"; letter-spacing: -0.02em; }
+.olc-actions { display: flex; gap: 8px; margin-top: 2px; }
+.open-loans-settled { display: flex; align-items: center; gap: 14px; padding: 14px 18px; border-radius: 12px; background: color-mix(in srgb, var(--gold) 6%, var(--surface-2)); border: 1px dashed color-mix(in srgb, var(--gold) 30%, var(--line)); flex-wrap: wrap; }
+.ols-icon { font-size: 24px; flex: none; }
+.open-loans-settled > div:first-of-type { display: grid; gap: 2px; flex: 1; min-width: 220px; }
+.open-loans-settled b { font-size: 14px; color: var(--text); }
+.open-loans-settled span { font-size: 12.5px; color: var(--muted); }
+
 .pp-tools { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 16px; }
 .pp-tools input[type="search"] { flex: 1 1 260px; min-width: 0; min-height: 42px; }
 .pp-tools .chips { margin: 0; }
 .pp-group { margin-bottom: 18px; }
 .pp-group > h2 { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin: 0 0 10px; }
 .pp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 12px; }
-.pp-card { display: grid; gap: 12px; align-content: start; text-align: left; padding: 16px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); color: var(--text); cursor: pointer;
-  transition: border-color 0.15s, transform 0.15s var(--ease-out), box-shadow 0.15s; position: relative; overflow: hidden; }
+.pp-card { display: grid; gap: 12px; align-content: start; text-align: left; padding: 16px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); color: var(--text); position: relative; overflow: hidden; transition: border-color 0.15s, transform 0.15s var(--ease-out), box-shadow 0.15s; }
 .pp-card::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 3px; background: var(--pc); opacity: 0.8; }
 .pp-card:hover { border-color: color-mix(in srgb, var(--pc) 45%, var(--line)); transform: translateY(-2px); box-shadow: var(--shadow-pop); }
 .pp-top { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .pp-av { width: 42px; height: 42px; border-radius: 13px; flex: none; display: grid; place-items: center; font-weight: 750; font-size: 17px; color: var(--pc); background: color-mix(in srgb, var(--pc) 16%, transparent); }
-.pp-av.sm { width: 30px; height: 30px; border-radius: 9px; font-size: 14px; display: inline-grid; vertical-align: middle; margin-right: 6px; }
+.pp-av.sm { width: 32px; height: 32px; border-radius: 10px; font-size: 14px; display: inline-grid; vertical-align: middle; margin-right: 6px; }
 .pp-name { display: grid; gap: 2px; min-width: 0; }
 .pp-name b { font-size: 15.5px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pp-name span { font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1523,7 +1551,20 @@ table.grid tr.selected td { background: var(--gold-soft); }
 .pp-bar i { display: block; height: 100%; border-radius: 99px; }
 .pp-bar i.in { background: var(--income); } .pp-bar i.out { background: var(--muted); }
 .pp-foot { font-size: 12px; color: var(--faint); }
+.pp-card-actions { display: flex; gap: 6px; padding-top: 10px; border-top: 1px solid var(--line); margin-top: 2px; }
+.pp-card-actions .btn { flex: 1; padding: 5px 8px; font-size: 12px; height: 30px; }
 .pp-sheet-stats { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--muted); margin: 4px 0 12px; }
+.pp-settle-banner { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; border-radius: 12px; background: color-mix(in srgb, var(--gold) 8%, var(--surface-2)); border: 1px solid color-mix(in srgb, var(--gold) 25%, var(--line)); margin-bottom: 14px; }
+.pp-empty-state { text-align: center; padding: 40px 20px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); display: grid; place-items: center; gap: 8px; }
+.ppe-icon { font-size: 40px; margin-bottom: 4px; }
+.pp-empty-state h3 { margin: 0; font-size: 18px; }
+.pp-empty-state p { margin: 0 0 16px; color: var(--muted); max-width: 440px; font-size: 13.5px; }
+.ppe-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; width: 100%; max-width: 680px; }
+.ppe-card { background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 14px; text-align: left; display: grid; gap: 4px; color: var(--text); cursor: pointer; transition: border-color .15s, transform .15s; }
+.ppe-card:hover { border-color: var(--gold); transform: translateY(-2px); }
+.ppe-badge { font-size: 12px; font-weight: 700; color: var(--gold); }
+.ppe-card b { font-size: 14px; }
+.ppe-card span { font-size: 12px; color: var(--muted); }
 .pp-danger { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--line); }
 .loan-kinds { grid-template-columns: repeat(4, 1fr); }
 @media (max-width: 520px) { .loan-kinds { grid-template-columns: repeat(2, 1fr); } }

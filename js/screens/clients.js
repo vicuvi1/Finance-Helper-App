@@ -43,7 +43,7 @@ export function view() {
   const perHour = hours ? Math.round(stats.reduce((a, s) => a + (s.perHour || 0) * s.hours, 0) / hours) : null;
   const shown = invs.filter((i) => I.invoiceStatus(i, today) !== 'paid').concat(invs.filter((i) => I.invoiceStatus(i, today) === 'paid').slice(0, 12));
 
-  return `<header class="top"><div><h1>Clients</h1><div class="sub">Invoices, who pays what, and what an hour earns</div></div>
+  return `<header class="top"><div><h1>Clients & invoices</h1><div class="sub">Invoices, who pays what, and what an hour earns</div></div>
     <div class="top-actions"><button class="btn" data-act="client-new">+ Client</button><button class="btn primary" data-act="inv-new">+ Invoice</button></div></header>
   <section class="hero">
     <div class="hero-main">

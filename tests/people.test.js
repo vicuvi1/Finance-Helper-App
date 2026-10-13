@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { defaultState, peopleSummary, deletePerson, loanAmount } from '../js/model.js';
 
 const tx = (id, type, amount, extra = {}) => ({ id, type, amount, currency: 'MDL', rate: 1, base: amount, date: '2026-10-01', category: 'other', account: 'wallet', note: '', person: 'p1', ...extra });
@@ -33,3 +34,28 @@ test('deleting a person keeps the records with the name on them', () => {
   assert.equal(s.tx[0].updatedAt, 99);
   assert.equal(s.deleted.p1, 99);
 });
+
+test('debts you owe: negative owes indicates you owe them', () => {
+  const s = defaultState();
+  s.people = [{ id: 'p1', name: 'Bob' }];
+  // I borrowed 200 MDL from Bob (income for me)
+  s.tx.push(tx('b1', 'income', 20000, { loan: true, note: 'borrowed' }));
+  const [r] = peopleSummary(s);
+  assert.deepEqual(r.owes, { MDL: -20000 });
+  // I paid back 200 MDL (expense for me)
+  s.tx.push(tx('b2', 'expense', 20000, { loan: true, note: 'paid back' }));
+  const [r2] = peopleSummary(s);
+  assert.deepEqual(r2.owes, {});
+});
+
+test('navigation: people is primary tab over clients', () => {
+  const indexHtml = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  assert.match(indexHtml, /href="#people"[^>]*data-tab="people"[^>]*data-key="6"/);
+  assert.match(indexHtml, /<span class="nl">People<\/span>/);
+
+  const appJs = readFileSync(new URL('../js/app.js', import.meta.url), 'utf8');
+  assert.match(appJs, /6:\s*'people'/);
+  assert.match(appJs, /SUB_TABS\s*=\s*\[[\s\S]*?tab:\s*'people'[\s\S]*?tab:\s*'clients'/);
+  assert.match(appJs, /NAV_PARENT\s*=\s*\{[^}]*clients:\s*'people'/);
+});
+
