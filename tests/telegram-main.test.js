@@ -188,3 +188,26 @@ test('always on: the Google script keeps messages while the app is closed; the a
   assert.equal(relay.triggers.length, 0);
   await bot.disconnect();
 });
+
+test('auto-connects immediately from existing storage on status() or start()', async () => {
+  const tg = fakeTelegram();
+  const storage = memory();
+  storage.write({ token: TOKEN, botName: 'my_money_bot', chatId: 777, userName: 'Owner' });
+  const got = [];
+  const bot = createTelegram({ app: {}, net: tg.net, storage, onUpdates: (u) => got.push(...u) });
+
+  // Status call automatically reads config and starts the bot
+  const st = bot.status();
+  assert.equal(st.connected, true);
+  assert.equal(st.linked, true);
+  assert.equal(st.botName, 'my_money_bot');
+  assert.equal(st.userName, 'Owner');
+  assert.equal(st.running, true);
+
+  tg.queue.push(msg(10, 777, 'pizza 120'));
+  await until(() => got.length > 0);
+  assert.equal(got[0].message.text, 'pizza 120');
+  bot.ack([10]);
+  await bot.disconnect();
+});
+

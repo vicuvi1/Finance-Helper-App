@@ -2,7 +2,7 @@
 // private app:// origin so ES modules and saved data work like on the web,
 // and nothing is loaded from the internet.
 
-const { app, BrowserWindow, protocol, net, shell, Menu, ipcMain, safeStorage, globalShortcut, Tray, nativeImage, dialog } = require('electron');
+const { app, BrowserWindow, protocol, net, shell, Menu, ipcMain, safeStorage, globalShortcut, Tray, nativeImage, dialog, powerMonitor } = require('electron');
 const { createTelegram } = require('./telegram.cjs');
 const { createBinance } = require('./binance.cjs');
 const { createDrive } = require('./gdrive.cjs');
@@ -328,9 +328,19 @@ const telegram = createTelegram({
   onEvent: (ev) => toPage('tg-event', ev),
 });
 app.whenReady().then(() => {
-  // Give the page a moment to load before messages arrive.
-  setTimeout(() => telegram.start(), 4000);
+  telegram.start();
+  setTimeout(() => telegram.start(), 2000);
 });
+if (powerMonitor) {
+  powerMonitor.on('resume', () => {
+    telegram.wake?.();
+    telegram.start();
+  });
+  powerMonitor.on('unlock-screen', () => {
+    telegram.wake?.();
+    telegram.start();
+  });
+}
 ipcMain.handle('tg-status', () => telegram.status());
 ipcMain.handle('tg-connect', async (_e, token) => telegram.connect(token));
 ipcMain.handle('tg-pair', () => telegram.pair());

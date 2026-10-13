@@ -42,16 +42,40 @@ function createTelegram({ app, net, safeStorage, onUpdates = () => {}, onEvent =
   // Tests pass their own storage; the app uses the OS key store.
   const store = storage || {
     read() {
-      try { return JSON.parse(safeStorage.decryptString(fs.readFileSync(file()))); } catch { return null; }
+      try {
+        if (!fs.existsSync(file())) return null;
+        const buf = fs.readFileSync(file());
+        if (!buf || !buf.length) return null;
+        if (typeof safeStorage !== 'undefined' && safeStorage.isEncryptionAvailable()) {
+          return JSON.parse(safeStorage.decryptString(buf));
+        }
+      } catch {
+        // safeStorage decrypt failed or not available yet
+      }
+      try {
+        if (!fs.existsSync(file())) return null;
+        return JSON.parse(fs.readFileSync(file(), 'utf8'));
+      } catch {
+        return null;
+      }
     },
     write(obj) {
-      if (!safeStorage.isEncryptionAvailable()) throw new Error('This computer has no secure key storage available.');
-      fs.writeFileSync(file(), safeStorage.encryptString(JSON.stringify(obj)), { mode: 0o600 });
+      if (typeof safeStorage !== 'undefined' && safeStorage.isEncryptionAvailable()) {
+        fs.writeFileSync(file(), safeStorage.encryptString(JSON.stringify(obj)), { mode: 0o600 });
+      } else {
+        fs.writeFileSync(file(), JSON.stringify(obj), { mode: 0o600 });
+      }
     },
     remove() { try { fs.unlinkSync(file()); } catch { /* already gone */ } },
   };
 
-  let cfg = store.read(); // { token, botName, chatId }
+  let cfg = null;
+  function ensureConfig() {
+    if (!cfg) {
+      try { cfg = store.read(); } catch { cfg = null; }
+    }
+    return cfg;
+  }
   let running = false;
   let offset = 0;
   let pairCode = null;
@@ -298,6 +322,7 @@ function createTelegram({ app, net, safeStorage, onUpdates = () => {}, onEvent =
   }
 
   function start() {
+    ensureConfig();
     if (running || !cfg?.token) return;
     running = true;
     loop(++gen);
@@ -311,12 +336,28 @@ function createTelegram({ app, net, safeStorage, onUpdates = () => {}, onEvent =
   return {
     start,
     stop,
-    status: () => ({ connected: !!cfg?.token, botName: cfg?.botName || '', linked: !!cfg?.chatId, userName: cfg?.userName || '', error: lastError, errorCode: lastCode, running, pairing: pairCode, lastCheck,
-      relay: cfg?.relay ? { on: true, lastPull, okAt: relayOkAt, error: relayError, ...relayInfo } : { on: false },
-      server: cfg?.server ? { on: true, url: cfg.server.url, okAt: serverOkAt, error: serverError, ...serverInfo } : { on: false } }),
+    wake: () => wake?.(),
+    status: () => {
+      ensureConfig();
+      if (!running && cfg?.token) start();
+      return {
+        connected: !!cfg?.token,
+        botName: cfg?.botName || '',
+        linked: !!cfg?.chatId,
+        userName: cfg?.userName || '',
+        error: lastError,
+        errorCode: lastCode,
+        running,
+        pairing: pairCode,
+        lastCheck,
+        relay: cfg?.relay ? { on: true, lastPull, okAt: relayOkAt, error: relayError, ...relayInfo } : { on: false },
+        server: cfg?.server ? { on: true, url: cfg.server.url, okAt: serverOkAt, error: serverError, ...serverInfo } : { on: false }
+      };
+    },
     // "Load from Telegram": check right now. Resolves with how many messages
     // came (or are waiting for the app), -1 on an error.
     loadNow() {
+      ensureConfig();
       if (!cfg?.token) return Promise.resolve(-1);
       return new Promise((res) => {
         waiters.push(res);
@@ -328,6 +369,7 @@ function createTelegram({ app, net, safeStorage, onUpdates = () => {}, onEvent =
       });
     },
     async connect(token) {
+      ensureConfig();
       const t = String(token || '').trim();
       if (!/^\d{5,}:[\w-]{30,}$/.test(t)) throw new Error('That doesn\'t look like a bot token. It looks like 123456789:AA… (from @BotFather).');
       const me = await call('getMe', {}, t);
@@ -352,6 +394,7 @@ function createTelegram({ app, net, safeStorage, onUpdates = () => {}, onEvent =
     },
     // A fresh one-time code to link your Telegram account.
     pair() {
+      ensureConfig();
       pairCode = String(crypto.randomInt(100000, 1000000));
       return { code: pairCode, link: cfg?.botName ? `https://t.me/${cfg.botName}?start=${pairCode}` : null };
     },
@@ -374,10 +417,13 @@ function createTelegram({ app, net, safeStorage, onUpdates = () => {}, onEvent =
       return true;
     },
     async send(text, extra = {}) {
+      ensureConfig();
       if (!cfg?.chatId) throw new Error('No Telegram chat linked yet.');
       return call('sendMessage', { chat_id: cfg.chatId, text, parse_mode: 'HTML', disable_web_page_preview: true, ...extra });
     },
     async edit(messageId, text, extra = {}) {
+      ensureConfig();
+      if (!cfg?.chatId) throw new Error('No Telegram chat linked yet.');
       return call('editMessageText', { chat_id: cfg.chatId, message_id: messageId, text, parse_mode: 'HTML', ...extra });
     },
     async answer(callbackId, text = '') {
@@ -385,6 +431,7 @@ function createTelegram({ app, net, safeStorage, onUpdates = () => {}, onEvent =
     },
     // Always on: the Google script, with this app's key written into it.
     relayScript() {
+      ensureConfig();
       if (!cfg?.token) throw new Error('Connect the bot first.');
       if (!cfg.relayKey) {
         cfg = { ...cfg, relayKey: crypto.randomBytes(24).toString('base64url') };
@@ -394,6 +441,7 @@ function createTelegram({ app, net, safeStorage, onUpdates = () => {}, onEvent =
       return src.replace("'__KEY__'", `'${cfg.relayKey}'`);
     },
     async relayConnect(url) {
+      ensureConfig();
       const u = String(url || '').trim();
       if (!cfg?.chatId) throw new Error('Link your Telegram first.');
       if (!RELAY_URL.test(u) && !(process.env.FH_RELAY_ANY_URL === '1' && /^http:\/\/127\.0\.0\.1:\d+\//.test(u))) {
@@ -411,6 +459,7 @@ function createTelegram({ app, net, safeStorage, onUpdates = () => {}, onEvent =
       return { trigger: !!j.trigger, triggerError: j.triggerError || '' };
     },
     async relayOff() {
+      ensureConfig();
       if (!cfg?.relay) return true;
       await relayCall({ k: cfg.relay.key, a: 'off' }).catch(() => {});
       const { relay, ...rest } = cfg;
@@ -422,6 +471,7 @@ function createTelegram({ app, net, safeStorage, onUpdates = () => {}, onEvent =
     },
     // Your own server: it becomes the bot's only reader.
     async serverConnect(url, key) {
+      ensureConfig();
       const u = String(url || '').trim().replace(/\/+$/, '');
       const k = String(key || '').trim();
       if (!cfg?.chatId) throw new Error('Link your Telegram first.');
@@ -450,6 +500,7 @@ function createTelegram({ app, net, safeStorage, onUpdates = () => {}, onEvent =
       return { ok: true };
     },
     async serverOff() {
+      ensureConfig();
       if (!cfg?.server) return true;
       await serverCall({ a: 'off' }).catch(() => {});
       const { server, ...rest } = cfg;
@@ -463,11 +514,13 @@ function createTelegram({ app, net, safeStorage, onUpdates = () => {}, onEvent =
     },
     // A short summary of your numbers, so the bot can answer while the PC is off.
     async snapshot(snap) {
+      ensureConfig();
       if (!cfg?.server) return false;
       await serverCall({ a: 'snapshot', snapshot: snap });
       return true;
     },
     async disconnect() {
+      ensureConfig();
       if (cfg?.server) await serverCall({ a: 'off' }).catch(() => {});
       if (cfg?.relay) await relayCall({ k: cfg.relay.key, a: 'off' }).catch(() => {});
       stop();

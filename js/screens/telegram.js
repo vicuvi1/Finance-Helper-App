@@ -337,6 +337,8 @@ export function initTelegram() {
   setInterval(() => loadStatus({ quiet: true }), 30000);
   setInterval(tick, 60000);
   setTimeout(tick, 8000);
+  window.addEventListener('online', () => { loadStatus(); bot()?.loadNow(); });
+  window.addEventListener('focus', () => loadStatus({ quiet: true }));
 }
 
 // After unlocking encrypted data: handle what waited.
