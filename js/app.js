@@ -2371,6 +2371,7 @@ document.addEventListener('click', (e) => {
   else if (act === 'redo') undoRedo(1);
   else if (act === 'row-add') addDraftRow();
   else if (act === 'day') openDaySheet(el.dataset.date);
+  else if (act === 'day-add') openTxSheet(null, { date: el.dataset.date });
   else if (act === 'copy-table') copyTable();
   else if (act === 'tg-load') Telegram.loadNow();
   else if (act === 'tg-fix') Telegram.openFix();

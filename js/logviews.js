@@ -4,7 +4,7 @@
 import { formatMoney } from './money.js';
 import { daysInMonth, weekday, todayISO, dowIndex, DOW_LONG, DOW_SHORT, MONTHS, addDays } from './dates.js';
 import { TYPE_LABEL } from './importer.js';
-import { B } from './model.js';
+import { B, category } from './model.js';
 
 export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const plain = (c) => formatMoney(c, '');
@@ -177,47 +177,174 @@ export function tableHTML(state, list, { sort, draft, fmt, selected = new Set(),
 }
 
 // Month grid, Monday first, with what came in and went out each day and a
-// weekly total. Darker days are the days you spent more.
+// Month grid, Monday first, with what came in and went out each day and a
+// weekly total. Modern financial calendar cards with emojis, week summaries, and insights.
 export function calendarHTML(state, key) {
   const days = daysInMonth(key);
   const today = todayISO();
   const per = {};
+  let totalMonthOut = 0;
+  let totalMonthIn = 0;
+  let highestSpendDay = null;
+  let highestSpendAmt = 0;
+  let activeDaysCount = 0;
+
   for (const t of state.tx) {
     if (!t.date.startsWith(key) || t.type === 'transfer') continue;
-    const d = (per[t.date] ||= { in: 0, out: 0, n: 0 });
+    const d = (per[t.date] ||= { in: 0, out: 0, n: 0, categories: [], topNote: '', maxSingleOut: 0 });
     if (t.loan) continue;
-    if (t.type === 'income') d.in += B(t); else d.out += B(t);
+    if (t.type === 'income') {
+      const bAmt = B(t);
+      d.in += bAmt;
+      totalMonthIn += bAmt;
+    } else {
+      const bAmt = B(t);
+      d.out += bAmt;
+      totalMonthOut += bAmt;
+      if (bAmt > d.maxSingleOut) {
+        d.maxSingleOut = bAmt;
+        d.topNote = t.note || '';
+      }
+    }
+    const cat = category(state, t.category);
+    if (cat?.emoji && !d.categories.includes(cat.emoji)) {
+      d.categories.push(cat.emoji);
+    }
     d.n++;
   }
+
+  for (let d = 1; d <= days; d++) {
+    const iso = `${key}-${String(d).padStart(2, '0')}`;
+    const v = per[iso];
+    if (v?.out) {
+      activeDaysCount++;
+      if (v.out > highestSpendAmt) {
+        highestSpendAmt = v.out;
+        highestSpendDay = { day: d, iso, amt: v.out, topNote: v.topNote };
+      }
+    }
+  }
+
   const maxOut = Math.max(1, ...Object.values(per).map((d) => d.out));
   const lead = (weekday(`${key}-01`) + 6) % 7;
   const cellsHtml = [];
   let weekOut = 0;
+  let weekIn = 0;
   let col = 0;
+  let weekIndex = 1;
+
   const pushWeek = () => {
-    cellsHtml.push(`<div class="cal-week" aria-label="Week spent">${weekOut ? `<span>week</span>−${compact(weekOut)}` : ''}</div>`);
+    const hasData = weekOut > 0 || weekIn > 0;
+    const net = weekIn - weekOut;
+    cellsHtml.push(`
+      <div class="cal-week-card" aria-label="Week summary">
+        <div class="cal-week-head"><span class="cal-week-badge">W${weekIndex++}</span></div>
+        ${hasData ? `
+          <div class="cal-week-stats">
+            ${weekOut ? `<span class="cw-out" title="Weekly outflow">−${compact(weekOut)}</span>` : ''}
+            ${weekIn ? `<span class="cw-in" title="Weekly inflow">+${compact(weekIn)}</span>` : ''}
+            ${weekIn && weekOut ? `<span class="cw-net ${net >= 0 ? 'pos' : 'neg'}" title="Weekly net">${net >= 0 ? '+' : '−'}${compact(Math.abs(net))}</span>` : ''}
+          </div>
+        ` : '<span class="cw-empty">·</span>'}
+      </div>
+    `);
     weekOut = 0;
+    weekIn = 0;
     col = 0;
   };
-  for (let i = 0; i < lead; i++) { cellsHtml.push('<div class="cal-blank"></div>'); col++; }
+
+  for (let i = 0; i < lead; i++) {
+    cellsHtml.push('<div class="cal-blank"></div>');
+    col++;
+  }
+
   for (let d = 1; d <= days; d++) {
     const iso = `${key}-${String(d).padStart(2, '0')}`;
     const v = per[iso];
-    weekOut += v?.out || 0;
-    const heat = v?.out ? (0.15 + 0.85 * (v.out / maxOut)).toFixed(2) : 0;
-    cellsHtml.push(`<button type="button" class="cal-day dow-${dowIndex(iso)}${iso === today ? ' today' : ''}${iso > today ? ' future' : ''}" data-act="day" data-date="${iso}" style="--heat:${heat}" aria-label="${iso}">
-      <span class="d">${d}${iso === today ? '<span class="today-dot">Today</span>' : ''}</span>
-      ${v?.in ? `<span class="in">+${compact(v.in)}</span>` : ''}
-      ${v?.out ? `<span class="out">−${compact(v.out)}</span>` : ''}
-    </button>`);
+    const dayOut = v?.out || 0;
+    const dayIn = v?.in || 0;
+    const count = v?.n || 0;
+    weekOut += dayOut;
+    weekIn += dayIn;
+
+    const heatRatio = dayOut ? dayOut / maxOut : 0;
+    const heat = dayOut ? (0.15 + 0.85 * heatRatio).toFixed(2) : 0;
+    const isToday = iso === today;
+    const isFuture = iso > today;
+    const isWeekend = dowIndex(iso) >= 5;
+    const topEmojis = (v?.categories || []).slice(0, 3).join('');
+
+    cellsHtml.push(`
+      <div class="cal-day-cell dow-${dowIndex(iso)}${isWeekend ? ' weekend' : ''}">
+        <div class="cal-day${isToday ? ' today' : ''}${isFuture ? ' future' : ''}${dayOut ? ' has-spend' : ''}${dayIn ? ' has-income' : ''}" data-act="day" data-date="${iso}" style="--heat:${heat}" role="button" tabindex="0" aria-label="${iso}">
+          <div class="cal-day-header">
+            <span class="cal-date-badge">${d}</span>
+            ${isToday ? '<span class="cal-today-pill">Today</span>' : ''}
+            ${topEmojis ? `<span class="cal-emojis" title="Categories logged">${topEmojis}</span>` : ''}
+            <button type="button" class="cal-quick-add" data-act="day-add" data-date="${iso}" title="Add record on day ${d}" aria-label="Add record on day ${d}">+</button>
+          </div>
+
+          <div class="cal-day-content">
+            ${dayIn ? `<span class="cal-pill income" title="Earned: +${plain(dayIn)}"><span class="sign">+</span>${compact(dayIn)}</span>` : ''}
+            ${dayOut ? `<span class="cal-pill expense" title="Spent: −${plain(dayOut)}"><span class="sign">−</span>${compact(dayOut)}</span>` : ''}
+            ${count > 1 ? `<span class="cal-tx-count" title="${count} records">${count} items</span>` : ''}
+          </div>
+
+          ${dayOut ? `<div class="cal-intensity-bar" style="width:${Math.max(12, Math.round(heatRatio * 100))}%" title="Daily spend intensity"></div>` : ''}
+        </div>
+      </div>
+    `);
+
     if (++col === 7) pushWeek();
   }
+
   if (col) {
-    while (col < 7) { cellsHtml.push('<div class="cal-blank"></div>'); col++; }
+    while (col < 7) {
+      cellsHtml.push('<div class="cal-blank"></div>');
+      col++;
+    }
     pushWeek();
   }
+
   const todayDow = today.startsWith(key) ? dowIndex(today) : -1;
-  const dows = DOW_SHORT.map((d, i) => `<div class="cal-dow dow-${i}${i === todayDow ? ' on' : ''}">${d}</div>`).join('');
-  return `<div class="cal">${dows}<div class="cal-dow cal-week-h">Week</div>${cellsHtml.join('')}</div>
-    <p class="muted small">Darker days are days you spent more. Click a day to see or add its records.</p>`;
+  const dows = DOW_SHORT.map((d, i) => `
+    <div class="cal-dow dow-${i}${i >= 5 ? ' weekend' : ''}${i === todayDow ? ' on' : ''}">
+      <span>${d}</span>
+    </div>
+  `).join('');
+
+  const avgDaily = activeDaysCount ? Math.round(totalMonthOut / activeDaysCount) : 0;
+  const zeroDays = days - activeDaysCount;
+
+  return `
+    <div class="cal-container">
+      <div class="cal">
+        ${dows}
+        <div class="cal-dow cal-week-h"><span>Weekly</span></div>
+        ${cellsHtml.join('')}
+      </div>
+
+      <div class="cal-insights-bar">
+        <div class="cal-insight-pill">
+          <span class="cip-icon">☕</span>
+          <span>Daily avg: <strong>${compact(avgDaily)}</strong></span>
+        </div>
+        ${highestSpendDay ? `
+          <div class="cal-insight-pill highlight">
+            <span class="cip-icon">🏆</span>
+            <span>Peak spend: <strong>Day ${highestSpendDay.day} (−${compact(highestSpendDay.amt)})</strong>${highestSpendDay.topNote ? ` <small class="muted">(${esc(highestSpendDay.topNote)})</small>` : ''}</span>
+          </div>
+        ` : ''}
+        <div class="cal-insight-pill">
+          <span class="cip-icon">🏖️</span>
+          <span>No-spend days: <strong>${zeroDays}</strong></span>
+        </div>
+        <div class="cal-legend">
+          <span class="leg-item"><span class="leg-dot income"></span> Inflow</span>
+          <span class="leg-item"><span class="leg-dot expense"></span> Outflow</span>
+          <span class="leg-item"><span class="leg-dot today"></span> Today</span>
+        </div>
+      </div>
+    </div>
+  `;
 }
