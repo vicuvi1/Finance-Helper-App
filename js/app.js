@@ -1065,13 +1065,24 @@ function viewSettings() {
       `).join('')}
     </div>
   </section>`,
-    danger: `<section class="card set-danger-card">
+    danger: `<section class="card set-danger-card" id="danger-zone-card">
       <div class="card-head-pill">
         <h2>⚠️ Danger zone</h2>
         <span class="set-badge danger">Irreversible</span>
       </div>
-      <p class="muted small" style="margin:0 0 14px">Permanently wipe all transactions, accounts, people, and preferences stored in this browser or device. Make sure to export a JSON backup first if you want to keep your data.</p>
-      <button class="btn danger block" data-act="wipe">Erase everything on this device</button>
+      <p class="muted small" style="margin:0 0 12px">Permanently wipe all transactions, accounts, people, and preferences stored in this browser or device. Make sure to export a JSON backup first if you want to keep your data.</p>
+      
+      <div class="danger-lock-wrap">
+        <label class="danger-lock-label" for="danger-unlock-cb">
+          <input type="checkbox" id="danger-unlock-cb" data-act="danger-unlock">
+          <span>I understand this will permanently delete all data on this device</span>
+        </label>
+      </div>
+
+      <div class="danger-actions-row">
+        <button type="button" class="btn" data-act="export-json">💾 Backup data first</button>
+        <button type="button" class="btn danger disabled" id="btn-danger-wipe" data-act="wipe" disabled title="Check the confirmation box above to unlock">🔒 Erase everything on this device</button>
+      </div>
     </section>`,
   };
   // One section at a time, picked on the left (like any settings screen).
@@ -2110,10 +2121,82 @@ async function onJSONFile(text) {
 }
 
 function openWipeSheet() {
-  openSheet(`<h3>Erase everything? <button type="button" class="icon-btn" data-close aria-label="Close">✕</button></h3>
-    <p style="margin-top:0">This deletes all ${state.tx.length} records and your settings from this device. It can't be undone. Make a backup first if you might need them.</p>
-    <div class="btns"><button class="btn" data-close>Keep my data</button><button class="btn danger" id="wipe-go">Erase ${state.tx.length} records</button></div>`, (sheet) => {
-    sheet.querySelector('#wipe-go').addEventListener('click', () => {
+  const txCount = state.tx.length;
+  const accCount = state.accounts.length;
+  const pplCount = (state.people || []).length;
+
+  openSheet(`
+    <div class="wipe-modal">
+      <div class="wipe-modal-header">
+        <div class="wipe-danger-badge">⚠️</div>
+        <div>
+          <h3 style="margin:0; font-size:18px; color:var(--expense, #ef4444)">Permanently erase all data?</h3>
+          <p class="muted small" style="margin:4px 0 0">This will wipe all records from this device. It cannot be undone.</p>
+        </div>
+        <button type="button" class="icon-btn" data-close aria-label="Close" style="margin-left:auto">✕</button>
+      </div>
+
+      <div class="wipe-summary-grid">
+        <div class="wipe-summary-item">
+          <span class="wipe-sum-val">${txCount}</span>
+          <span class="wipe-sum-lbl">Transactions</span>
+        </div>
+        <div class="wipe-summary-item">
+          <span class="wipe-sum-val">${accCount}</span>
+          <span class="wipe-sum-lbl">Accounts</span>
+        </div>
+        <div class="wipe-summary-item">
+          <span class="wipe-sum-val">${pplCount}</span>
+          <span class="wipe-sum-lbl">People &amp; Loans</span>
+        </div>
+        <div class="wipe-summary-item">
+          <span class="wipe-sum-val">All</span>
+          <span class="wipe-sum-lbl">Settings &amp; Jars</span>
+        </div>
+      </div>
+
+      <div class="wipe-backup-banner">
+        <span>💡 Save a backup file to keep your history safe before erasing.</span>
+        <button type="button" class="btn small" data-act="export-json">💾 Download backup</button>
+      </div>
+
+      <div class="wipe-confirm-box">
+        <label for="wipe-confirm-input" class="wipe-confirm-prompt">
+          To confirm permanent deletion, type <strong>ERASE</strong> in the box below:
+        </label>
+        <input type="text" id="wipe-confirm-input" class="input block" placeholder="Type ERASE to confirm" autocomplete="off" spellcheck="false" autofocus>
+      </div>
+
+      <div class="btns wipe-btns">
+        <button type="button" class="btn" data-close>Keep my data</button>
+        <button type="button" class="btn danger disabled" id="wipe-go" disabled title="Type ERASE above to enable">
+          ⚠️ Erase everything (${txCount} records)
+        </button>
+      </div>
+    </div>
+  `, (sheet) => {
+    const input = sheet.querySelector('#wipe-confirm-input');
+    const goBtn = sheet.querySelector('#wipe-go');
+
+    const updateState = () => {
+      const match = (input?.value || '').trim().toUpperCase() === 'ERASE';
+      if (goBtn) {
+        goBtn.disabled = !match;
+        goBtn.classList.toggle('disabled', !match);
+        goBtn.classList.toggle('ready', match);
+        goBtn.title = match ? 'Click to permanently erase all data' : 'Type ERASE above to enable';
+      }
+    };
+
+    input?.addEventListener('input', updateState);
+    input?.addEventListener('keyup', (e) => {
+      if (e.key === 'Enter' && (input?.value || '').trim().toUpperCase() === 'ERASE') {
+        goBtn?.click();
+      }
+    });
+
+    goBtn?.addEventListener('click', () => {
+      if ((input?.value || '').trim().toUpperCase() !== 'ERASE') return;
       state = M.defaultState();
       state.meta.createdAt = Date.now();
       if (DEMO) state.meta.demoSeeded = true;
@@ -2308,7 +2391,25 @@ document.addEventListener('click', (e) => {
     state.settings.categories = state.settings.categories.filter((c) => c.id !== el.dataset.id);
     state.deleted[el.dataset.id] = Date.now();
     commit();
-  } else if (act === 'wipe') openWipeSheet();
+  } else if (act === 'danger-unlock' || el.id === 'danger-unlock-cb') {
+    const cb = document.getElementById('danger-unlock-cb');
+    const btn = document.getElementById('btn-danger-wipe');
+    if (cb && btn) {
+      const unlocked = !!cb.checked;
+      btn.disabled = !unlocked;
+      btn.classList.toggle('disabled', !unlocked);
+      btn.innerHTML = unlocked ? '⚠️ Erase everything on this device' : '🔒 Erase everything on this device';
+      btn.title = unlocked ? 'Open confirmation dialog' : 'Check the confirmation box above to unlock';
+    }
+  } else if (act === 'wipe') {
+    const cb = document.getElementById('danger-unlock-cb');
+    if (cb && !cb.checked) {
+      toast('Check the confirmation box first to unlock data erase');
+      cb.focus();
+      return;
+    }
+    openWipeSheet();
+  }
 });
 
 document.addEventListener('change', (e) => {
@@ -2318,6 +2419,16 @@ document.addEventListener('change', (e) => {
   else if (e.target.dataset.sh) onSheetChange(e.target);
   else if (e.target.classList.contains('sel')) return;
   else if (e.target.closest('#tx-table')) onCellChange(e.target);
+  else if (e.target.id === 'danger-unlock-cb' || e.target.dataset.act === 'danger-unlock') {
+    const btn = document.getElementById('btn-danger-wipe');
+    if (btn) {
+      const unlocked = !!e.target.checked;
+      btn.disabled = !unlocked;
+      btn.classList.toggle('disabled', !unlocked);
+      btn.innerHTML = unlocked ? '⚠️ Erase everything on this device' : '🔒 Erase everything on this device';
+      btn.title = unlocked ? 'Open confirmation dialog' : 'Check the confirmation box above to unlock';
+    }
+  }
   else if (e.target.id === 'file-csv') {
     const file = e.target.files?.[0];
     e.target.value = '';

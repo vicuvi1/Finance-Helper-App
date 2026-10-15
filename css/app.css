@@ -1667,6 +1667,166 @@ table.grid tr.selected td { background: var(--gold-soft); }
 .set-danger-card { border-color: color-mix(in srgb, var(--expense) 40%, var(--line)); background: color-mix(in srgb, var(--expense) 4%, var(--surface)); }
 .set-danger-card h2 { color: var(--expense); }
 
+.danger-lock-wrap {
+  margin: 12px 0 14px;
+  padding: 10px 14px;
+  background: color-mix(in srgb, var(--expense) 8%, var(--surface-2));
+  border: 1px solid color-mix(in srgb, var(--expense) 25%, var(--line));
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+}
+.danger-lock-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  cursor: pointer;
+  user-select: none;
+}
+.danger-lock-label input[type="checkbox"] {
+  width: 17px;
+  height: 17px;
+  accent-color: var(--expense);
+  cursor: pointer;
+}
+.danger-actions-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.danger-actions-row .btn {
+  flex: 1;
+  min-width: 180px;
+}
+#btn-danger-wipe.disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  filter: grayscale(0.5);
+  pointer-events: none;
+}
+#btn-danger-wipe:not(.disabled) {
+  opacity: 1;
+  cursor: pointer;
+  filter: none;
+  background: color-mix(in srgb, var(--expense) 18%, var(--surface));
+  border-color: var(--expense);
+  color: var(--expense);
+}
+#btn-danger-wipe:not(.disabled):hover {
+  background: var(--expense);
+  color: #fff;
+}
+
+/* Wipe confirmation sheet */
+.wipe-modal {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.wipe-modal-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.wipe-danger-badge {
+  font-size: 24px;
+  line-height: 1;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--expense) 15%, transparent);
+  border: 1px solid color-mix(in srgb, var(--expense) 35%, transparent);
+}
+.wipe-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 8px;
+}
+.wipe-summary-item {
+  padding: 10px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+.wipe-sum-val {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+}
+.wipe-sum-lbl {
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-top: 2px;
+}
+.wipe-backup-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--income, #22c55e) 8%, var(--surface-2));
+  border: 1px solid color-mix(in srgb, var(--income, #22c55e) 25%, var(--line));
+  font-size: 13px;
+  color: var(--text);
+  flex-wrap: wrap;
+}
+.wipe-confirm-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  background: color-mix(in srgb, var(--expense) 6%, var(--surface-2));
+  border: 1px solid color-mix(in srgb, var(--expense) 25%, var(--line));
+  border-radius: var(--radius-sm);
+}
+.wipe-confirm-prompt {
+  font-size: 13px;
+  color: var(--text);
+}
+#wipe-confirm-input {
+  font-weight: 700;
+  text-align: center;
+  letter-spacing: 2px;
+  font-size: 15px;
+  border-color: color-mix(in srgb, var(--expense) 40%, var(--line));
+}
+#wipe-confirm-input:focus {
+  border-color: var(--expense);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--expense) 20%, transparent);
+}
+.wipe-btns {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  align-items: center;
+}
+#wipe-go.disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  filter: grayscale(0.6);
+  pointer-events: none;
+}
+#wipe-go.ready {
+  opacity: 1;
+  cursor: pointer;
+  filter: none;
+  background: var(--expense);
+  color: #fff;
+  border-color: var(--expense);
+  box-shadow: 0 0 16px color-mix(in srgb, var(--expense) 45%, transparent);
+}
+
+
 /* Grid: responsive multi-column layout without CSS columns splitting cards */
 .set-grid { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); align-items: start; }
 .set-grid > .card { margin: 0; display: flex; flex-direction: column; box-shadow: var(--shadow-sm); transition: border-color 0.15s; }

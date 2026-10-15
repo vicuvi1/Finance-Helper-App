@@ -37,3 +37,26 @@ test('css contains settings modernization rules and responsive grid', () => {
   assert.ok(css.includes('.set-danger-card'), 'must style danger card');
   assert.ok(!css.includes('.set-grid { display: block; columns: 2;'), 'must not use fragile CSS multi-columns in set-grid');
 });
+
+test('danger zone card and wipe modal include safety confirmation locks', () => {
+  const appJs = readFileSync(new URL('../js/app.js', import.meta.url), 'utf8');
+  const css = readFileSync(new URL('../css/app.css', import.meta.url), 'utf8');
+
+  // Danger zone card safety lock
+  assert.ok(appJs.includes('id="danger-unlock-cb"'), 'danger zone must provide safety unlock checkbox');
+  assert.ok(appJs.includes('id="btn-danger-wipe"'), 'danger zone button must have dedicated id');
+  assert.ok(appJs.includes('disabled title="Check the confirmation box above to unlock"'), 'erase button must be disabled by default');
+  assert.ok(appJs.includes('Backup data first'), 'danger zone must provide backup option');
+
+  // Wipe modal type-to-confirm safety
+  assert.ok(appJs.includes('id="wipe-confirm-input"'), 'wipe sheet must have confirmation text input');
+  assert.ok(appJs.includes('ERASE'), 'wipe sheet must require typing ERASE to confirm');
+  assert.ok(appJs.includes('wipe-summary-grid'), 'wipe sheet must summarize records to be deleted');
+
+  // CSS rules
+  assert.ok(css.includes('.danger-lock-wrap'), 'css must style danger lock box');
+  assert.ok(css.includes('.wipe-confirm-box'), 'css must style wipe confirm box');
+  assert.ok(css.includes('#btn-danger-wipe.disabled'), 'css must style disabled danger button');
+  assert.ok(css.includes('#wipe-go.disabled'), 'css must style disabled wipe confirmation button');
+});
+
