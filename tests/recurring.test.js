@@ -129,3 +129,99 @@ test('Plan screen renders Subscriptions Hub, What-If simulator, and tabs', async
   assert.match(html, /plan-tabs/);
 });
 
+test('preset price customization: getPresetSubs, setPresetPrice, resetPresetPrice, formatPresetPrice', async () => {
+  const { getPresetSubs, setPresetPrice, resetPresetPrice, formatPresetPrice } = await import('../js/screens/plan.js');
+  const s = defaultState();
+
+  // Initially all presets have isCustom: false and default prices
+  const initialPresets = getPresetSubs(s);
+  const gpt = initialPresets.find((p) => p.name === 'ChatGPT Plus');
+  assert.equal(gpt.amount, 2000);
+  assert.equal(gpt.currency, 'USD');
+  assert.equal(gpt.isCustom, false);
+  assert.equal(formatPresetPrice(gpt), '$20');
+
+  const netflix = initialPresets.find((p) => p.name === 'Netflix');
+  assert.equal(netflix.amount, 1199);
+  assert.equal(netflix.currency, 'EUR');
+  assert.equal(formatPresetPrice(netflix), '€11.99');
+
+  const gym = initialPresets.find((p) => p.name === 'Gym Membership');
+  assert.equal(gym.amount, 65000);
+  assert.equal(gym.currency, 'MDL');
+  assert.equal(formatPresetPrice(gym), '650 MDL');
+
+  // Customize ChatGPT Plus to $25 and Gym Membership to 450 MDL
+  setPresetPrice(s, 'ChatGPT Plus', 2500, 'USD');
+  setPresetPrice(s, 'Gym Membership', 45000, 'MDL');
+
+  assert.equal(s.settings.presetPrices['ChatGPT Plus'].amount, 2500);
+  assert.equal(s.settings.presetPrices['Gym Membership'].amount, 45000);
+
+  const updatedPresets = getPresetSubs(s);
+  const updatedGpt = updatedPresets.find((p) => p.name === 'ChatGPT Plus');
+  assert.equal(updatedGpt.amount, 2500);
+  assert.equal(updatedGpt.currency, 'USD');
+  assert.equal(updatedGpt.isCustom, true);
+  assert.equal(formatPresetPrice(updatedGpt), '$25');
+
+  const updatedGym = updatedPresets.find((p) => p.name === 'Gym Membership');
+  assert.equal(updatedGym.amount, 45000);
+  assert.equal(updatedGym.isCustom, true);
+  assert.equal(formatPresetPrice(updatedGym), '450 MDL');
+
+  // Reset a single preset
+  resetPresetPrice(s, 'ChatGPT Plus');
+  assert.equal(s.settings.presetPrices['ChatGPT Plus'], undefined);
+  assert.equal(getPresetSubs(s).find((p) => p.name === 'ChatGPT Plus').isCustom, false);
+  assert.equal(getPresetSubs(s).find((p) => p.name === 'Gym Membership').isCustom, true);
+
+  // Reset all
+  resetPresetPrice(s);
+  assert.deepEqual(s.settings.presetPrices, {});
+  assert.equal(getPresetSubs(s).find((p) => p.name === 'Gym Membership').isCustom, false);
+});
+
+test('preset price editor mode and custom price rendering', async () => {
+  const { ctx } = await import('../js/ctx.js');
+  const PlanScreen = await import('../js/screens/plan.js');
+  const s = defaultState();
+  s.settings.presetPrices = {
+    'Claude Pro': { amount: 2200, currency: 'USD' },
+  };
+  ctx.state = s;
+  ctx.ui = { planTab: 'subs', showPresets: true, editingPresets: false };
+
+  // View mode renders custom price badge and pill
+  let html = PlanScreen.view();
+  assert.match(html, /Custom prices active/);
+  assert.match(html, /\$22/);
+  assert.match(html, /plan-toggle-edit-presets/);
+  assert.match(html, /plan-edit-price-one/);
+
+  // In edit mode renders input fields
+  ctx.ui.editingPresets = true;
+  html = PlanScreen.view();
+  assert.match(html, /Preset Price Editor/);
+  assert.match(html, /preset-input-amt/);
+  assert.match(html, /preset-input-cur/);
+  assert.match(html, /✓ Done editing/);
+});
+
+test('plan-use-preset uses customized price when clicked', async () => {
+  const { ctx } = await import('../js/ctx.js');
+  const PlanScreen = await import('../js/screens/plan.js');
+  const s = defaultState();
+  s.settings.presetPrices = {
+    'ChatGPT Plus': { amount: 2400, currency: 'USD' },
+  };
+  ctx.state = s;
+  const presets = PlanScreen.getPresetSubs(s);
+  const customGpt = presets.find((p) => p.name === 'ChatGPT Plus');
+  assert.equal(customGpt.amount, 2400);
+  assert.equal(customGpt.currency, 'USD');
+  assert.equal(customGpt.isCustom, true);
+});
+
+
+

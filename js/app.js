@@ -404,19 +404,36 @@ function rateBar(summary) {
   if (summary.income <= 0) return '';
   const r = Math.max(0, Math.min(1, summary.savingsRate));
   const good = summary.savingsRate * 100 >= target;
-  return `<div class="rate">
+  return `<div class="rate log-rate-bar">
     <div class="row">${summary.net < 0
-    ? `<span>Spent <b class="expense">${money(-summary.net)}</b> more than you earned</span>`
-    : `<span>Kept <b class="${good ? 'income' : 'expense'}">${pct(summary.savingsRate)}</b> of income</span>`}<span class="muted">target ${target}%</span></div>
+    ? `<span>Deficit: spent <b class="expense">${money(-summary.net)}</b> more than you earned</span>`
+    : `<span>Saved <b class="${good ? 'income' : 'expense'}">${pct(summary.savingsRate)}</b> of income</span>`}<span class="muted">Safe Target: <b>${target}%</b></span></div>
     <div class="bar ${good ? '' : 'over'}"><i style="width:${(r * 100).toFixed(1)}%"></i><span class="mark" style="left:${target}%"></span></div>
   </div>`;
 }
 
 function stats(s, key = 'm') {
-  return `<div class="stats">
-    <div class="stat"><span class="k">Earned</span><b class="income">${countUp(s.income, `${key}-in`)}</b></div>
-    <div class="stat"><span class="k">Spent</span><b class="expense">${countUp(s.expense, `${key}-out`)}</b>${s.expense ? (() => { const w = workText(state, s.expense, todayISO()); return w ? `<span class="work-time" title="What it cost in your work time (Settings → Your hour)">≈ ${w} of work</span>` : ''; })() : ''}</div>
-    <div class="stat"><span class="k">Kept</span><b>${countUp(s.net, `${key}-net`)}</b></div>
+  const target = M.savingsJar(state)?.pct ?? 70;
+  const netGood = s.net >= 0;
+  const ratePct = s.income > 0 ? Math.round(s.savingsRate * 100) : 0;
+  const isTargetMet = ratePct >= target;
+  const w = s.expense ? workText(state, s.expense, todayISO()) : '';
+  return `<div class="stats log-kpi-grid">
+    <div class="stat log-kpi-card in">
+      <div class="log-kpi-top"><span class="k">Earned</span><span class="log-kpi-badge in">↗ Inflow</span></div>
+      <b class="income log-kpi-val">${countUp(s.income, `${key}-in`)}</b>
+      <span class="log-kpi-sub muted">${monthLabel(ui.month)} earnings</span>
+    </div>
+    <div class="stat log-kpi-card out">
+      <div class="log-kpi-top"><span class="k">Spent</span><span class="log-kpi-badge out">↘ Outflow</span></div>
+      <b class="expense log-kpi-val">${countUp(s.expense, `${key}-out`)}</b>
+      <span class="log-kpi-sub muted">${w ? `<span title="What it cost in your work time (Settings → Your hour)">≈ ${esc(w)} of work</span>` : 'Monthly outflow'}</span>
+    </div>
+    <div class="stat log-kpi-card net ${netGood ? 'good' : 'bad'}">
+      <div class="log-kpi-top"><span class="k">Net Cash Flow</span><span class="log-kpi-badge ${netGood ? (isTargetMet ? 'gold' : 'in') : 'bad'}">${netGood ? `${ratePct}% kept` : 'Deficit'}</span></div>
+      <b class="log-kpi-val ${netGood ? 'income' : 'expense'}">${countUp(s.net, `${key}-net`, { sign: true })}</b>
+      <span class="log-kpi-sub muted">${s.net < 0 ? `Spent <b class="expense">${money(-s.net)}</b> over income` : `Target: ${target}% safe savings`}</span>
+    </div>
   </div>`;
 }
 
@@ -909,8 +926,27 @@ function viewLog() {
       <button type="button" class="btn" data-act="export-month" title="Download this month as a file Excel opens">Export month</button>
     </div>
   </div>
-  ${view === 'calendar' || (view === 'sheet' && !q) ? '' : `<div class="chips">${chip('all', 'All')}${chip('expense', 'Spent')}${chip('income', 'Earned')}${chip('transfer', 'Moves')}${chip('loan', '⚡ Loans')}</div>`}
-  ${q && view !== 'calendar' ? searchCard(list) : view === 'calendar' ? '' : `<p class="search-hint muted small">Search all months: <span>${esc(SEARCH_HINT)}</span></p>`}
+  ${view === 'calendar' || (view === 'sheet' && !q) ? '' : `
+    <div class="log-filter-row">
+      <div class="chips" style="margin:0;">
+        ${chip('all', 'All')}
+        ${chip('expense', '🔴 Spent')}
+        ${chip('income', '🟢 Earned')}
+        ${chip('transfer', '🔄 Moves')}
+        ${chip('loan', '⚡ Loans')}
+      </div>
+      <div class="log-quick-chips">
+        <span class="muted small" style="font-size:11px;">Quick:</span>
+        <button type="button" class="lq-chip" data-act="log-quick-search" data-q="today">📅 Today</button>
+        <button type="button" class="lq-chip" data-act="log-quick-search" data-q=">1000">&gt; 1 000</button>
+        <button type="button" class="lq-chip" data-act="log-quick-search" data-q="50-200">50–200</button>
+        <button type="button" class="lq-chip" data-act="log-quick-search" data-q="coffee">☕ coffee</button>
+        ${state.people?.length ? `<button type="button" class="lq-chip" data-act="log-quick-search" data-q="${esc(state.people[0].name)}">👤 ${esc(state.people[0].name)}</button>` : ''}
+        ${q ? `<button type="button" class="lq-chip lq-clear" data-act="log-clear-search">✕ Clear search</button>` : ''}
+      </div>
+    </div>
+  `}
+  ${q && view !== 'calendar' ? searchCard(list) : ''}
   ${content}
   ${view === 'sheet' && !q ? '<p class="muted small">Type an amount and it saves. Clear it to delete. <b>+</b> at the bottom adds the next month.</p>' : ''}
   ${view === 'table' ? '<p class="muted small">Edit any cell; it saves by itself. <b>Enter</b> moves down a row. <b>←</b> / <b>→</b> switch months. Tick rows (Shift+click for a range) to change many at once. <b>Ctrl+Z</b> undoes anything. Paste rows copied from Excel or Google Sheets anywhere on this page to import them.</p>' : ''}
@@ -2217,6 +2253,8 @@ document.addEventListener('click', (e) => {
   else if (act === 'year') { ui.year += Number(el.dataset.step); render({ enter: true }); }
   else if (act === 'open-month') { ui.month = el.dataset.key; ui.search = ''; location.hash = '#log'; }
   else if (act === 'filter') { ui.filter = el.dataset.filter; render(); }
+  else if (act === 'log-quick-search') { ui.search = el.dataset.q; render(); document.getElementById('search')?.focus(); }
+  else if (act === 'log-clear-search') { ui.search = ''; render(); }
   else if (act === 'log-view') { state.settings.logView = el.dataset.view; commit(); }
   else if (act === 'sort') {
     const col = el.dataset.col;

@@ -41,6 +41,152 @@ export const PRESET_SUBS = [
   { name: 'iCloud+ Storage', amount: 299, currency: 'USD', every: 'month', emoji: '☁️', group: 'utilities', cat: 'home' },
 ];
 
+export function getPresetSubs(state) {
+  const custom = state?.settings?.presetPrices || {};
+  return PRESET_SUBS.map((p) => {
+    const c = custom[p.name];
+    if (c && (Number.isInteger(c.amount) || c.currency)) {
+      return {
+        ...p,
+        amount: Number.isInteger(c.amount) ? c.amount : p.amount,
+        currency: c.currency || p.currency,
+        isCustom: true,
+      };
+    }
+    return { ...p, isCustom: false };
+  });
+}
+
+export function formatPresetPrice(p) {
+  if (!p) return '';
+  const val = p.currency === 'MDL' ? (p.amount / 100) : centsToPlain(p.amount);
+  if (p.currency === 'MDL') return `${val} MDL`;
+  if (p.currency === 'EUR') return `€${val}`;
+  if (p.currency === 'USD') return `$${val}`;
+  return `${val} ${p.currency}`;
+}
+
+export function setPresetPrice(state, name, amountInCents, currency, now = Date.now()) {
+  if (!state) return;
+  if (!state.settings) state.settings = {};
+  if (!state.settings.presetPrices) state.settings.presetPrices = {};
+  const def = PRESET_SUBS.find((p) => p.name === name);
+  const targetCur = currency || def?.currency || 'USD';
+  if (def && def.amount === amountInCents && def.currency === targetCur) {
+    delete state.settings.presetPrices[name];
+  } else {
+    state.settings.presetPrices[name] = {
+      amount: amountInCents,
+      currency: targetCur,
+      updatedAt: now,
+    };
+  }
+  state.settings.updatedAt = now;
+}
+
+export function resetPresetPrice(state, name = null, now = Date.now()) {
+  if (state?.settings?.presetPrices) {
+    if (name) {
+      delete state.settings.presetPrices[name];
+    } else {
+      state.settings.presetPrices = {};
+    }
+    state.settings.updatedAt = now;
+  }
+}
+
+export function getAvailableCurrencies(state) {
+  const set = new Set(['USD', 'EUR', 'MDL', 'RON', 'GBP', 'CHF', 'CAD', 'UAH', 'PLN']);
+  if (state?.settings?.currency) set.add(state.settings.currency);
+  for (const a of state?.settings?.accounts || []) {
+    if (a.currency) set.add(a.currency);
+  }
+  return [...set];
+}
+
+export function openEditPresetPriceSheet(name) {
+  const { state } = ctx;
+  const presets = getPresetSubs(state);
+  const p = presets.find((x) => x.name === name) || PRESET_SUBS.find((x) => x.name === name);
+  if (!p) return;
+  const def = PRESET_SUBS.find((x) => x.name === name) || p;
+  const curOptions = getAvailableCurrencies(state);
+  if (!curOptions.includes(p.currency)) curOptions.push(p.currency);
+
+  let cur = p.currency;
+  let amtText = centsToPlain(p.amount);
+
+  const html = () => `
+    <div class="grab"></div>
+    <form id="preset-price-form" novalidate>
+      <h3>Edit Preset Price · ${p.emoji} ${esc(p.name)} <button type="button" class="icon-btn" data-close aria-label="Close">✕</button></h3>
+      <p class="muted small" style="margin-top:-4px; margin-bottom:12px;">Customize the default price and billing currency when quick-adding this subscription.</p>
+      
+      <div class="amount-input">
+        <input id="preset-sheet-amt" type="text" inputmode="decimal" autocomplete="off" placeholder="0" value="${esc(amtText)}" aria-label="Price">
+        <span class="cur" id="preset-sheet-cur-label">${esc(cur)}</span>
+      </div>
+
+      <div class="row2" style="margin-top:12px;">
+        <label class="field">
+          <span>Billing Currency</span>
+          <select id="preset-sheet-cur">
+            ${curOptions.map((c) => `<option value="${c}" ${c === cur ? 'selected' : ''}>${c}</option>`).join('')}
+          </select>
+        </label>
+        <label class="field">
+          <span>Original Default</span>
+          <input type="text" disabled value="${formatPresetPrice(def)}" style="opacity:0.75; cursor:not-allowed;">
+        </label>
+      </div>
+
+      <p class="lock-msg" id="preset-sheet-msg" role="alert"></p>
+
+      <div class="btns" style="margin-top:16px;">
+        ${p.isCustom ? `<button type="button" class="btn" id="preset-sheet-reset-btn" style="color:var(--c-danger, #ef4444);">↺ Reset to default</button>` : ''}
+        <button type="submit" class="btn primary">Save Price</button>
+      </div>
+    </form>
+  `;
+
+  ctx.openSheet('', (sheet) => {
+    sheet.innerHTML = html();
+    const amtInput = sheet.querySelector('#preset-sheet-amt');
+    amtInput?.focus();
+    amtInput?.select();
+
+    sheet.querySelector('#preset-sheet-cur')?.addEventListener('change', (e) => {
+      cur = e.target.value;
+      const lbl = sheet.querySelector('#preset-sheet-cur-label');
+      if (lbl) lbl.textContent = cur;
+    });
+
+    sheet.querySelector('#preset-sheet-reset-btn')?.addEventListener('click', () => {
+      resetPresetPrice(state, name);
+      ctx.commit();
+      ctx.closeSheet();
+      ctx.toast(`Reset ${p.name} back to default price`);
+      ctx.render();
+    });
+
+    sheet.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const val = sheet.querySelector('#preset-sheet-amt')?.value;
+      const amount = evalAmount(val);
+      const msg = sheet.querySelector('#preset-sheet-msg');
+      if (amount == null || amount < 0) {
+        if (msg) msg.textContent = 'Please enter a valid price.';
+        return;
+      }
+      setPresetPrice(state, name, amount, cur);
+      ctx.commit();
+      ctx.closeSheet();
+      ctx.toast(`Updated ${p.name} price to ${formatPresetPrice({ amount, currency: cur })}`);
+      ctx.render();
+    });
+  });
+}
+
 export function getSubGroup(rule, categoryName = '') {
   const note = String(rule.note || '').toLowerCase();
   const cat = String(categoryName || '').toLowerCase();
@@ -200,20 +346,65 @@ function subscriptionsTab(state, today, rules, scheduled) {
     <!-- Quick Presets Drawer -->
     ${ctx.ui.showPresets || expenseRules.length === 0 ? `
       <div class="sub-presets-card">
-        <div style="display:flex; justify-content:space-between; align-items:center;">
+        <div class="sub-presets-header">
           <div>
-            <h3 style="margin:0; font-size:14px; font-weight:600;">⚡ Quick Add Subscriptions & AI Presets</h3>
-            <span class="muted small">Tap to add in one click with pre-filled price and frequency</span>
+            <h3 style="margin:0; font-size:14px; font-weight:600; display:flex; align-items:center; gap:6px;">
+              <span>⚡ Quick Add Subscriptions &amp; AI Presets</span>
+              ${Object.keys(state.settings?.presetPrices || {}).length ? `<span class="pill pill-gold" style="font-size:10px; padding:1px 6px;">Custom prices active</span>` : ''}
+            </h3>
+            <span class="muted small">${ctx.ui.editingPresets ? 'Change amounts or currencies below — saves automatically' : 'Tap chip to add subscription, or edit prices to match your real billing'}</span>
           </div>
-          <button class="card-link" data-act="plan-toggle-presets">Hide</button>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <button class="btn sm ${ctx.ui.editingPresets ? 'primary' : ''}" data-act="plan-toggle-edit-presets" title="${ctx.ui.editingPresets ? 'Exit preset editor' : 'Customize prices and currencies for all presets'}">
+              ${ctx.ui.editingPresets ? '✓ Done editing' : '✏️ Edit prices'}
+            </button>
+            ${Object.keys(state.settings?.presetPrices || {}).length ? `<button class="card-link" data-act="plan-reset-presets" title="Reset all custom prices back to original defaults" style="color:var(--c-danger, #ef4444); font-size:12px;">↺ Reset all</button>` : ''}
+            <button class="card-link" data-act="plan-toggle-presets">Hide</button>
+          </div>
         </div>
-        <div class="sub-presets-grid">
-          ${PRESET_SUBS.map((p) => `<button class="sub-preset-btn" data-act="plan-use-preset" data-name="${esc(p.name)}">
-            <span>${p.emoji}</span>
-            <b>${esc(p.name)}</b>
-            <span class="badge-price">${p.currency === 'MDL' ? `${p.amount / 100} MDL` : `${p.currency === 'EUR' ? '€' : '$'}${centsToPlain(p.amount)}`}</span>
-          </button>`).join('')}
-        </div>
+
+        ${ctx.ui.editingPresets ? `
+          <div class="sub-presets-edit-banner">
+            <span style="font-size:12.5px;">💡 <b>Preset Price Editor:</b> Type your custom monthly price or select billing currency. Changes save instantly.</span>
+          </div>
+          <div class="sub-presets-edit-grid">
+            ${getPresetSubs(state).map((p) => {
+              const curOptions = getAvailableCurrencies(state);
+              if (!curOptions.includes(p.currency)) curOptions.push(p.currency);
+              const def = PRESET_SUBS.find((x) => x.name === p.name);
+              return `
+                <div class="sub-preset-edit-item ${p.isCustom ? 'is-custom' : ''}">
+                  <div class="sub-preset-edit-header">
+                    <span class="sub-preset-edit-emoji">${p.emoji}</span>
+                    <b class="sub-preset-edit-name" title="${esc(p.name)}">${esc(p.name)}</b>
+                    ${p.isCustom ? `<button class="card-link sub-preset-reset-one" data-act="plan-reset-one" data-name="${esc(p.name)}" title="Reset to default (${formatPresetPrice(def)})">↺ Default</button>` : ''}
+                  </div>
+                  <div class="sub-preset-edit-inputs">
+                    <div class="sub-preset-amt-wrap">
+                      <input type="text" inputmode="decimal" class="preset-input-amt" data-name="${esc(p.name)}" value="${esc(centsToPlain(p.amount))}" placeholder="0.00" aria-label="Price for ${esc(p.name)}">
+                    </div>
+                    <select class="preset-input-cur" data-name="${esc(p.name)}" aria-label="Currency for ${esc(p.name)}">
+                      ${curOptions.map((c) => `<option value="${c}" ${c === p.currency ? 'selected' : ''}>${c}</option>`).join('')}
+                    </select>
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        ` : `
+          <div class="sub-presets-grid">
+            ${getPresetSubs(state).map((p) => `
+              <div class="sub-preset-chip ${p.isCustom ? 'custom-priced' : ''}">
+                <button class="sub-preset-btn" data-act="plan-use-preset" data-name="${esc(p.name)}" title="Add ${esc(p.name)} (${formatPresetPrice(p)})">
+                  <span>${p.emoji}</span>
+                  <b>${esc(p.name)}</b>
+                  <span class="badge-price">${formatPresetPrice(p)}</span>
+                </button>
+                <button class="sub-preset-quick-edit" data-act="plan-edit-price-one" data-name="${esc(p.name)}" title="Edit price for ${esc(p.name)}" aria-label="Edit price for ${esc(p.name)}">✏️</button>
+              </div>
+            `).join('')}
+          </div>
+        `}
       </div>
     ` : ''}
 
@@ -261,8 +452,8 @@ function subscriptionsTab(state, today, rules, scheduled) {
                   <span>${esc(M.account(state, r.account)?.name || '')}</span>
                 </div>
               </div>
-              <div class="sub-price-col">
-                <div class="sub-price-primary">${formatMoney(r.amount, r.currency)}</div>
+              <div class="sub-price-col" data-act="rec-edit" data-id="${esc(r.id)}" title="Click to edit subscription price & details" style="cursor:pointer;">
+                <div class="sub-price-primary">${formatMoney(r.amount, r.currency)} <span class="sub-price-pencil" style="font-size:11px; opacity:0.6; margin-left:2px;" title="Edit price">✏️</span></div>
                 ${r.currency !== base() ? `<div class="sub-price-secondary">~${ctx.money(monthlyInBase)}/mo</div>` : ''}
               </div>
               <div class="sub-actions-col">
@@ -655,7 +846,8 @@ export function onClick(act, el) {
     return true;
   }
   if (act === 'plan-use-preset') {
-    const p = PRESET_SUBS.find((x) => x.name === el.dataset.name);
+    const presets = getPresetSubs(ctx.state);
+    const p = presets.find((x) => x.name === el.dataset.name) || PRESET_SUBS.find((x) => x.name === el.dataset.name);
     if (p) {
       const cats = ctx.state.settings.categories.filter((c) => c.type === 'expense');
       const matchedCat = cats.find((c) => c.id === p.cat) || cats[0];
@@ -669,6 +861,32 @@ export function onClick(act, el) {
         start: todayISO(),
       });
     }
+    return true;
+  }
+  if (act === 'plan-toggle-edit-presets') {
+    ctx.ui.editingPresets = !ctx.ui.editingPresets;
+    ctx.render();
+    if (!ctx.ui.editingPresets) {
+      ctx.toast('Preset prices saved');
+    }
+    return true;
+  }
+  if (act === 'plan-edit-price-one') {
+    openEditPresetPriceSheet(el.dataset.name);
+    return true;
+  }
+  if (act === 'plan-reset-presets') {
+    resetPresetPrice(ctx.state);
+    ctx.commit();
+    ctx.toast('All preset prices reset to defaults');
+    ctx.render();
+    return true;
+  }
+  if (act === 'plan-reset-one') {
+    resetPresetPrice(ctx.state, el.dataset.name);
+    ctx.commit();
+    ctx.toast(`Reset ${el.dataset.name} to default price`);
+    ctx.render();
     return true;
   }
   if (act === 'plan-toggle-select') {
@@ -747,3 +965,39 @@ export function onClick(act, el) {
   }
   return false;
 }
+
+export function onInput(target) {
+  if (target?.classList?.contains('preset-input-amt')) {
+    const name = target.dataset.name;
+    const item = target.closest('.sub-preset-edit-item');
+    const curEl = item?.querySelector('.preset-input-cur');
+    const cur = curEl ? curEl.value : null;
+    const amount = evalAmount(target.value);
+    if (amount != null && amount >= 0) {
+      setPresetPrice(ctx.state, name, amount, cur);
+      ctx.commit({ quiet: true });
+    }
+    return true;
+  }
+  return false;
+}
+
+export function onChange(target) {
+  if (target?.classList?.contains('preset-input-amt') || target?.classList?.contains('preset-input-cur')) {
+    const name = target.dataset.name;
+    const item = target.closest('.sub-preset-edit-item');
+    const amtEl = item?.querySelector('.preset-input-amt');
+    const curEl = item?.querySelector('.preset-input-cur');
+    if (amtEl && curEl) {
+      const amount = evalAmount(amtEl.value);
+      if (amount != null && amount >= 0) {
+        setPresetPrice(ctx.state, name, amount, curEl.value);
+        ctx.commit({ quiet: true });
+        ctx.render();
+      }
+    }
+    return true;
+  }
+  return false;
+}
+
