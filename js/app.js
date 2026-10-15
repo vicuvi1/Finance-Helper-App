@@ -2370,8 +2370,7 @@ document.addEventListener('click', (e) => {
     }
   }
   const go = e.target.closest('[data-go]');
-  if (go && !e.target.closest('[data-act]')) { location.hash = `#${go.dataset.go}`; return; }
-  const el = e.target.closest('[data-act]');
+  if (go && !el) { location.hash = `#${go.dataset.go}`; return; }
   if (!el || el.closest('.sheet')) return;
   const act = el.dataset.act;
   if (act === 'test-sound') {
