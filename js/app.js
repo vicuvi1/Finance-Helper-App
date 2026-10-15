@@ -30,6 +30,7 @@ import * as Rules from './screens/rules.js';
 import * as Goals from './screens/goals.js';
 import * as Telegram from './screens/telegram.js';
 import * as TgBlocks from './screens/tgblocks.js';
+import * as TelegramHub from './screens/telegram_hub.js';
 import * as Motion from './motion.js';
 import * as Calc from './screens/calc.js';
 import * as Buddy from './screens/buddy.js';
@@ -921,7 +922,6 @@ function viewLog() {
     ${view === 'calendar' ? '' : `<input type="search" id="search" placeholder="Search all months: coffee, maib, >1000, march…" value="${esc(ui.search)}" aria-label="Search all records">`}
     <div class="log-actions">
       ${undoButtons()}
-      ${Telegram.isLinked() ? '<button type="button" class="btn" data-act="tg-load" title="Get what you sent to your Telegram bot">📥 From Telegram</button>' : ''}
       <button type="button" class="btn" data-act="copy-table" title="Copy this month as a table to paste into Excel or Google Sheets">Copy table</button>
       <button type="button" class="btn" data-act="export-month" title="Download this month as a file Excel opens">Export month</button>
     </div>
@@ -2521,7 +2521,7 @@ document.addEventListener('keydown', (e) => {
   if (e.target.closest('input, select, textarea')) return;
   if ((e.key === 'l' || e.key === 'L') && Security.hasLock()) { Security.lock(); return; }
   if (ui.tab === 'log' && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) { e.preventDefault(); goToMonth(addMonths(ui.month, e.key === 'ArrowLeft' ? -1 : 1)); return; }
-  const tabs = { 1: 'home', 2: 'log', 3: 'accounts', 4: 'goals', 5: 'plan', 6: 'people', 7: 'reports', 0: 'settings' };
+  const tabs = { 1: 'home', 2: 'log', 3: 'accounts', 4: 'goals', 5: 'plan', 6: 'people', 7: 'reports', 8: 'telegram', 0: 'settings' };
   if (e.key === 'n' || e.key === 'N') { e.preventDefault(); openTxSheet(); }
   else if (e.key === '/') {
     e.preventDefault();
@@ -2552,6 +2552,8 @@ const SCREENS = {
   reports: ReportsScreen,
   review: YearReview,
   rates: RatesScreen,
+  telegram: TelegramHub,
+  bot: TelegramHub,
   settings: { view: viewSettings, onClick: (a, el) => Security.onClick(a, el) || Rules.onClick(a, el) || Telegram.onClick(a) || TgBlocks.onClick(a, el) || Buddy.onClick(a, el) || Binance.onClick(a) || Sync.onClick(a) || SelfCheck.onClick(a) || Backups.onClick(a, el) || (a.startsWith('update-') && (Updates.onClick(a), true)), onChange: (el) => Security.onChange(el) || Telegram.onChange(el) || Buddy.onChange(el) || WorkHour.onChange(el) },
 };
 
@@ -2562,6 +2564,7 @@ function openMoreSheet() {
       ${item('goals', 'Goals', 'What you are saving for, filling up by itself')}
       ${item('plan', 'Plan', 'Budgets, bills, subscriptions, regular income')}
       ${item('people', 'People & loans', 'Track who owes you, debts, IOUs & client invoices')}
+      ${item('telegram', 'Telegram bot', 'Phone sync, custom keyboard buttons & bot commands')}
       ${item('reports', 'Reports', 'Any period, year in review, income for taxes')}
       ${item('rates', 'Rates & converter', 'Exchange rates, good day to convert USD?')}
       ${item('settings', 'Settings', 'Goal, smart split, categories, backups')}

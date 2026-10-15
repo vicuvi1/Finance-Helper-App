@@ -3600,4 +3600,318 @@ body.locked .theme-atmosphere, body.printing .theme-atmosphere { display: none; 
   }
 }
 
+/* ==========================================================================
+   Telegram Bot Screen & Mobile Hub
+   ========================================================================== */
+.view-telegram-hub {
+  max-width: 1400px;
+  margin: 0 auto;
+}
+.tg-hub-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.tg-hub-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.seg-tg-tabs {
+  display: flex;
+  gap: 8px;
+  margin: 16px 0 20px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+.seg-tg-tabs .chip {
+  padding: 8px 16px;
+  font-size: 13px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  color: var(--text-subtle);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.seg-tg-tabs .chip[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--c5, #0ea5e9) 15%, var(--surface-2));
+  border-color: var(--c5, #0ea5e9);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.tg-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+  margin-bottom: 16px;
+}
+.tg-kpi-card {
+  padding: 14px 18px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.tg-kpi-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--muted);
+}
+.tg-kpi-val {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.tg-sync-hero-card {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--c5, #0ea5e9) 12%, var(--surface)) 0%, var(--surface) 100%);
+  border-color: color-mix(in srgb, var(--c5, #0ea5e9) 35%, var(--line));
+  margin-bottom: 16px;
+}
+.tg-sync-hero-body {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.tg-big-sync-btn {
+  padding: 12px 24px;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+}
+
+.tg-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+.tg-recent-feed {
+  max-height: 480px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.tg-feed-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+.tg-feed-icon {
+  font-size: 20px;
+  line-height: 1;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--surface) 80%, transparent);
+  border-radius: 99px;
+  flex-shrink: 0;
+}
+.tg-feed-source-pill {
+  display: block;
+  font-size: 9px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.tg-empty-feed {
+  text-align: center;
+  padding: 36px 16px;
+}
+
+.tg-cheatsheet-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+.tg-cheat-card {
+  padding: 10px 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+.tg-cheat-card code {
+  color: var(--gold, #eab308);
+  font-weight: 700;
+  font-size: 13px;
+}
+
+/* Custom Buttons & Phone preview */
+.tg-buttons-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(320px, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+@media (max-width: 900px) {
+  .tg-buttons-layout {
+    grid-template-columns: 1fr;
+  }
+}
+.tg-phone-frame {
+  margin: 14px auto;
+  max-width: 320px;
+  border: 4px solid var(--line-strong);
+  border-radius: 28px;
+  background: #0f172a;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+  overflow: hidden;
+}
+.tg-phone-screen {
+  display: flex;
+  flex-direction: column;
+  min-height: 420px;
+  padding: 12px;
+  background: #0b141a;
+  color: #fff;
+}
+.tg-phone-chat {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding-bottom: 12px;
+}
+.tg-bubble-in {
+  background: #1f2c34;
+  padding: 10px 14px;
+  border-radius: 12px 12px 12px 2px;
+  font-size: 13px;
+  line-height: 1.4;
+  max-width: 85%;
+  color: #e9edef;
+}
+.tg-phone-input-bar {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: #1f2c34;
+  border-radius: 20px;
+  font-size: 12px;
+  color: #8696a0;
+  margin-bottom: 10px;
+}
+.tg-phone-kb-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+.tg-mock-key {
+  background: #2a3942;
+  border-radius: 6px;
+  padding: 8px 4px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  font-size: 11px;
+  color: #e9edef;
+  min-height: 44px;
+}
+.tg-mock-key b {
+  font-size: 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 80px;
+}
+.tg-mock-key small {
+  color: #8696a0;
+  font-size: 9px;
+}
+.tg-mock-key.helper {
+  background: #202c33;
+  color: #00a884;
+}
+
+/* Commands Console */
+.tg-commands-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(360px, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+@media (max-width: 950px) {
+  .tg-commands-grid {
+    grid-template-columns: 1fr;
+  }
+}
+.tg-quick-chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-top: 8px;
+}
+.tg-console-input-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.tg-console-input-row .input {
+  flex: 1;
+  min-width: 220px;
+}
+.tg-console-output-box {
+  margin-top: 14px;
+  background: #0f172a;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 16px;
+  min-height: 180px;
+  max-height: 380px;
+  overflow-y: auto;
+}
+.tg-console-bubble {
+  background: #1e293b;
+  border-left: 3px solid var(--c5, #0ea5e9);
+  padding: 14px 18px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  line-height: 1.5;
+  color: #f1f5f9;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.tg-cmd-table {
+  width: 100%;
+  margin: 12px 0;
+  font-size: 13px;
+}
+.tg-cmd-table td {
+  padding: 8px 10px;
+}
+.tg-botfather-help {
+  padding: 12px 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  margin-top: 12px;
+  font-size: 13px;
+}
+
+
 

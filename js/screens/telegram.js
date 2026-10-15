@@ -16,8 +16,7 @@ import { formatMoney } from '../money.js';
 const bot = () => window.desktop?.telegram;
 const bg = () => window.desktop?.background;
 const st = { status: null, pair: null, busy: false, error: '', bg: null, relay: { busy: false, error: '', copied: false, script: '', open: false } };
-// open: false | 'google' | 'server'
-const prefs = () => ({ daily: true, at: '21:00', bills: true, weekly: true, weeklyDay: 0, weeklyAt: '19:00', cash: true, ...(ctx.state.meta.tg || {}) });
+export const prefs = () => ({ daily: true, at: '21:00', bills: true, weekly: true, weeklyDay: 0, weeklyAt: '19:00', cash: true, ...(ctx.state.meta.tg || {}) });
 
 // The Sunday ritual: the week, records to file, then the cash check.
 async function sendWeekly() {
@@ -620,3 +619,9 @@ export function onChange(el) {
   }
   return false;
 }
+
+export const getStatus = () => st;
+export const getBot = () => bot();
+export const sendDirect = (text, extra) => send(text, extra);
+export const sendWeeklyRitual = () => sendWeekly();
+
