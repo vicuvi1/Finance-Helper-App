@@ -196,14 +196,40 @@ const send = (channel, payload) => {
   for (const w of BrowserWindow.getAllWindows()) w.webContents.send(channel, payload);
 };
 
+function isNewerVersion(remote, local) {
+  if (!remote || !local) return false;
+  const clean = (v) => String(v).trim().replace(/^v/i, '');
+  const [rParts, rPre] = clean(remote).split('-');
+  const [lParts, lPre] = clean(local).split('-');
+  const rNums = rParts.split('.').map((n) => parseInt(n, 10) || 0);
+  const lNums = lParts.split('.').map((n) => parseInt(n, 10) || 0);
+  const len = Math.max(rNums.length, lNums.length, 3);
+  for (let i = 0; i < len; i++) {
+    const r = rNums[i] || 0;
+    const l = lNums[i] || 0;
+    if (r > l) return true;
+    if (r < l) return false;
+  }
+  if (!rPre && lPre) return true;
+  if (rPre && !lPre) return false;
+  if (rPre && lPre) return rPre.localeCompare(lPre) > 0;
+  return false;
+}
+
 function getUpdater() {
   if (updater || !app.isPackaged) return updater;
   try {
     ({ autoUpdater: updater } = require('electron-updater'));
     updater.autoDownload = false;
     updater.autoInstallOnAppQuit = true;
-    updater.on('update-available', (i) => send('update-event', { type: 'available', version: i.version, date: i.releaseDate }));
-    updater.on('update-not-available', () => send('update-event', { type: 'none' }));
+    updater.on('update-available', (i) => {
+      if (isNewerVersion(i?.version, app.getVersion())) {
+        send('update-event', { type: 'available', version: i.version, date: i.releaseDate });
+      } else {
+        send('update-event', { type: 'none', version: i?.version });
+      }
+    });
+    updater.on('update-not-available', (i) => send('update-event', { type: 'none', version: i?.version }));
     updater.on('download-progress', (p) => send('update-event', { type: 'progress', percent: Math.round(p.percent) }));
     updater.on('update-downloaded', (i) => send('update-event', { type: 'ready', version: i.version }));
     updater.on('error', (e) => send('update-event', { type: 'error', message: String(e?.message || e).split('\n')[0] }));
@@ -223,14 +249,23 @@ ipcMain.handle('update-check', async () => {
     // .exe or an unpacked folder); never report that as "up to date".
     if (!r?.updateInfo) return { type: 'error', message: 'This copy of the app can\'t update itself. Install it with the Setup file once; after that updates are one click.' };
     const latest = r.updateInfo.version;
-    return { type: latest && latest !== app.getVersion() ? 'available' : 'none', version: latest, date: r?.updateInfo?.releaseDate };
+    const current = app.getVersion();
+    const hasUpdate = Boolean(latest && isNewerVersion(latest, current));
+    return {
+      type: hasUpdate ? 'available' : 'none',
+      version: latest,
+      currentVersion: current,
+      date: r?.updateInfo?.releaseDate
+    };
   } catch (err) {
     return { type: 'error', message: String(err?.message || err).split('\n')[0] };
   }
 });
 ipcMain.handle('update-download', async () => {
   try {
-    await getUpdater()?.downloadUpdate();
+    const u = getUpdater();
+    if (!u) return false;
+    await u.downloadUpdate();
     return true;
   } catch (err) {
     send('update-event', { type: 'error', message: String(err?.message || err).split('\n')[0] });

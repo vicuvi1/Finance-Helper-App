@@ -3,10 +3,10 @@
 // updates itself: it always loads the newest version when online.
 
 import { ctx, esc } from '../ctx.js';
-import { APP_VERSION } from '../version.js';
+import { APP_VERSION, isNewerVersion } from '../version.js';
 
 const desk = () => (typeof window !== 'undefined' ? window.desktop?.update : null);
-const u = { status: 'idle', version: null, percent: 0, message: '' };
+const u = { status: 'idle', version: null, latestVersion: null, percent: 0, message: '' };
 let started = false;
 
 const when = (ts) => (ts ? new Date(ts).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : 'never');
@@ -26,8 +26,18 @@ export async function initUpdates() {
     if (m.previousVersion) ctx.toast(`Updated to version ${info.version}`);
   }
   desk()?.onEvent((e) => {
-    if (e.type === 'available') Object.assign(u, { status: 'available', version: e.version });
-    else if (e.type === 'none') { if (u.status === 'checking') u.status = 'latest'; }
+    if (e.type === 'available') {
+      if (isNewerVersion(e.version, u.current || APP_VERSION)) {
+        Object.assign(u, { status: 'available', version: e.version });
+      } else {
+        u.status = 'latest';
+        u.latestVersion = e.version;
+      }
+    }
+    else if (e.type === 'none') {
+      u.status = 'latest';
+      if (e.version) u.latestVersion = e.version;
+    }
     else if (e.type === 'progress') Object.assign(u, { status: 'downloading', percent: e.percent });
     else if (e.type === 'ready') Object.assign(u, { status: 'ready', version: e.version });
     else if (e.type === 'error') Object.assign(u, { status: 'error', message: e.message });
@@ -64,7 +74,9 @@ export function settingsCard() {
     const line = {
       idle: 'Not checked yet this session.',
       checking: 'Checking GitHub for a new version…',
-      latest: 'You have the latest version installed.',
+      latest: u.latestVersion && isNewerVersion(current, u.latestVersion)
+        ? `You are running v${esc(current)}, which is ahead of GitHub Releases (latest release is v${esc(u.latestVersion)}). You have all the newest features.`
+        : 'You have the latest version installed.',
       available: `Version ${esc(u.version)} is available on GitHub Releases.`,
       downloading: `Downloading version ${esc(u.version || '')}… ${u.percent}%`,
       ready: `Version ${esc(u.version)} is ready to install. Restart to finish.`,
@@ -118,8 +130,12 @@ export async function onClick(act) {
       const r = await desk().check();
       if (r.type === 'dev') Object.assign(u, { status: 'dev', message: r.message });
       else if (r.type === 'error') Object.assign(u, { status: 'error', message: r.message });
-      else if (r.type === 'available') Object.assign(u, { status: 'available', version: r.version });
-      else u.status = 'latest';
+      else if (r.type === 'available' && isNewerVersion(r.version, u.current || APP_VERSION)) {
+        Object.assign(u, { status: 'available', version: r.version });
+      } else {
+        u.status = 'latest';
+        if (r.version) u.latestVersion = r.version;
+      }
     } catch (e) {
       Object.assign(u, { status: 'error', message: String(e?.message || e).split('\n')[0] });
     }
