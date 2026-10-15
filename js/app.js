@@ -69,6 +69,7 @@ const ui = {
   sort: { col: 'date', dir: 1 },
   spendPeriod: 'month',
   incomePeriod: 'month',
+  maskBalance: (() => { try { return localStorage.getItem('finance-helper.mask-balance') === '1'; } catch { return false; } })(),
   // Table view's empty "new row": keeps date/type/account between adds.
   draft: null,
   // Table rows ticked for a bulk change.
@@ -270,17 +271,28 @@ function monthNav() {
 // A live balance card with a net-worth sparkline, badges on the sections
 // that need you, and the main goal plus today at the bottom.
 
-function sparkline(values, w = 172, h = 36) {
+function sparkline(values, w = 216, h = 28) {
   if (values.length < 2) return '';
   const max = Math.max(...values);
   const min = Math.min(...values);
   const span = max - min || 1;
-  const pts = values.map((v, i) => [(i / (values.length - 1)) * w, h - 3 - ((v - min) / span) * (h - 8)]);
+  const pad = 4;
+  const step = (w - pad * 2) / (values.length - 1);
+  const pts = values.map((v, i) => [pad + i * step, h - pad - ((v - min) / span) * (h - pad * 2)]);
   const line = pts.map(([x, y], i) => `${i ? 'L' : 'M'}${x.toFixed(1)} ${y.toFixed(1)}`).join(' ');
+  const last = pts.at(-1);
   return `<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true">
-    <defs><linearGradient id="spark-g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--gold);stop-opacity:.35"/><stop offset="1" style="stop-color:var(--gold);stop-opacity:0"/></linearGradient></defs>
-    <path d="${line} L${w} ${h} L0 ${h} Z" fill="url(#spark-g)"/><path d="${line}" class="spark-line" pathLength="1"/>
-    <circle cx="${pts.at(-1)[0].toFixed(1)}" cy="${pts.at(-1)[1].toFixed(1)}" r="3" class="spark-dot"/></svg>`;
+    <defs>
+      <linearGradient id="spark-g" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="var(--gold)" stop-opacity="0.38"/>
+        <stop offset="100%" stop-color="var(--gold)" stop-opacity="0"/>
+      </linearGradient>
+    </defs>
+    <path d="${line} L${(w - pad).toFixed(1)} ${h} L${pad} ${h} Z" fill="url(#spark-g)"/>
+    <path d="${line}" class="spark-line" pathLength="1"/>
+    <circle cx="${last[0].toFixed(1)}" cy="${last[1].toFixed(1)}" r="3.2" class="spark-dot"/>
+    <circle cx="${last[0].toFixed(1)}" cy="${last[1].toFixed(1)}" r="6" class="spark-pulse"/>
+  </svg>`;
 }
 
 function renderSidebar() {
@@ -294,14 +306,45 @@ function renderSidebar() {
   const shown = Math.round(total / 100) * 100;
   const before = renderSidebar.last;
   renderSidebar.last = shown;
-  top.innerHTML = `<button type="button" class="sc-body" data-go="accounts" title="Open Accounts">
-    <span class="sc-label">All my money</span>
-    <span class="sc-total">${formatMoney(Math.round(total / 100) * 100, '')}<small>${esc(state.settings.currency)}</small></span>
+
+  const isMasked = !!ui.maskBalance;
+  const totalDisplay = isMasked ? '<span class="sc-masked">••••••••</span>' : formatMoney(shown, '');
+  const netSign = s.net >= 0 ? '+' : '−';
+  const netAbs = Math.abs(s.net);
+  const trendDisplay = isMasked ? '••••' : `${netSign}${money(Math.round(netAbs / 100) * 100, { compact: true })}`;
+  const trendCls = s.net >= 0 ? 'pos' : 'neg';
+  const savingsRate = s.income > 0 ? (s.net > 0 ? Math.round((s.net / s.income) * 100) : 0) : null;
+
+  top.innerHTML = `<div class="sc-body" role="button" tabindex="0" data-go="accounts" title="Open Accounts &amp; Net Worth">
+    <div class="sc-head">
+      <span class="sc-label">All my money</span>
+      <button type="button" class="sc-mask-btn" data-act="toggle-mask" title="${isMasked ? 'Reveal balance (H)' : 'Hide balance (H)'}">
+        ${isMasked
+          ? `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`
+          : `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`}
+      </button>
+    </div>
+    <div class="sc-total-wrap">
+      <span class="sc-total">${totalDisplay}<small>${esc(state.settings.currency)}</small></span>
+      <span class="sc-badge ${trendCls}" title="Net flow this month: ${money(s.net, { sign: true })}">
+        ${s.net >= 0 ? '▲' : '▼'} ${trendDisplay}
+      </span>
+    </div>
     ${sparkline(series)}
-    <span class="sc-row"><span>This month</span><b class="${s.net >= 0 ? 'income' : 'expense'}">${money(Math.round(s.net / 100) * 100, { sign: true })}</b></span>
-  </button>`;
+    <div class="sc-row">
+      <div class="sc-stat">
+        <span class="sc-stat-label">This month</span>
+        <b class="sc-stat-val ${s.net >= 0 ? 'income' : 'expense'}">${isMasked ? '••••••' : money(Math.round(s.net / 100) * 100, { sign: true })}</b>
+      </div>
+      <div class="sc-stat sc-stat-right">
+        <span class="sc-stat-label">Savings rate</span>
+        <b class="sc-stat-val gold">${savingsRate != null ? `${savingsRate}%` : '—'}</b>
+      </div>
+    </div>
+  </div>`;
+
   // The balance moved (a record, an undo, a sync): show by how much.
-  if (before != null && before !== shown) {
+  if (before != null && before !== shown && !isMasked) {
     const body = top.querySelector('.sc-body');
     Motion.floatDelta(body, money(shown - before, { sign: true, compact: true }), shown > before ? 'up' : 'down');
     body?.classList.add('bump');
@@ -322,8 +365,8 @@ function renderSidebar() {
   badge('people', overdue ? String(overdue) : open ? String(open) : '', overdue ? 'alert' : '');
   badge('log', todayCount ? `${todayCount} today` : '', 'soft');
   badge('goals', gs.target && gs.ratio > 0 ? `${Math.round(gs.ratio * 100)}%` : '', 'gold');
-  const r = 15;
-  const c = 2 * Math.PI * r;
+  badge('telegram', Telegram.isLinked?.() ? '● On' : '', 'soft');
+
   const ambState = AmbientMusic.getState();
   const currentTrack = AmbientMusic.TRACKS.find((t) => t.id === ambState.track) || AmbientMusic.TRACKS[0];
   const ambPill = `<div class="sf-ambient">
@@ -337,13 +380,26 @@ function renderSidebar() {
         <i class="w1"></i><i class="w2"></i><i class="w3"></i>
       </span>
     </button>
+    <button type="button" class="amb-next-mini" data-act="amb-next" title="Next track">⏭</button>
   </div>`;
-  bottom.innerHTML = `${gs.target ? `<button type="button" class="sf-goal" data-go="goals" title="${esc(g.name)}">
-      <svg viewBox="0 0 38 38" width="38" height="38" aria-hidden="true"><circle cx="19" cy="19" r="${r}" class="sf-track"/><circle cx="19" cy="19" r="${r}" class="sf-prog" style="stroke-dasharray:${c.toFixed(1)};stroke-dashoffset:${(c * (1 - gs.ratio)).toFixed(1)}" transform="rotate(-90 19 19)"/></svg>
-      <span><b>${esc(g.emoji || '🎯')} ${esc(g.name)}</b><small>${Math.round(gs.ratio * 100)}% · ${money(Math.round(gs.remaining / 100) * 100, { compact: true })} to go</small></span>
-    </button>` : ''}
-    <div class="sf-row"><span class="sf-today dow-${dowIndex(today)}"><i aria-hidden="true"></i>${DOW_LONG[dowIndex(today)].slice(0, 3)}, ${Number(today.slice(8, 10))} ${MONTHS[Number(today.slice(5, 7)) - 1].slice(0, 3)}</span>
-    <button type="button" class="sf-buddy" data-act="bd-toggle" aria-pressed="${Buddy.isOn()}" title="${Buddy.isOn() ? 'Hide' : 'Show'} ${esc(Buddy.buddyName())}">🤖 <span>${esc(Buddy.buddyName())}</span><b>${Buddy.isOn() ? 'On' : 'Off'}</b></button></div>
+
+  const goalCapsule = gs.target ? `<button type="button" class="sf-goal" data-go="goals" title="${esc(g.name)} (${Math.round(gs.ratio * 100)}%)">
+    <div class="sf-goal-top">
+      <span class="sf-goal-name">${esc(g.emoji || '🎯')} ${esc(g.name)}</span>
+      <span class="sf-goal-pct">${Math.round(gs.ratio * 100)}%</span>
+    </div>
+    <div class="sf-goal-track">
+      <div class="sf-goal-fill" style="width:${Math.min(100, Math.max(3, Math.round(gs.ratio * 100)))}%"></div>
+    </div>
+    <div class="sf-goal-sub">
+      <span>${money(Math.round(gs.remaining / 100) * 100, { compact: true })} to go</span>
+      <span>Target: ${money(Math.round(g.target / 100) * 100, { compact: true })}</span>
+    </div>
+  </button>` : '';
+
+  bottom.innerHTML = `${goalCapsule}
+    <div class="sf-row"><span class="sf-today dow-${dowIndex(today)}" title="${DOW_LONG[dowIndex(today)]}, ${today}"><i aria-hidden="true"></i>${DOW_LONG[dowIndex(today)].slice(0, 3)}, ${Number(today.slice(8, 10))} ${MONTHS[Number(today.slice(5, 7)) - 1].slice(0, 3)}</span>
+    <button type="button" class="sf-buddy" data-act="bd-toggle" aria-pressed="${Buddy.isOn()}" title="${Buddy.isOn() ? 'Hide' : 'Show'} ${esc(Buddy.buddyName())}">🤖 <span>${esc(Buddy.buddyName())}</span><b class="${Buddy.isOn() ? 'on' : ''}">${Buddy.isOn() ? 'On' : 'Off'}</b></button></div>
     ${ambPill}`;
 }
 
@@ -2281,8 +2337,40 @@ document.addEventListener('click', (e) => {
     if (e.target.classList.contains('sheet-backdrop') || e.target.closest('button[data-close]')) closeSheet();
     return;
   }
+  const el = e.target.closest('[data-act]');
+  if (el && !el.closest('.sheet')) {
+    const act = el.dataset.act;
+    if (act === 'toggle-mask') {
+      ui.maskBalance = !ui.maskBalance;
+      try { localStorage.setItem('finance-helper.mask-balance', ui.maskBalance ? '1' : '0'); } catch {}
+      renderSidebar();
+      toast(ui.maskBalance ? 'Balance masked 🔒' : 'Balance revealed 👁️');
+      return;
+    }
+    if (act === 'cmd-palette') {
+      openPalette({
+        state,
+        go: (tab) => { location.hash = `#${tab}`; },
+        openNew: (draft = {}) => openTxSheet(draft),
+        openCalc: () => Calc.toggle(),
+        lock: () => { if (Security.hasLock()) Security.lock(); },
+        exportExcel: () => exportExcel(),
+        backupJSON: () => exportJSON(),
+      });
+      return;
+    }
+    if (act === 'lock-app') {
+      if (Security.hasLock()) {
+        Security.lock();
+      } else {
+        toast('Set a PIN in Settings to lock with one click (or press L)');
+        location.hash = '#settings';
+      }
+      return;
+    }
+  }
   const go = e.target.closest('[data-go]');
-  if (go) { location.hash = `#${go.dataset.go}`; return; }
+  if (go && !e.target.closest('[data-act]')) { location.hash = `#${go.dataset.go}`; return; }
   const el = e.target.closest('[data-act]');
   if (!el || el.closest('.sheet')) return;
   const act = el.dataset.act;
@@ -2521,6 +2609,14 @@ document.addEventListener('keydown', (e) => {
   if (e.ctrlKey || e.metaKey || e.altKey || sheetRoot.firstChild) return;
   if (e.target.closest('input, select, textarea')) return;
   if ((e.key === 'l' || e.key === 'L') && Security.hasLock()) { Security.lock(); return; }
+  if (e.key === 'h' || e.key === 'H') {
+    e.preventDefault();
+    ui.maskBalance = !ui.maskBalance;
+    try { localStorage.setItem('finance-helper.mask-balance', ui.maskBalance ? '1' : '0'); } catch {}
+    renderSidebar();
+    toast(ui.maskBalance ? 'Balance masked 🔒' : 'Balance revealed 👁️');
+    return;
+  }
   if (ui.tab === 'log' && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) { e.preventDefault(); goToMonth(addMonths(ui.month, e.key === 'ArrowLeft' ? -1 : 1)); return; }
   const tabs = { 1: 'home', 2: 'log', 3: 'accounts', 4: 'goals', 5: 'plan', 6: 'people', 7: 'reports', 8: 'telegram', 0: 'settings' };
   if (e.key === 'n' || e.key === 'N') { e.preventDefault(); openTxSheet(); }
