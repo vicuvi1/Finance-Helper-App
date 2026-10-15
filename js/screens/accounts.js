@@ -78,6 +78,35 @@ export function view() {
   const savingChange = hist.at(-1).value - hist[0].value;
   const savingsChip = (n, label) => `<button class="chip" aria-pressed="${range === n}" data-act="nw-range" data-n="${n}">${label}</button>`;
 
+  const isCashAcc = (a) => a.kind === 'cash' || a.id === 'wallet' || /^(wallet|cash|numerar)$/i.test(a.name || '');
+  const isCardAcc = (a) => (a.kind === 'card' || a.kind === 'virtual') && !isSaving(a);
+  const isBizAcc = (a) => a.kind === 'business';
+  const isCryptoAcc = (a) => a.kind === 'crypto';
+
+  const cashCount = active.filter((v) => isCashAcc(v.account)).length;
+  const cardCount = active.filter((v) => isCardAcc(v.account)).length;
+  const bizCount = active.filter((v) => isBizAcc(v.account)).length;
+  const savCount = active.filter((v) => isSaving(v.account)).length;
+  const cryptoCount = active.filter((v) => isCryptoAcc(v.account)).length;
+
+  const filter = ctx.ui.accFilter || 'all';
+  const shown = filter === 'cash' ? active.filter((v) => isCashAcc(v.account))
+    : filter === 'card' ? active.filter((v) => isCardAcc(v.account))
+    : filter === 'business' ? active.filter((v) => isBizAcc(v.account))
+    : filter === 'savings' ? active.filter((v) => isSaving(v.account))
+    : filter === 'crypto' ? active.filter((v) => isCryptoAcc(v.account))
+    : active;
+
+  const filterChips = reorder ? '' : `
+    <div class="acc-filter-chips" role="tablist" aria-label="Account category filter">
+      <button type="button" class="chip${filter === 'all' ? ' on' : ''}" data-act="acc-filter" data-kind="all" aria-pressed="${filter === 'all'}">All (${active.length})</button>
+      <button type="button" class="chip${filter === 'cash' ? ' on' : ''}" data-act="acc-filter" data-kind="cash" aria-pressed="${filter === 'cash'}">💵 Cash (${cashCount})</button>
+      <button type="button" class="chip${filter === 'card' ? ' on' : ''}" data-act="acc-filter" data-kind="card" aria-pressed="${filter === 'card'}">💳 Cards & Banks (${cardCount})</button>
+      ${bizCount ? `<button type="button" class="chip${filter === 'business' ? ' on' : ''}" data-act="acc-filter" data-kind="business" aria-pressed="${filter === 'business'}">💼 Business (${bizCount})</button>` : ''}
+      <button type="button" class="chip${filter === 'savings' ? ' on' : ''}" data-act="acc-filter" data-kind="savings" aria-pressed="${filter === 'savings'}">🏦 Savings (${savCount})</button>
+      ${cryptoCount ? `<button type="button" class="chip${filter === 'crypto' ? ' on' : ''}" data-act="acc-filter" data-kind="crypto" aria-pressed="${filter === 'crypto'}">🪙 Crypto (${cryptoCount})</button>` : ''}
+    </div>`;
+
   return `<header class="top"><div><h1>Accounts</h1><div class="sub">${active.length} account${active.length === 1 ? '' : 's'} · ${[...byCur.keys()].join(', ')}</div></div>
     <div class="btns top-btns">${active.length > 1 ? `<button class="btn${reorder ? ' primary' : ''}" data-act="acc-reorder" aria-pressed="${reorder}">${reorder ? 'Done' : '⇄ Reorder'}</button>` : ''}<button class="btn primary" data-act="acc-new">+ Add account</button></div></header>
   <section class="hero">
@@ -97,14 +126,22 @@ export function view() {
     </div>
   </section>
   ${reorder ? '<p class="muted small reorder-hint">Drag the cards where you want them, or use the arrows. The order is the same everywhere (lists, record forms, your other devices).</p>' : ''}
+  ${filterChips}
+  ${filter === 'cash' && !shown.length ? `
+    <div class="card empty-card" style="text-align:center;padding:28px 16px;margin:12px 0 16px;">
+      <div style="font-size:32px;margin-bottom:8px">💵</div>
+      <h3 style="margin:0 0 6px">No cash accounts yet</h3>
+      <p class="muted small" style="margin:0 0 16px">Add a cash account to easily track your cash spending and physical wallet.</p>
+      <button type="button" class="btn primary" data-act="acc-new-cash">+ Add Cash Account</button>
+    </div>` : `
   <div class="bcards${reorder ? ' reordering' : ''}">
-    ${active.map((v, i) => (reorder
+    ${shown.map((v, i) => (reorder
     ? `<div class="bc-slot" draggable="true" data-drag-id="${esc(v.account.id)}">${card(v, { act: null })}<div class="bc-order">
         <button type="button" class="icon-btn" data-act="acc-move" data-id="${esc(v.account.id)}" data-dir="-1" aria-label="Move ${esc(v.account.name)} earlier" ${i ? '' : 'disabled'}>←</button>
-        <button type="button" class="icon-btn" data-act="acc-move" data-id="${esc(v.account.id)}" data-dir="1" aria-label="Move ${esc(v.account.name)} later" ${i < active.length - 1 ? '' : 'disabled'}>→</button></div></div>`
+        <button type="button" class="icon-btn" data-act="acc-move" data-id="${esc(v.account.id)}" data-dir="1" aria-label="Move ${esc(v.account.name)} later" ${i < shown.length - 1 ? '' : 'disabled'}>→</button></div></div>`
     : card(v, { attrs: `draggable="true" data-drag-id="${esc(v.account.id)}"` }))).join('')}
-    ${reorder ? '' : '<button type="button" class="bcard-add" data-act="acc-new"><span>+</span>Add a card or account</button>'}
-  </div>
+    ${reorder ? '' : `<button type="button" class="bcard-add" data-act="${filter === 'cash' ? 'acc-new-cash' : 'acc-new'}"><span>+</span>Add ${filter === 'cash' ? 'cash' : 'a card or account'}</button>`}
+  </div>`}
   ${archived.length ? `<details class="card"><summary>Archived (${archived.length})</summary><div class="bcards" style="margin:14px 0 0">${archived.map((v) => card(v)).join('')}</div></details>` : ''}
   <div class="acc-charts">
     ${netWorthCard(state) || ''}
@@ -205,11 +242,11 @@ function setBalanceSheet(id) {
   });
 }
 
-function editAccount(id) {
+function editAccount(id, preset = {}) {
   const { state } = ctx;
   const existing = id ? M.account(state, id) : null;
   const a = existing ? { ...existing, holdings: (existing.holdings || []).map((h) => ({ ...h })) } : {
-    id: `a-${M.uid()}`, name: '', bank: '', kind: 'card', currency: state.settings.currency, start: 0, last4: '', color: (state.settings.accounts.length % 8) + 1, savings: false, archived: false, holdings: [],
+    id: `a-${M.uid()}`, name: preset.name || '', bank: preset.bank || '', kind: preset.kind || 'card', currency: state.settings.currency, start: 0, last4: '', color: (state.settings.accounts.length % 8) + 1, savings: false, archived: false, holdings: [], emoji: preset.emoji || (preset.kind === 'cash' ? '💵' : ''), ...preset,
   };
   const used = existing && state.tx.some((t) => t.account === id || t.from === id || t.to === id);
 
@@ -282,6 +319,7 @@ function editAccount(id) {
     a.name = v('#a-name').value.trim();
     a.bank = v('#a-bank').value.trim();
     a.kind = v('#a-kind').value;
+    if (a.kind === 'cash' && (!a.emoji || a.emoji === '💳')) a.emoji = '💵';
     a.currency = v('#a-currency').value;
     if (v('#a-conv-rate')) convText = v('#a-conv-rate').value;
     a.last4 = v('#a-last4').value.replace(/\D/g, '').slice(0, 4);
@@ -421,7 +459,20 @@ function editAccount(id) {
 }
 
 export function onClick(act, el) {
-  if (act === 'acc-new') { editAccount(null); return true; }
+  if (act === 'acc-new') {
+    const preset = ctx.ui.accFilter === 'cash' ? { kind: 'cash', name: 'Cash', bank: 'Cash', emoji: '💵' } : {};
+    editAccount(null, preset);
+    return true;
+  }
+  if (act === 'acc-new-cash') {
+    editAccount(null, { kind: 'cash', name: 'Cash', bank: 'Cash', emoji: '💵' });
+    return true;
+  }
+  if (act === 'acc-filter') {
+    ctx.ui.accFilter = el.dataset.kind;
+    ctx.render();
+    return true;
+  }
   if (act === 'acc-open') { openAccount(el.dataset.id); return true; }
   if (act === 'acc-reorder') { ctx.ui.accReorder = !ctx.ui.accReorder; ctx.render(); return true; }
   if (act === 'acc-move') {

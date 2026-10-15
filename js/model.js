@@ -36,9 +36,9 @@ export function defaultState() {
         { id: 'care', name: 'Hygiene & cosmetics', emoji: '🧴', pct: 10 },
       ],
       accounts: [
-        { ...ACCOUNT_DEFAULTS, id: 'wallet', name: 'Wallet', kind: 'cash', color: 2 },
-        { ...ACCOUNT_DEFAULTS, id: 'safe', name: 'Safe', kind: 'savings', savings: true, color: 1 },
-        { ...ACCOUNT_DEFAULTS, id: 'card', name: 'Card', kind: 'card', color: 5 },
+        { ...ACCOUNT_DEFAULTS, id: 'wallet', name: 'Wallet', kind: 'cash', emoji: '💵', color: 2 },
+        { ...ACCOUNT_DEFAULTS, id: 'safe', name: 'Safe', kind: 'savings', savings: true, emoji: '🏦', color: 1 },
+        { ...ACCOUNT_DEFAULTS, id: 'card', name: 'Card', kind: 'card', emoji: '💳', color: 5 },
       ],
       categories: [
         { id: 'work', type: 'income', name: 'Work', emoji: '💼' },
@@ -98,7 +98,17 @@ export function normalizeState(raw) {
   if (!raw || typeof raw !== 'object') return base;
   const s = raw.settings || {};
   const accounts = (Array.isArray(s.accounts) && s.accounts.length ? s.accounts : base.settings.accounts)
-    .map((a, i) => ({ ...ACCOUNT_DEFAULTS, color: (i % 8) + 1, ...a, holdings: Array.isArray(a.holdings) ? a.holdings : [] }));
+    .map((a, i) => {
+      const acc = { ...ACCOUNT_DEFAULTS, color: (i % 8) + 1, ...a, holdings: Array.isArray(a.holdings) ? a.holdings : [] };
+      if (acc.id === 'wallet' || /^(wallet|cash|numerar)$/i.test(acc.name || '')) {
+        if (acc.kind !== 'cash') acc.kind = 'cash';
+        if (!acc.emoji || acc.emoji === '💳') acc.emoji = '💵';
+      }
+      return acc;
+    });
+  if (!accounts.some((a) => a.kind === 'cash' || a.id === 'wallet' || /^(wallet|cash|numerar)$/i.test(a.name || ''))) {
+    accounts.unshift({ ...ACCOUNT_DEFAULTS, id: 'wallet', name: 'Cash', kind: 'cash', emoji: '💵', color: 2 });
+  }
   const settings = {
     ...base.settings,
     ...s,

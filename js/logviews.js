@@ -41,6 +41,58 @@ export function sortRows(state, list, { col = 'date', dir = 1 } = {}) {
   });
 }
 
+export function accountDisplayName(a, { baseCur = '', showCur = true } = {}) {
+  if (!a) return '';
+  const em = a.emoji || (a.kind === 'cash' ? '💵' : a.kind === 'card' ? '💳' : a.kind === 'virtual' ? '🌐' : a.kind === 'business' ? '💼' : (a.savings || a.kind === 'savings') ? '🏦' : a.kind === 'crypto' ? '🪙' : '👛');
+  let name = a.name || 'Account';
+  if ((a.id === 'wallet' || /^wallet$/i.test(name)) && !/^cash/i.test(name)) {
+    name = `Cash (${name})`;
+  } else if (/^(cash|numerar)$/i.test(name)) {
+    name = 'Cash';
+  }
+  const bankPart = a.bank && !name.toLowerCase().includes(a.bank.toLowerCase()) ? ` · ${a.bank}` : '';
+  const curPart = showCur && a.currency ? ` · ${a.currency}` : '';
+  return `${em} ${name}${bankPart}${curPart}`.trim();
+}
+
+export function accountOptionsHTML(accounts, selectedId, { baseCur = '', includeEmpty = false, emptyLabel = 'Pick…' } = {}) {
+  const groups = [
+    { id: 'cash', label: '💵 Cash', match: (a) => a.kind === 'cash' || a.id === 'wallet' || /^(wallet|cash|numerar)$/i.test(a.name || '') },
+    { id: 'cards', label: '💳 Cards & Banks', match: (a) => (a.kind === 'card' || a.kind === 'virtual') && !a.savings && a.kind !== 'savings' },
+    { id: 'business', label: '💼 Business', match: (a) => a.kind === 'business' },
+    { id: 'savings', label: '🏦 Savings & Safe', match: (a) => a.savings || a.kind === 'savings' },
+    { id: 'crypto', label: '🪙 Crypto', match: (a) => a.kind === 'crypto' },
+    { id: 'other', label: '📁 Other Accounts', match: () => true },
+  ];
+
+  const assigned = new Set();
+  const grouped = [];
+  for (const g of groups) {
+    const items = [];
+    for (const a of accounts) {
+      if (!assigned.has(a.id) && g.match(a)) {
+        assigned.add(a.id);
+        items.push(a);
+      }
+    }
+    if (items.length) {
+      grouped.push({ label: g.label, items });
+    }
+  }
+
+  let html = includeEmpty ? `<option value="" ${!selectedId ? 'selected' : ''}>${esc(emptyLabel)}</option>` : '';
+  for (const g of grouped) {
+    html += `<optgroup label="${esc(g.label)}">`;
+    for (const a of g.items) {
+      const isSel = a.id === selectedId;
+      const label = accountDisplayName(a, { baseCur });
+      html += `<option value="${esc(a.id)}" ${isSel ? 'selected' : ''}>${esc(label)}</option>`;
+    }
+    html += `</optgroup>`;
+  }
+  return html;
+}
+
 const accEmoji = (a) => {
   if (a.emoji) return `${a.emoji} `;
   const map = { cash: '💵', card: '💳', virtual: '🌐', business: '💼', savings: '🏦', crypto: '🪙' };
@@ -70,11 +122,11 @@ function cells(state, t) {
   const typeSel = `<select data-col="type" aria-label="Type" class="${isLoan ? 'sel-loan' : `sel-${t.type}`}">${typeOptions(t)}</select>`;
   const isT = t.type === 'transfer';
   const cat = isT
-    ? `<label class="cell-pre"><span>from</span><select data-col="from" aria-label="From account">${options(accounts, t.from, { emojiFn: accEmoji })}</select></label>`
+    ? `<label class="cell-pre"><span>from</span><select data-col="from" aria-label="From account">${accountOptionsHTML(accounts, t.from, { baseCur: state.settings.currency })}</select></label>`
     : `<select data-col="category" aria-label="Category">${t.category ? '' : '<option value="" selected>Pick…</option>'}${options(categories.filter((c) => c.type === t.type), t.category)}</select>`;
   const acc = isT
-    ? `<label class="cell-pre"><span>to</span><select data-col="to" aria-label="To account">${options(accounts, t.to, { emojiFn: accEmoji })}</select></label>`
-    : `<select data-col="account" aria-label="Account">${options(accounts, t.account, { emojiFn: accEmoji })}</select>`;
+    ? `<label class="cell-pre"><span>to</span><select data-col="to" aria-label="To account">${accountOptionsHTML(accounts, t.to, { baseCur: state.settings.currency })}</select></label>`
+    : `<select data-col="account" aria-label="Account">${accountOptionsHTML(accounts, t.account, { baseCur: state.settings.currency })}</select>`;
   const di = t.date ? dowIndex(t.date) : 0;
   const shown = t.date ? `<span class="dow-tag dow-${di}">${DOW_SHORT[di]}</span><span class="dtext">${Number(t.date.slice(8, 10))} ${MONTHS[Number(t.date.slice(5, 7)) - 1].slice(0, 3)}</span>` : '';
   const loanBadge = isLoan ? `<span class="tbl-loan-badge ${t.type === 'expense' ? 'lent' : 'borrowed'}" title="${t.type === 'expense' ? 'Loan given (Lent)' : 'Loan received (Borrowed)'}">⚡ ${t.type === 'expense' ? 'Lent' : 'Borrowed'}</span>` : '';

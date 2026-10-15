@@ -45,7 +45,7 @@ import { forecast } from './forecast.js';
 import { bindTilt } from './cards.js';
 import { FREQS, markDone, dueItems } from './recurring.js';
 import { invoiceStatus } from './invoices.js';
-import { tableHTML, calendarHTML, dayLabelHTML } from './logviews.js';
+import { tableHTML, calendarHTML, dayLabelHTML, accountOptionsHTML, accountDisplayName } from './logviews.js';
 import { sheetHTML, monthTabs } from './sheetview.js';
 import { createHistory } from './history.js';
 import { searchTx, searchSummary, SEARCH_HINT } from './search.js';
@@ -758,7 +758,7 @@ function bulkBar() {
     <b>${list.length} selected</b>
     <span class="muted small">${[out ? `−${money(out)}` : '', inc ? `+${money(inc)}` : ''].filter(Boolean).join(' · ')}</span>
     <select data-bulk="category" aria-label="Set category"><option value="">Category…</option>${cats('expense', 'Spent')}${cats('income', 'Earned')}</select>
-    <select data-bulk="account" aria-label="Set account"><option value="">Account…</option>${state.settings.accounts.filter((a) => !a.archived).map((a) => `<option value="${esc(a.id)}">${esc(a.name)}</option>`).join('')}</select>
+    <select data-bulk="account" aria-label="Set account"><option value="">Account…</option>${accountOptionsHTML(state.settings.accounts.filter((a) => !a.archived), '', { baseCur: state.settings.currency })}</select>
     <label class="bulk-date"><span>Date</span><input type="date" data-bulk="date" aria-label="Set date"></label>
     <button type="button" class="btn danger" data-act="bulk-del">Delete</button>
     <button type="button" class="btn" data-act="bulk-clear">Clear</button>
@@ -1012,7 +1012,7 @@ function viewLog() {
 function viewSettings() {
   const st = state.settings;
   const accOptions = (sel, withAll) => (withAll ? `<option value="all" ${sel === 'all' ? 'selected' : ''}>All my money</option>` : '')
-    + st.accounts.map((a) => `<option value="${esc(a.id)}" ${sel === a.id ? 'selected' : ''}>${esc(a.name)}</option>`).join('');
+    + accountOptionsHTML(st.accounts, sel, { baseCur: st.currency });
   const jarOptions = (sel) => st.jars.filter((j) => !j.savings).map((j) => `<option value="${esc(j.id)}" ${sel === j.id ? 'selected' : ''}>${esc(j.name)}</option>`).join('')
     + `<option value="${M.NO_JAR}" ${sel === M.NO_JAR ? 'selected' : ''}>Business, outside the jars</option>`;
   const used = new Set(state.tx.map((t) => t.category));
@@ -1316,8 +1316,7 @@ function categoryOrder(type) {
 }
 
 function accLabel(a) {
-  const multi = state.settings.accounts.some((x) => x.currency !== state.settings.currency);
-  return `${a.name}${a.bank && !a.name.toLowerCase().includes(a.bank.toLowerCase()) ? ` · ${a.bank}` : ''}${multi ? ` · ${a.currency}` : ''}`;
+  return accountDisplayName(a, { baseCur: state.settings.currency });
 }
 
 // Rate to the base currency we'd suggest for a new record: today's rate if
@@ -1379,9 +1378,11 @@ function openTxSheet(existing = null, preset = {}) {
   const entryRate = () => Number(String(entryRateText).replace(',', '.'));
   const curChoices = () => [...new Set([curOf(), baseCur, 'USD', 'EUR', ...state.settings.accounts.map((a) => a.currency), ...state.people.map((x) => x.currency)].filter(Boolean))];
 
-  const accSelect = (field, label) => `<label class="field"><span>${label}</span><select id="tx-${field}">
-    ${accounts.concat(existing && !accounts.some((a) => a.id === existing[field]) && M.account(state, existing[field]) ? [M.account(state, existing[field])] : [])
-    .map((a) => `<option value="${esc(a.id)}" ${draft[field] === a.id ? 'selected' : ''}>${esc(accLabel(a))}</option>`).join('')}</select></label>`;
+  const accSelect = (field, label) => {
+    const all = accounts.concat(existing && !accounts.some((a) => a.id === existing[field]) && M.account(state, existing[field]) ? [M.account(state, existing[field])] : []);
+    return `<label class="field"><span>${label}</span><select id="tx-${field}">
+      ${accountOptionsHTML(all, draft[field], { baseCur })}</select></label>`;
+  };
 
   const html = () => {
     const isT = draft.type === 'transfer';
