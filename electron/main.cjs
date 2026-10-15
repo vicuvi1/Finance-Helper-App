@@ -198,31 +198,56 @@ const send = (channel, payload) => {
 
 function getUpdater() {
   if (updater || !app.isPackaged) return updater;
-  ({ autoUpdater: updater } = require('electron-updater'));
-  updater.autoDownload = false;
-  updater.autoInstallOnAppQuit = true;
-  updater.on('update-available', (i) => send('update-event', { type: 'available', version: i.version, date: i.releaseDate }));
-  updater.on('update-not-available', () => send('update-event', { type: 'none' }));
-  updater.on('download-progress', (p) => send('update-event', { type: 'progress', percent: Math.round(p.percent) }));
-  updater.on('update-downloaded', (i) => send('update-event', { type: 'ready', version: i.version }));
-  updater.on('error', (e) => send('update-event', { type: 'error', message: String(e?.message || e).split('\n')[0] }));
-  return updater;
+  try {
+    ({ autoUpdater: updater } = require('electron-updater'));
+    updater.autoDownload = false;
+    updater.autoInstallOnAppQuit = true;
+    updater.on('update-available', (i) => send('update-event', { type: 'available', version: i.version, date: i.releaseDate }));
+    updater.on('update-not-available', () => send('update-event', { type: 'none' }));
+    updater.on('download-progress', (p) => send('update-event', { type: 'progress', percent: Math.round(p.percent) }));
+    updater.on('update-downloaded', (i) => send('update-event', { type: 'ready', version: i.version }));
+    updater.on('error', (e) => send('update-event', { type: 'error', message: String(e?.message || e).split('\n')[0] }));
+    return updater;
+  } catch (err) {
+    console.error('Failed to load electron-updater:', err);
+    return null;
+  }
 }
 
 ipcMain.handle('update-check', async () => {
-  const u = getUpdater();
-  if (!u) return { type: 'dev', message: 'Updates work in the installed app, not in development.' };
-  const r = await u.checkForUpdates();
-  // No answer at all means this copy can't self-update (e.g. the portable
-  // .exe or an unpacked folder); never report that as "up to date".
-  if (!r?.updateInfo) return { type: 'error', message: 'This copy of the app can\'t update itself. Install it with the Setup file once; after that updates are one click.' };
-  const latest = r.updateInfo.version;
-  return { type: latest && latest !== app.getVersion() ? 'available' : 'none', version: latest, date: r?.updateInfo?.releaseDate };
+  try {
+    const u = getUpdater();
+    if (!u) return { type: 'dev', message: 'Updates work in the installed app with updater support.' };
+    const r = await u.checkForUpdates();
+    // No answer at all means this copy can't self-update (e.g. the portable
+    // .exe or an unpacked folder); never report that as "up to date".
+    if (!r?.updateInfo) return { type: 'error', message: 'This copy of the app can\'t update itself. Install it with the Setup file once; after that updates are one click.' };
+    const latest = r.updateInfo.version;
+    return { type: latest && latest !== app.getVersion() ? 'available' : 'none', version: latest, date: r?.updateInfo?.releaseDate };
+  } catch (err) {
+    return { type: 'error', message: String(err?.message || err).split('\n')[0] };
+  }
 });
-ipcMain.handle('update-download', async () => { await getUpdater()?.downloadUpdate(); return true; });
+ipcMain.handle('update-download', async () => {
+  try {
+    await getUpdater()?.downloadUpdate();
+    return true;
+  } catch (err) {
+    send('update-event', { type: 'error', message: String(err?.message || err).split('\n')[0] });
+    return false;
+  }
+});
 // Silent install (no Setup wizard to click through or lose behind other
 // windows), then the app starts again by itself.
-ipcMain.handle('update-install', () => { quitting = true; getUpdater()?.quitAndInstall(true, true); return true; });
+ipcMain.handle('update-install', () => {
+  try {
+    quitting = true;
+    getUpdater()?.quitAndInstall(true, true);
+    return true;
+  } catch {
+    return false;
+  }
+});
 
 app.whenReady().then(() => {
   protocol.handle('app', (req) => {
