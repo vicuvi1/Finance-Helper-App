@@ -2450,6 +2450,21 @@ document.addEventListener('click', (e) => {
     render();
     const rows = [...document.querySelectorAll(`#sheet-grid tr[data-date="${el.dataset.date}"]`)];
     rows.at(-1)?.querySelectorAll('input')[2]?.focus();
+  } else if (act === 'sh-jump-today') {
+    const todayRow = document.getElementById('gs-today-row');
+    if (todayRow) {
+      todayRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      todayRow.classList.add('flash-row');
+      setTimeout(() => todayRow.classList.remove('flash-row'), 1500);
+    } else {
+      goToMonth(monthKey(todayISO()));
+      setTimeout(() => {
+        const row = document.getElementById('gs-today-row');
+        row?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        row?.classList.add('flash-row');
+        setTimeout(() => row?.classList.remove('flash-row'), 1500);
+      }, 60);
+    }
   }
   else if (act === 'sel-all') onSelectAll(el);
   else if (act === 'bulk-clear') { ui.selected.clear(); refreshSelection(); }
@@ -2533,7 +2548,27 @@ document.addEventListener('change', (e) => {
   else onSettingsChange(e.target);
 });
 
+function updateSheetFormula(input) {
+  if (!input || !input.matches || !input.matches('#sheet-grid input[data-sh]')) return;
+  const [date, side, , field] = (input.dataset.sh || '').split('|');
+  const tr = input.closest('tr');
+  const rowNum = tr?.querySelector('.gs-rn')?.textContent || '';
+  const colLetter = side === 'in' ? (field === 'amount' ? 'B' : 'C') : (field === 'amount' ? 'D' : 'E');
+  const coordEl = document.getElementById('gs-cell-addr');
+  const textEl = document.getElementById('gs-formula-text');
+  if (coordEl && rowNum) coordEl.textContent = `${colLetter}${rowNum}`;
+  if (textEl) {
+    const sideName = side === 'in' ? 'Income' : 'Expense';
+    const fieldName = field === 'amount' ? 'Amount' : 'Note';
+    const val = input.value.trim() || '(empty)';
+    textEl.textContent = `${date} · ${sideName} ${fieldName}: ${val}`;
+  }
+}
+
+document.addEventListener('focusin', (e) => updateSheetFormula(e.target));
+
 document.addEventListener('input', (e) => {
+  if (e.target.matches && e.target.matches('#sheet-grid input[data-sh]')) updateSheetFormula(e.target);
   if (e.target.dataset.act === 'amb-vol') {
     AmbientMusic.setVolume(e.target.value);
     return;
