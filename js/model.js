@@ -4,6 +4,7 @@
 import { splitByPercent, formatMoney } from './money.js';
 import { monthKey, addMonths, daysInMonth, monthLabel, addDays, isValidISO } from './dates.js';
 import { convert, coinValue } from './fx.js';
+import { perMonth } from './recurring.js';
 
 // v1: first release. v2: custom multi-currency accounts, people, loans,
 // per-record timestamps and deletion markers for sync.
@@ -443,10 +444,26 @@ export function splitIncome(state, cents) {
   return jars.map((j, i) => ({ jar: j, amount: parts[i] }));
 }
 
+// Your usual monthly income, in the main currency: the regular incomes in
+// Plan, or the average of the last 3 months that had income (the larger).
+export function expectedIncome(state, key) {
+  const base = state.settings.currency;
+  const regular = (state.recurring || []).filter((r) => r.type === 'income' && !r.paused)
+    .reduce((a, r) => a + ((r.currency || base) === base ? perMonth(r) : convert(perMonth(r), r.currency, base, state.rates) || 0), 0);
+  const past = [1, 2, 3].map((n) => monthSummary(state, addMonths(key, -n)).income).filter((x) => x > 0);
+  const average = past.length ? Math.round(past.reduce((a, x) => a + x, 0) / past.length) : 0;
+  return Math.max(regular, average);
+}
+
 // How each jar is doing this month. Spending jars get income × pct as a budget;
 // the savings jar is measured by what you actually kept (income − spending).
-export function jarStatus(state, key) {
+// For the month still running (pass `today`), budgets use your usual income
+// until this month's income reaches it, so jars aren't "over" just because
+// the pay hasn't come in yet.
+export function jarStatus(state, key, today = null) {
   const sum = monthSummary(state, key);
+  const usual = today && monthKey(today) === key ? expectedIncome(state, key) : 0;
+  const basis = Math.max(sum.income, usual);
   const spentByJar = {};
   for (const t of sum.expenses) {
     const j = jarOf(state, t.category);
@@ -455,13 +472,14 @@ export function jarStatus(state, key) {
   }
   return state.settings.jars.map((j) => {
     // Whole lei: nobody budgets 2 446,30.
-    const budget = Math.round((sum.income * j.pct) / 10000) * 100;
+    const budget = Math.round((basis * j.pct) / 10000) * 100;
+    const est = basis > sum.income ? { basis, estimated: true } : { basis, estimated: false };
     if (j.savings) {
       const kept = Math.max(0, sum.net);
-      return { jar: j, budget, used: kept, left: kept - budget, ratio: budget ? kept / budget : null, savings: true };
+      return { jar: j, budget, used: kept, left: kept - budget, ratio: budget ? kept / budget : null, savings: true, ...est };
     }
     const used = spentByJar[j.id] || 0;
-    return { jar: j, budget, used, left: budget - used, ratio: budget ? used / budget : used ? Infinity : 0 };
+    return { jar: j, budget, used, left: budget - used, ratio: budget ? used / budget : used ? Infinity : 0, ...est };
   });
 }
 
@@ -470,6 +488,30 @@ export function jarStatus(state, key) {
 export const NO_JAR = 'none';
 const WORKISH = /work|business|job|fee|tax|client|office|lucru|munc|afacer|tax[aă]|impozit|комис|налог|работ/i;
 export const jarOf = (state, catId) => category(state, catId)?.jar || jarFallback(state);
+
+// Fixed bills (rent, utilities, internet…): real spending, but not "daily"
+// spending, so they don't use up today's safe-to-spend. A category's own
+// choice wins; otherwise its name decides.
+const BILLISH = /bill|rent|chiri|apart|utilit|factur|comunal|internet|subscript|abonam|insur|asigur|mortgage|ipotec|credit|coммун|аренд|квартир/i;
+export const isBillCategory = (state, catId) => {
+  const c = category(state, catId);
+  if (!c) return false;
+  return typeof c.bill === 'boolean' ? c.bill : c.id === 'home' || c.id === 'subscriptions' || BILLISH.test(c.name || '');
+};
+
+// Once: spending categories named like work costs ("Work fees", "Taxes",
+// "Business") leave the personal jars; you can put them back in Settings.
+const WORK_COST = /\b(work|business|job|fees?|tax(es)?|client|office|lucru|afacer\w*|impozit\w*)\b/i;
+export function moveWorkCostsOutOfJars(state, now = Date.now()) {
+  const moved = [];
+  for (const c of state.settings.categories) {
+    if (c.type !== 'expense' || c.jar === NO_JAR || c.jarChosen || !WORK_COST.test(c.name || '')) continue;
+    c.jar = NO_JAR;
+    touch(c, now);
+    moved.push(c.name);
+  }
+  return moved;
+}
 
 function jarFallback(state) {
   const nonSavings = state.settings.jars.find((j) => !j.savings);
@@ -799,7 +841,7 @@ export function insights(state, key, today) {
   }
 
   // 2. Jars that went over budget.
-  for (const j of jarStatus(state, key)) {
+  for (const j of jarStatus(state, key, today)) {
     if (j.savings || !j.used) continue;
     if (j.used > j.budget) {
       const rows = s.byCategory.filter((c) => jarOf(state, c.id) === j.jar.id);
@@ -807,7 +849,7 @@ export function insights(state, key, today) {
       // Most of it is a category that sounds like work: maybe it is a work cost, not a personal one.
       const big = rows[0] && rows[0].amount >= j.used / 2 && WORKISH.test(cat(rows[0].id).name) ? cat(rows[0].id).name : '';
       const hint = big ? ` If ${big} is a work cost, set it to "Business, outside the jars" in Settings → Categories.` : '';
-      out.push({ level: 'bad', icon: j.jar.emoji, title: `${j.jar.name}: over by ${fmt(j.used - j.budget)}`, text: `Plan was ${j.jar.pct}% of income (${fmt(j.budget)}), you spent ${fmt(j.used)}: ${inside}. The difference comes out of your deposit.${hint}` });
+      out.push({ level: 'bad', icon: j.jar.emoji, title: `${j.jar.name}: over by ${fmt(j.used - j.budget)}`, text: `Plan was ${j.jar.pct}% of ${j.estimated ? 'your usual ' : ''}income (${fmt(j.budget)}), you spent ${fmt(j.used)}: ${inside}. The difference comes out of your deposit.${hint}` });
     }
   }
 

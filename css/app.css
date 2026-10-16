@@ -563,7 +563,9 @@ tr.click:hover td { background: color-mix(in srgb, var(--gold) 5%, var(--surface
 .set-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px 0; border-top: 1px solid var(--line); }
 .set-row:first-of-type { border-top: 0; }
 .set-row .pct { width: 84px; text-align: right; font-feature-settings: "tnum"; }
-.cat-row { display: grid; grid-template-columns: 14px minmax(0, 1fr) minmax(0, 1fr); gap: 10px; align-items: center; margin-bottom: 8px; }
+.cat-row { display: grid; grid-template-columns: 14px minmax(0, 1fr) minmax(0, 1fr) auto; gap: 10px; align-items: center; margin-bottom: 8px; }
+.cat-bill { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); cursor: pointer; white-space: nowrap; }
+.cat-bill input { width: 16px; height: 16px; accent-color: var(--gold); margin: 0; }
 .cat-row .dot { margin: 0; }
 .sum-ok { color: var(--income); font-weight: 600; }
 .sum-bad { color: var(--expense); font-weight: 600; }

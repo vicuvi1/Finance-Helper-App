@@ -55,6 +55,11 @@ tested); `js/app.js` only renders and handles taps.
 - Safe to spend today: `js/safespend.js` (pure, tested): cards+cash (`isLiquid`) minus bills
   before the next recurring income (else the 1st) minus this month's savings plan not yet moved
   to savings, over the days left. Home `safeCard`, bot `safeLine` in expense replies and /today.
+  Bills (`isBillCategory`: category `bill` flag, else Home & bills / Subscriptions / rent-like
+  names) don't count as today's spending; logging one offers "Make it monthly" (`offerMonthlyBill`).
+- Jars: for the running month `jarStatus(state, key, today)` budgets on `expectedIncome` (regular
+  incomes or the last 3 months' average, the larger) until real income passes it. Work-cost
+  categories were moved once to "Business, outside the jars" (`moveWorkCostsOutOfJars`).
 - No `alert`/`confirm`/`prompt`: confirmations are bottom sheets.
 - New app files go in `sw.js` `SHELL` (offline), `build.files` in
   `package.json` (desktop) and `scripts/build-preview.mjs` if outside css/js/icons.

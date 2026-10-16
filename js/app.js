@@ -495,7 +495,7 @@ function stats(s, key = 'm') {
 }
 
 function jarsCard(key) {
-  const rows = M.jarStatus(state, key);
+  const rows = M.jarStatus(state, key, todayISO());
   const income = M.monthSummary(state, key).income;
   const body = rows.map((j) => {
     if (j.savings) {
@@ -539,7 +539,8 @@ function jarsCard(key) {
       <h2 style="margin:0;">Smart split jars</h2>
       <button class="card-link" data-go="settings" data-sub="categories">Rules</button>
     </div>
-    ${income ? '' : '<p class="muted small" style="margin-top:6px; margin-bottom:0;">Log your income this month and each jar gets its share.</p>'}
+    ${rows[0]?.estimated ? `<p class="muted small" style="margin-top:6px; margin-bottom:0;">Budgets use your usual income (${money(rows[0].basis)} a month) until this month's comes in${income ? `: ${money(income)} so far` : ''}.</p>`
+    : income ? '' : '<p class="muted small" style="margin-top:6px; margin-bottom:0;">Log your income this month and each jar gets its share.</p>'}
     <div class="liquid-jars-grid">${body}</div>
   </section>`;
 }
@@ -596,7 +597,7 @@ function safeCard(today) {
   const sparkDays = [];
   for (let i = 6; i >= 0; i--) {
     const d = addDays(today, -i);
-    const spent = state.tx.filter((t) => t.date === d && t.type === 'expense' && !t.loan && !t.recurring)
+    const spent = state.tx.filter((t) => t.date === d && t.type === 'expense' && !t.loan && !t.recurring && !M.isBillCategory(state, t.category))
       .reduce((a, t) => a + M.B(t), 0);
     sparkDays.push({ d, dayLabel: Number(d.slice(8)), spent });
   }
@@ -1020,8 +1021,9 @@ function viewSettings() {
     ${dot(catColor(c.id))}
     <input type="text" value="${esc(c.name)}" data-cat="${esc(c.id)}" data-field="name" aria-label="Name">
     ${c.type === 'expense'
-    ? `<select data-cat="${esc(c.id)}" data-field="jar" aria-label="Jar">${jarOptions(c.jar)}</select>`
-    : used.has(c.id) ? '<span></span>' : `<button class="btn danger" data-act="del-cat" data-id="${esc(c.id)}">Remove</button>`}
+    ? `<select data-cat="${esc(c.id)}" data-field="jar" aria-label="Jar">${jarOptions(c.jar)}</select>
+      <label class="cat-bill" title="A bill (rent, internet, utilities): paying it doesn't use up today's safe-to-spend"><input type="checkbox" data-cat="${esc(c.id)}" data-field="bill" ${M.isBillCategory(state, c.id) ? 'checked' : ''}><span>Bill</span></label>`
+    : used.has(c.id) ? '<span></span><span></span>' : `<button class="btn danger" data-act="del-cat" data-id="${esc(c.id)}">Remove</button><span></span>`}
   </div>`;
   const lastBackup = state.meta.lastBackup ? new Date(state.meta.lastBackup).toLocaleDateString() : 'never';
   const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.navigator.standalone;
@@ -1044,7 +1046,7 @@ function viewSettings() {
     <label class="field" style="margin:12px 0 0"><span>The "move to savings" button sends money to</span><select data-set="savingsAccount">${accOptions(st.savingsAccount, false)}</select></label>
   </section>`,
     categories: `<section class="card"><h2>Categories</h2>
-    <p class="muted small" style="margin-top:0">Spending: pick which jar it comes from. Work costs (fees, taxes) can stay outside the jars.</p>
+    <p class="muted small" style="margin-top:0">Spending: pick which jar it comes from. Work costs (fees, taxes) can stay outside the jars. Tick <b>Bill</b> for rent, internet and other bills: paying them doesn't use up today's safe-to-spend.</p>
     ${st.categories.filter((c) => c.type === 'expense').map(catRow).join('')}
     <p class="muted small">Income sources</p>
     ${st.categories.filter((c) => c.type === 'income').map(catRow).join('')}
@@ -1242,7 +1244,33 @@ function runCounters(entering) {
   }
 }
 
+// A bill paid by hand (rent, internet…): offer to make it a monthly bill,
+// so it's set aside before each payday instead of surprising one day.
+function offerMonthlyBill(tx) {
+  if (tx.type !== 'expense' || tx.recurring || tx.loan || !M.isBillCategory(state, tx.category)) return false;
+  const norm = (x) => String(x || '').trim().toLowerCase();
+  if (state.recurring.some((r) => r.type === 'expense' && r.category === tx.category && norm(r.note) === norm(tx.note))) return false;
+  toast(`Spent ${formatMoney(tx.amount, tx.currency)}. Is this a monthly bill?`, 'Make it monthly', () => {
+    const t = state.tx.find((x) => x.id === tx.id);
+    if (!t || t.recurring) return;
+    const now = Date.now();
+    const id = M.uid();
+    state.recurring.push({ id, createdAt: now, updatedAt: now, type: 'expense', amount: t.amount, currency: t.currency, account: t.account, category: t.category, note: t.note, every: 'month', start: t.date, lastDone: t.date, auto: false, paused: false });
+    M.touch(t).recurring = id;
+    commit();
+    toast('Monthly bill added. Safe to spend now keeps it aside before each payday (see Plan).');
+  });
+  return true;
+}
+
 function render({ enter = false } = {}) {
+  // Once: work costs ("Work fees", "Taxes") leave the personal jars.
+  if (!state._sealed && !state.meta.workJarsMoved) {
+    state.meta.workJarsMoved = 1;
+    const moved = M.moveWorkCostsOutOfJars(state);
+    persist({ quiet: true });
+    if (moved.length && !DEMO) setTimeout(() => toast(`${moved.join(', ')}: now a work cost, outside your personal jars. Change it in Settings → Categories.`), 1500);
+  }
   // Once: the owner chose look B (Midnight, dark). "Light" stays in Settings.
   if (!state._sealed && !state.meta.lookB) {
     state.meta.lookB = 1;
@@ -1585,6 +1613,7 @@ function openTxSheet(existing = null, preset = {}) {
     // Changed the category: offer to always file records like this there.
     if (existing && Rules.afterCorrection(existing, tx)) return;
     if (!existing && draft.repeat && tx.type !== 'transfer') { toast(`Added, and it repeats ${FREQS.find((f) => f.id === draft.repeat).short}. See Plan.`); return; }
+    if (!existing && offerMonthlyBill(tx)) return;
     const alert = !existing && M.budgetAlert(state, tx);
     if (alert) { toast(alert.text); return; }
     if (!existing && tx.type === 'income' && !tx.loan) openSplitSheet(tx);
@@ -2319,7 +2348,8 @@ function onSettingsChange(el) {
     const c = M.touch(M.category(state, el.dataset.cat));
     if (el.dataset.field === 'name') c.name = v.trim() || 'Untitled';
     else if (el.dataset.field === 'emoji') c.emoji = v.trim() || '•';
-    else if (el.dataset.field === 'jar') c.jar = v;
+    else if (el.dataset.field === 'jar') { c.jar = v; c.jarChosen = true; }
+    else if (el.dataset.field === 'bill') c.bill = el.checked;
   } else return;
   persist();
   Sync.changed();

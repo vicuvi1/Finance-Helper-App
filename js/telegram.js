@@ -142,7 +142,7 @@ export function monthText(state, today) {
       lines.push(`${esc(catName(state, c.id))} ${fm(state, c.amount)} · ${Math.round(share * 100)}%`);
     }
   }
-  const over = jarStatus(state, key).filter((j) => !j.savings && j.budget && j.used > j.budget);
+  const over = jarStatus(state, key, today).filter((j) => !j.savings && j.budget && j.used > j.budget);
   if (over.length) lines.push('', ...over.map((j) => `⚠️ ${esc(j.jar.name)}: over by ${fm(state, j.used - j.budget)}`));
   return lines.join('\n');
 }

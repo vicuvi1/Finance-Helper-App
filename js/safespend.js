@@ -3,7 +3,7 @@
 // spread over the days until that income (or the end of the month).
 // Pure and tested; Home and the Telegram bot show it.
 
-import { accountBalances, monthSummary, savingsJar, B } from './model.js';
+import { accountBalances, monthSummary, savingsJar, isBillCategory, B } from './model.js';
 import { dueItems, upcomingItems } from './recurring.js';
 import { isLiquid } from './forecast.js';
 import { daysBetween, monthKey, addMonths } from './dates.js';
@@ -46,7 +46,9 @@ export function safeToSpend(state, today) {
   const savingsLeft = Math.max(0, plan - moved);
 
   // Today's everyday spending counts against today's share, not the pool.
-  const spentToday = state.tx.filter((t) => t.date === today && t.type === 'expense' && !t.loan && !t.recurring)
+  // Bills paid today (rent, internet…) are not today's spending: they already
+  // left your balance, so they shrink every day's share a little instead.
+  const spentToday = state.tx.filter((t) => t.date === today && t.type === 'expense' && !t.loan && !t.recurring && !isBillCategory(state, t.category))
     .reduce((a, t) => a + B(t), 0);
   const pool = liquid + spentToday - billsTotal - savingsLeft;
   const perDay = pool > 0 ? lei(pool / days) : 0;
