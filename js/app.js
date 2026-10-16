@@ -49,7 +49,7 @@ import { tableHTML, calendarHTML, dayLabelHTML, accountOptionsHTML, accountDispl
 import { sheetHTML, monthTabs } from './sheetview.js';
 import { createHistory } from './history.js';
 import { searchTx, searchSummary, SEARCH_HINT } from './search.js';
-import { safeToSpend, shortDay } from './safespend.js';
+import { safeToSpend, shortDay, limitStatus, suggestLimit, everydaySpent } from './safespend.js';
 import * as Pay from './payyourself.js';
 import { sound } from './audio.js';
 import { AmbientMusic } from './ambient.js';
@@ -646,6 +646,70 @@ function openPaySheet() {
   });
 }
 
+// ---------- Spending limit ----------
+// One number for the month's everyday spending (not bills, rent or work
+// costs). Safe to spend then never gives a day more than its fair share of
+// what is left of it.
+function limitSettingsCard() {
+  const lim = limitStatus(state, todayISO());
+  return `<section class="card"><h2>Spending limit</h2>
+    <p class="muted small" style="margin-top:0">${lim ? `<b>${money(lim.amount)}</b> a month for everyday spending. This month: ${money(lim.spent)} spent, ${lim.left >= 0 ? `${money(lim.left)} left` : `<span class="expense">${money(-lim.left)} over</span>`}.`
+    : 'Pick how much you want to spend in a month on everyday things (food, going out, shopping). Safe to spend then shares it out day by day. Bills and rent don\'t count.'}</p>
+    <button class="btn block" data-act="limit-setup">${lim ? 'Change' : 'Set a limit'}</button></section>`;
+}
+
+function openLimitSheet() {
+  const today = todayISO();
+  const key = monthKey(today);
+  const cur = state.settings.limit || {};
+  const usual = suggestLimit(state, today);
+  const spent = everydaySpent(state, `${key}-01`, today);
+  const daysLeft = daysInMonth(key) - Number(today.slice(8)) + 1;
+  const chips = usual ? [[usual, 'My usual'], [Math.round(usual * 0.9 / 10000) * 10000, '−10%'], [Math.round(usual * 0.8 / 10000) * 10000, '−20%']] : [];
+  openSheet(`<h3>Spending limit <button type="button" class="icon-btn" data-close aria-label="Close">✕</button></h3>
+    <p class="muted small" style="margin-top:0">How much for everyday spending this month: food, going out, shopping, taxis. Bills, rent, repeating payments and work costs don't count.</p>
+    <form id="limit-form" autocomplete="off">
+      <label class="field"><span>Limit per month (${esc(state.settings.currency)})</span><input id="limit-amount" type="text" inputmode="decimal" value="${cur.amount ? centsToPlain(cur.amount) : usual ? centsToPlain(usual) : ''}" placeholder="e.g. 8000"></label>
+      ${chips.length ? `<div class="picks lim-chips">${chips.map(([v, l]) => `<button type="button" class="pick" data-lim="${v}">${l} <b>${formatMoney(v, state.settings.currency, { compact: true })}</b></button>`).join('')}</div>` : ''}
+      <div class="lim-preview" id="limit-preview" aria-live="polite"></div>
+      <p class="lock-msg" id="limit-err" hidden></p>
+      <div class="btns">${cur.on ? '<button type="button" class="btn danger" id="limit-off">Turn off</button>' : '<button type="button" class="btn" data-close>Not now</button>'}<button class="btn primary" type="submit">${cur.on ? 'Save' : 'Set the limit'}</button></div>
+    </form>`, (sheet) => {
+    const input = sheet.querySelector('#limit-amount');
+    const preview = sheet.querySelector('#limit-preview');
+    const show = () => {
+      const v = evalAmount(input.value);
+      if (!(v > 0)) { preview.innerHTML = ''; return; }
+      const left = v - spent;
+      const perDay = left > 0 ? Math.floor(left / daysLeft / 100) * 100 : 0;
+      const pct = Math.min(100, (spent / v) * 100);
+      preview.innerHTML = `<div class="lim-bar ${left < 0 ? 'over' : ''}"><i style="width:${pct.toFixed(1)}%"></i></div>
+        <div class="lim-figs"><span><b>${money(spent)}</b> spent this month</span><span>${left >= 0 ? `<b>${money(left)}</b> left` : `<b class="expense">${money(-left)}</b> over`}</span></div>
+        <p class="lim-day">${left > 0 ? `About <b>${money(perDay)}</b> a day for the ${daysLeft} day${daysLeft === 1 ? '' : 's'} left` : 'Nothing left for this month at this limit'}${usual ? ` · you usually spend ${money(usual)}` : ''}</p>`;
+    };
+    input.addEventListener('input', show);
+    sheet.querySelectorAll('[data-lim]').forEach((b) => b.addEventListener('click', () => { input.value = centsToPlain(Number(b.dataset.lim)); show(); }));
+    show();
+    sheet.querySelector('#limit-off')?.addEventListener('click', () => {
+      state.settings.limit = { ...state.settings.limit, on: false };
+      state.settings.updatedAt = Date.now();
+      commit(); closeSheet(); toast('Spending limit is off. Safe to spend goes by your money only.');
+    });
+    sheet.querySelector('#limit-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const amount = evalAmount(input.value);
+      const err = sheet.querySelector('#limit-err');
+      if (!(amount > 0)) { err.textContent = 'Type the limit, e.g. 8000.'; err.hidden = false; return; }
+      state.settings.limit = { on: true, amount };
+      state.settings.updatedAt = Date.now();
+      commit();
+      closeSheet();
+      const sf = safeToSpend(state, todayISO());
+      toast(`Limit set. Today you can spend ${money(Math.max(0, sf.leftToday))}.`);
+    });
+  });
+}
+
 // On pay day, if you chose "automatically": the salary moves by itself.
 function autoPay() {
   if (state._sealed || DEMO) return;
@@ -726,7 +790,17 @@ function safeCard(today) {
     ? `Bills and savings need <b>${money(sf.short)}</b> more before ${esc(shortDay(sf.payday))}.`
     : isOver
       ? `Over by <b>${money(-left)}</b>. From tomorrow: <b>${money(sf.tomorrow)}</b> a day until ${esc(shortDay(sf.payday))}.`
-      : `Spent <b>${money(sf.spentToday)}</b> of today's <b>${money(sf.perDay)}</b> · <b>${money(Math.max(0, sf.pool))}</b> for ${sf.days} day${sf.days === 1 ? '' : 's'}, until ${esc(shortDay(sf.payday))}`;
+      : sf.byLimit
+        ? `Spent <b>${money(sf.spentToday)}</b> of today's <b>${money(sf.perDay)}</b> · your limit decides today`
+        : `Spent <b>${money(sf.spentToday)}</b> of today's <b>${money(sf.perDay)}</b> · <b>${money(Math.max(0, sf.pool))}</b> for ${sf.days} day${sf.days === 1 ? '' : 's'}, until ${esc(shortDay(sf.payday))}`;
+  const lim = sf.limit;
+  const limitRow = lim
+    ? `<button type="button" class="sh-limit ${lim.left < 0 ? 'over' : lim.projected > lim.amount ? 'pace' : ''}" data-act="limit-setup" title="Change your spending limit">
+        <span class="shl-top"><span>Month limit</span><span><b>${money(lim.spent)}</b> of ${money(lim.amount)} · ${lim.left >= 0 ? `${money(lim.left)} left` : `${money(-lim.left)} over`}</span></span>
+        <span class="sh-meter"><i style="width:${Math.min(100, lim.ratio * 100).toFixed(1)}%"></i></span>
+        ${lim.left >= 0 && lim.projected > lim.amount ? `<span class="shl-pace">At this pace: ${money(lim.projected)} by the end of the month</span>` : ''}
+      </button>`
+    : '<button type="button" class="card-link sh-setlimit" data-act="limit-setup">Set a monthly spending limit →</button>';
 
   return `<section class="card safe-hero sh-${tone}" aria-label="Safe to spend today">
     <div class="sh-main">
@@ -734,6 +808,7 @@ function safeCard(today) {
       <b class="sh-fig">${formatMoney(fig, '')}<small>${esc(cur)}</small></b>
       <div class="sh-meter" role="img" aria-label="${Math.round(used)}% of today's share spent"><i style="width:${used.toFixed(1)}%"></i></div>
       <p class="sh-sub">${sub}</p>
+      ${limitRow}
     </div>
     <div class="sh-week">
       <div class="sh-week-k"><span>Last 7 days</span><span>${money(avg, { compact: true })} a day on average</span></div>
@@ -1254,7 +1329,7 @@ function viewSettings() {
   };
   // One section at a time, picked on the left (like any settings screen).
   const sections = [
-    { id: 'general', icon: '⚙️', label: 'General', sub: 'Look, pay yourself, smart split', desc: 'How the app looks, paying yourself a salary, the jar split and what an hour of your work is worth.', html: () => cards.look + paySettingsCard() + cards.split + WorkHour.settingsCard() + cards.accounts + cards.goals },
+    { id: 'general', icon: '⚙️', label: 'General', sub: 'Look, spending limit, pay yourself', desc: 'How the app looks, your monthly spending limit, paying yourself a salary, the jar split and what an hour of your work is worth.', html: () => cards.look + limitSettingsCard() + paySettingsCard() + cards.split + WorkHour.settingsCard() + cards.accounts + cards.goals },
     { id: 'extras', icon: '✨', label: 'Extras', sub: 'Music, sounds, wallpapers', desc: 'Moving backgrounds, wallpapers, button sounds and focus music. All optional, all off to start.', html: () => cards.extras },
     { id: 'categories', icon: '🏷️', label: 'Categories & rules', sub: 'Categories, jars, auto-rules', desc: 'Your categories, which jar each one fills, and rules that sort records for you.', html: () => cards.categories + Rules.settingsCard() },
     { id: 'data', icon: '💾', label: 'Data & backups', sub: 'Import, export, backups, sync', desc: 'Where your data lives, automatic backups, sync between devices and Excel import.', html: () => cards.data + Backups.settingsCard() + Sync.settingsCard() },
@@ -2540,6 +2615,7 @@ document.addEventListener('click', (e) => {
   else if (act === 'bd-toggle') Buddy.toggle();
   else if (act === 'calc') Calc.toggle();
   else if (act === 'pay-setup') openPaySheet();
+  else if (act === 'limit-setup') openLimitSheet();
   else if (act === 'pay-now') payNow();
   else if (act === 'pay-hide') { state.meta.payHide = 1; persist(); toast('Hidden. Set it up any time from Settings → General → Pay yourself.'); }
   else if (act === 'quick-pick') {

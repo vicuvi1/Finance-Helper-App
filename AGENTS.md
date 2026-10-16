@@ -87,6 +87,11 @@ Rules that keep three agents from tripping over each other:
   to savings, over the days left. Home `safeCard`, bot `safeLine` in expense replies and /today.
   Bills (`isBillCategory`: category `bill` flag, else Home & bills / Subscriptions / rent-like
   names) don't count as today's spending; logging one offers "Make it monthly" (`offerMonthlyBill`).
+- Spending limit (optional): `settings.limit = {on, amount}` per month for everyday spending
+  (`isEveryday`: not bills, repeating, loans or work costs). `limitStatus` gives spent/left/perDay
+  for the days left in the month (today included); `safeToSpend` uses the smaller of the limit's
+  and the money's daily share (`byLimit`). Sheet `openLimitSheet` (hero row, Settings → General),
+  bot `/limit 8000`, `/limit`, `/limit off`. Tests: `tests/limit.test.js`.
 - Jars: for the running month `jarStatus(state, key, today)` budgets on `expectedIncome` (regular
   incomes or the last 3 months' average, the larger) until real income passes it. Work-cost
   categories were moved once to "Business, outside the jars" (`moveWorkCostsOutOfJars`).

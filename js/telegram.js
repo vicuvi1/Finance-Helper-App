@@ -9,7 +9,7 @@ import { monthKey, addMonths, addDays, MONTHS, DOW_SHORT, dowIndex, monthLabel }
 import { blockKeyboard } from './blocks.js';
 import { dueItems, upcomingItems } from './recurring.js';
 import { workText } from './workhours.js';
-import { safeLine, safeToSpend, shortDay } from './safespend.js';
+import { safeLine, safeToSpend, shortDay, limitStatus } from './safespend.js';
 
 const fold = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 const INCOME_WORDS = /^(\+|got|earned|income|salary|salariu|venit|primit|зарплата|получил|доход)$/;
@@ -192,7 +192,24 @@ export function safeDetailsText(state, today) {
   if (s.billsTotal > 0) lines.push(`🔔 Bills before ${shortDay(s.payday)}: −${f(s.billsTotal)} (${s.bills.length} bill${s.bills.length === 1 ? '' : 's'})`);
   if (s.savingsLeft > 0) lines.push(`🏦 Savings plan needed: −${f(s.savingsLeft)}`);
   lines.push(`🏊 Pool: <b>${f(Math.max(0, s.pool))}</b> across ${s.days} day${s.days === 1 ? '' : 's'} until ${shortDay(s.payday)}${s.paydayFrom ? ` (${esc(s.paydayFrom)})` : ''}`);
+  if (s.limit) lines.push(`🎯 Month limit: ${f(s.limit.spent)} of ${f(s.limit.amount)}, ${s.limit.left >= 0 ? `${f(s.limit.left)} left (${f(s.limit.perDay)} a day)` : `${f(-s.limit.left)} over`}${s.byLimit ? '. Your limit sets today\'s share.' : ''}`);
   return lines.join('\n');
+}
+
+// /limit: the month against your spending limit (or how to set one).
+export function limitText(state, today) {
+  const l = limitStatus(state, today);
+  const f = (c) => esc(formatMoney(c, state.settings.currency));
+  if (!l) return '🎯 No spending limit yet. Set one: <code>/limit 8000</code> (a month, for everyday spending; bills and rent don\'t count).';
+  const bar = '▓'.repeat(Math.min(10, Math.round(l.ratio * 10))) + '░'.repeat(Math.max(0, 10 - Math.round(l.ratio * 10)));
+  return [
+    `🎯 <b>Spending limit</b>: ${f(l.amount)} a month`,
+    `${bar} ${Math.round(l.ratio * 100)}%`,
+    `Spent ${f(l.spent)} · ${l.left >= 0 ? `<b>${f(l.left)}</b> left for ${l.daysLeft} day${l.daysLeft === 1 ? '' : 's'}` : `<b>${f(-l.left)} over</b>`}`,
+    l.left >= 0 && l.projected > l.amount ? `⚠️ At this pace: ${f(l.projected)} by the end of the month.` : '',
+    '',
+    'Change: <code>/limit 9000</code> · off: <code>/limit off</code>',
+  ].filter((x, i, a) => x || a[i - 1]).join('\n');
 }
 
 // Visual status of all active goals.
@@ -240,7 +257,7 @@ export function ratesText(state) {
 
 export const HELP = `Tap a block below to log it for today, or type: <code>coffee 35</code>, <code>taxi 45 maib</code>, <code>120+45 groceries</code>. Income starts with +: <code>+500 salary</code>. Another day: <code>coffee 35 yesterday</code>.
 
-🟢 /safe · 🎯 /goals · 📊 /today · 📅 /month · 💰 /balance · 💵 /rates · 🧾 /last · ↩️ /undo
+🟢 /safe · 🚦 /limit · 🎯 /goals · 📊 /today · 📅 /month · 💰 /balance · 💵 /rates · 🧾 /last · ↩️ /undo
 🧱 /blocks: your buttons · <code>/addblock 🍕 Pizza 120</code> · <code>/delblock pizza</code>
 
 PC off? Keep sending: your messages are kept and the app logs them, with the right day, when it opens.`;

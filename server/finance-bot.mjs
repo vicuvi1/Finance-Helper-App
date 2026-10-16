@@ -82,6 +82,7 @@ const esc = (s) => String(s).replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;
 const ASKS = [
   [/^(\/today|📊)/, 'today'], [/^(\/balance|💰)/, 'balance'], [/^(\/month|📅)/, 'month'], [/^(\/last|🧾)/, 'last'],
   [/^(\/safe|🟢)/, 'safe'], [/^(\/goals|🎯)/, 'goals'], [/^(\/rates|💵)/, 'rates'],
+  [/^\/limit$/, 'limit'], [/^\/recap$/, 'recap'],
 ];
 const at = (t) => new Date(t).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: process.env.TZ || 'Europe/Chisinau' });
 
@@ -195,7 +196,7 @@ async function api(q) {
   if (q.a === 'snapshot') {
     const s = q.snapshot || {};
     const pick = (k) => (typeof s[k] === 'string' ? s[k].slice(0, 3500) : '');
-    st.snapshot = { at: Date.now(), today: pick('today'), balance: pick('balance'), month: pick('month'), last: pick('last'), safe: pick('safe'), goals: pick('goals'), rates: pick('rates') };
+    st.snapshot = { at: Date.now(), today: pick('today'), balance: pick('balance'), month: pick('month'), last: pick('last'), safe: pick('safe'), goals: pick('goals'), rates: pick('rates'), limit: pick('limit'), recap: pick('recap') };
     save();
     return { ok: true };
   }

@@ -206,6 +206,15 @@ async function handle(updates) {
       else if (cmd === '/review') { if (!late) sendWeekly(); }
       else if (cmd === '/cash') { if (!late) askCash(); }
       else if (cmd === '/safe' || text === '🟢 Safe') { if (!late) send(T.safeDetailsText(state, todayISO()), keyboard()); }
+      else if (/^\/limit\b/.test(cmd)) {
+        const arg = cmd.replace(/^\/limit\s*/, '').trim();
+        if (arg === 'off') { state.settings.limit = { ...(state.settings.limit || {}), on: false }; state.settings.updatedAt = Date.now(); changed = true; send('🎯 Spending limit is off.'); }
+        else if (arg) {
+          const amount = evalAmount(arg);
+          if (amount > 0) { state.settings.limit = { on: true, amount }; state.settings.updatedAt = Date.now(); changed = true; send(`${T.limitText(state, todayISO())}\n\n${safeLine(state, todayISO(), (c) => esc(formatMoney(c, state.settings.currency)))}`, keyboard()); }
+          else send('Write it like <code>/limit 8000</code>.');
+        } else if (!late) send(T.limitText(state, todayISO()), keyboard());
+      }
       else if (cmd === '/goals' || text === '🎯 Goals') { if (!late) send(T.goalsText(state, todayISO()), keyboard()); }
       else if (cmd === '/rates' || text === '💵 Rates') { if (!late) send(T.ratesText(state), keyboard()); }
       else if (cmd === '/today' || text === '📊 Today') { if (!late) send(T.todayText(state, todayISO()), keyboard()); }
@@ -544,6 +553,7 @@ export function pushSnapshot() {
       safe: T.safeDetailsText(state, today),
       goals: T.goalsText(state, today),
       rates: T.ratesText(state),
+      limit: T.limitText(state, today),
     };
     const key = JSON.stringify(snap);
     if (key === lastSnap) return;

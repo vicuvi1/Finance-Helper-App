@@ -19,6 +19,8 @@ const BOTFATHER_COMMANDS = `today - Today's spending & budget summary
 month - Month-to-date breakdown & jars
 balance - Net worth & balances per account
 safe - Daily safe-to-spend allowance
+limit - Your monthly spending limit (/limit 8000 sets it)
+recap - Last month's recap
 goals - Goal progress & completion ETAs
 rates - Live fiat & crypto exchange rates
 last - Last 10 recorded transactions
@@ -42,6 +44,9 @@ export function simulateCommand(cmd, state) {
   }
   if (lower === '/safe' || lower === 'safe' || lower === '🟢 safe') {
     return T.safeDetailsText(state, today);
+  }
+  if (lower === '/limit' || lower === 'limit') {
+    return T.limitText(state, today);
   }
   if (lower === '/goals' || lower === 'goals' || lower === '🎯 goals') {
     return T.goalsText(state, today);
@@ -261,6 +266,7 @@ function renderCommandsTab() {
     { label: '/month', cmd: '/month' },
     { label: '/balance', cmd: '/balance' },
     { label: '/safe', cmd: '/safe' },
+    { label: '/limit', cmd: '/limit' },
     { label: '/goals', cmd: '/goals' },
     { label: '/rates', cmd: '/rates' },
     { label: '/last', cmd: '/last' },
@@ -309,6 +315,7 @@ function renderCommandsTab() {
           <li><code>/month</code><span>Month-to-date breakdown, top categories &amp; jar status</span></li>
           <li><code>/balance</code><span>All accounts, liquid cash, cards &amp; safe balances</span></li>
           <li><code>/safe</code><span>Daily safe-to-spend allowance &amp; pool until payday</span></li>
+          <li><code>/limit</code><span>Your monthly spending limit; <code>/limit 8000</code> sets it, <code>/limit off</code> turns it off</span></li>
           <li><code>/goals</code><span>Visual progress bars and completion ETAs for goals</span></li>
           <li><code>/rates</code><span>Live official exchange rates &amp; crypto prices</span></li>
           <li><code>/last</code><span>List of last 10 recorded transactions</span></li>

@@ -5503,3 +5503,24 @@ details.card > summary { color: var(--text); font-size: 15px; }
 .set-hero-desc { font-size: 14.5px; margin-top: 4px; }
 .set-nav { box-shadow: var(--lift); border-color: var(--card-line); }
 .set-tab[aria-current="page"] { box-shadow: none; }
+
+/* Spending limit: a quiet row under Safe to spend, and its sheet. */
+.sh-setlimit { display: inline-block; margin-top: 12px; font-size: 13.5px; }
+.sh-limit { --lt: var(--gold); display: grid; gap: 7px; width: 100%; max-width: 520px; margin-top: 16px; padding: 12px 14px; text-align: left;
+  font: inherit; color: inherit; cursor: pointer; border: 1px solid var(--card-line); border-radius: 12px; background: color-mix(in srgb, var(--text) 3%, transparent); transition: border-color .2s; }
+.sh-limit:hover { border-color: var(--line-strong); }
+.sh-limit.pace { --lt: var(--warn); }
+.sh-limit.over { --lt: var(--expense); }
+.shl-top { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; font-size: 13.5px; color: var(--muted); }
+.shl-top b { color: var(--text); font-weight: 600; }
+.sh-limit .sh-meter { height: 5px; max-width: none; }
+.sh-limit .sh-meter i { background: var(--lt); }
+.shl-pace { font-size: 12.5px; color: var(--lt); }
+.lim-chips { margin: -2px 0 12px; }
+.lim-preview { min-height: 74px; margin-bottom: 8px; }
+.lim-bar { height: 8px; border-radius: 99px; background: color-mix(in srgb, var(--text) 9%, transparent); overflow: hidden; }
+.lim-bar i { display: block; height: 100%; border-radius: inherit; background: var(--gold); }
+.lim-bar.over i { background: var(--expense); }
+.lim-figs { display: flex; justify-content: space-between; gap: 10px; margin-top: 8px; font-size: 13.5px; color: var(--muted); }
+.lim-figs b { color: var(--text); }
+.lim-day { margin: 10px 0 0; font-size: 14.5px; }
