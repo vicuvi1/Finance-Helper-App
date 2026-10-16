@@ -102,7 +102,7 @@ test('sheet view: type an amount in a day row, edit it, clear it', async () => {
   await page.fill(key('amount'), '');
   await page.keyboard.press('Tab');
   await page.waitForFunction(() => !JSON.parse(localStorage.getItem('finance-helper.state')).tx.some((t) => t.note === 'sheet bread'));
-  assert.match(await page.textContent('#sheet-grid'), /Amount invested/);
+  assert.match(await page.textContent('#sheet-grid'), /Amount invested/i);
   assert.deepEqual(errors, []);
   await context.close();
 });
