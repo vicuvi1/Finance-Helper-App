@@ -10,7 +10,7 @@ test('history charts distinguish rebuilt segments and expose exact dates to keyb
   ], (v) => `${v} MDL`, { label: 'Net worth over time' });
   assert.equal((html.match(/stroke-dasharray:5 4/g) || []).length, 1);
   assert.equal((html.match(/class="chart-point" tabindex="0"/g) || []).length, 3);
-  assert.match(html, /2026-09-25: 200 MDL · Recorded balance/);
+  assert.match(html, /25 Sep 2026: 200 MDL · Actual balance/);
   assert.match(html, /aria-label="Net worth over time"/);
 });
 

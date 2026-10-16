@@ -60,37 +60,73 @@ export function dailyChart(days, fmt) {
   return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Spending per day this month">${base}${bars}${avgLine}${labels}</svg>`;
 }
 
-// A value over time (e.g. savings at the end of each month): line with a soft
-// area under it and the last point marked.
+// Smooth curve through the points that never overshoots them (monotone
+// cubic, Fritsch–Carlson): one [start, control, control, end] per segment.
+function monotone(xy) {
+  const n = xy.length;
+  const sl = xy.slice(1).map(([x, y], i) => (y - xy[i][1]) / (x - xy[i][0] || 1));
+  const t = xy.map((_, i) => (i === 0 ? sl[0] : i === n - 1 ? sl[n - 2] : sl[i - 1] * sl[i] <= 0 ? 0 : (sl[i - 1] + sl[i]) / 2));
+  sl.forEach((m, i) => {
+    if (m === 0) { t[i] = 0; t[i + 1] = 0; return; }
+    const a = t[i] / m;
+    const b = t[i + 1] / m;
+    const h = a * a + b * b;
+    if (h > 9) { const k = 3 / Math.sqrt(h); t[i] = k * a * m; t[i + 1] = k * b * m; }
+  });
+  return xy.slice(1).map(([x, y], i) => {
+    const [x0, y0] = xy[i];
+    const d = (x - x0) / 3;
+    return [[x0, y0], [x0 + d, y0 + t[i] * d], [x - d, y - t[i + 1] * d], [x, y]];
+  });
+}
+let lineId = 0;
+const niceDate = (d) => (/^\d{4}-\d{2}-\d{2}$/.test(d || '') ? `${Number(d.slice(8))} ${monthLabel(d.slice(0, 7), true)}` : d);
+
+// A value over time (e.g. savings at the end of each month): a smooth line
+// over a soft gradient, light gridlines, and a guide with the exact figure
+// under the mouse (or keyboard focus). Estimated stretches are dashed.
 export function lineChart(points, fmt, { color = 'var(--gold)', label = 'Savings over time' } = {}) {
   const W = 620;
-  const H = 150;
-  const top = 16;
+  const H = 170;
+  const top = 26;
   const bottom = 22;
   const plotH = H - top - bottom;
   if (!points.length) return '';
+  const id = `lc${++lineId}`;
+  const f = (n) => n.toFixed(1);
   const vals = points.map((p) => p.value);
   const max = Math.max(1, ...vals);
   const min = Math.min(0, ...vals);
   const span = max - min || 1;
-  const step = points.length > 1 ? (W - 8) / (points.length - 1) : 0;
-  const xy = points.map((p, i) => [points.length === 1 ? W / 2 : 4 + i * step, top + plotH - ((p.value - min) / span) * plotH]);
-  const line = xy.map(([x, y], i) => `${i ? 'L' : 'M'}${x.toFixed(1)} ${y.toFixed(1)}`).join(' ');
-  const area = `${line} L${xy.at(-1)[0].toFixed(1)} ${top + plotH} L${xy[0][0].toFixed(1)} ${top + plotH} Z`;
+  const step = points.length > 1 ? (W - 8) / (points.length - 1) : W;
+  const base = top + plotH;
+  const xy = points.map((p, i) => [points.length === 1 ? W / 2 : 4 + i * step, base - ((p.value - min) / span) * plotH]);
+  const segs = monotone(xy);
+  const curve = (sg) => `C${f(sg[1][0])} ${f(sg[1][1])} ${f(sg[2][0])} ${f(sg[2][1])} ${f(sg[3][0])} ${f(sg[3][1])}`;
+  const area = segs.length
+    ? `M${f(xy[0][0])} ${f(xy[0][1])} ${segs.map(curve).join(' ')} L${f(xy.at(-1)[0])} ${base} L${f(xy[0][0])} ${base} Z`
+    : '';
+  const grid = [0, 0.5, 1].map((r) => `<line class="lc-grid" x1="0" x2="${W}" y1="${f(top + plotH * r)}" y2="${f(top + plotH * r)}"/>`).join('');
   const [lx, ly] = xy.at(-1);
   const every = Math.ceil(points.length / 6);
   const labels = points.map((p, i) => ((i % every === 0 && points.length - 1 - i >= every / 2) || i === points.length - 1
-    ? `<text x="${xy[i][0].toFixed(1)}" y="${H - 5}" text-anchor="${points.length === 1 ? 'middle' : i === 0 ? 'start' : i === points.length - 1 ? 'end' : 'middle'}">${escapeText(p.label)}</text>` : '')).join('');
-  const segments = xy.slice(1).map(([x, y], i) => `<path d="M${xy[i][0].toFixed(1)} ${xy[i][1].toFixed(1)} L${x.toFixed(1)} ${y.toFixed(1)}" style="fill:none;stroke:${color};stroke-width:2;${points[i].snap === false || points[i + 1].snap === false ? 'stroke-dasharray:5 4;' : ''}"/>`).join('');
+    ? `<text x="${f(xy[i][0])}" y="${H - 5}" text-anchor="${points.length === 1 ? 'middle' : i === 0 ? 'start' : i === points.length - 1 ? 'end' : 'middle'}">${escapeText(p.label)}</text>` : '')).join('');
+  const segments = segs.map((sg, i) => `<path d="M${f(sg[0][0])} ${f(sg[0][1])} ${curve(sg)}" style="fill:none;stroke:${color};stroke-width:2.25;stroke-linecap:round;${points[i].snap === false || points[i + 1].snap === false ? 'stroke-dasharray:5 4;' : ''}"/>`).join('');
   const dots = points.map((p, i) => {
-    const tip = escapeText(`${p.date || p.label}: ${fmt(p.value)}${p.snap === false ? ' · Reconstructed' : p.snap === true ? ' · Recorded balance' : ''}`);
-    return `<g class="chart-point" tabindex="0" aria-label="${tip}"><circle cx="${xy[i][0].toFixed(1)}" cy="${xy[i][1].toFixed(1)}" r="12" fill="transparent"><title>${tip}</title></circle><circle class="point-mark" cx="${xy[i][0].toFixed(1)}" cy="${xy[i][1].toFixed(1)}" r="4" style="fill:${color}"/><text class="point-tip" x="${i < points.length / 2 ? 8 : W - 8}" y="12" text-anchor="${i < points.length / 2 ? 'start' : 'end'}">${tip}</text></g>`;
+    const tip = escapeText(`${niceDate(p.date) || p.label}: ${fmt(p.value)}${p.snap === false ? ' · Estimated' : p.snap === true ? ' · Actual balance' : ''}`);
+    const [x, y] = xy[i];
+    const left = i < points.length / 2;
+    const tx = Math.min(W - 4, Math.max(4, left ? x + 10 : x - 10));
+    return `<g class="chart-point" tabindex="0" aria-label="${tip}"><rect x="${f(Math.max(0, x - step / 2))}" y="0" width="${f(Math.min(step, W))}" height="${base}" fill="transparent"><title>${tip}</title></rect><line class="point-guide" x1="${f(x)}" x2="${f(x)}" y1="${top - 6}" y2="${base}"/><circle class="point-mark" cx="${f(x)}" cy="${f(y)}" r="5" style="fill:${color}"/><text class="point-tip" x="${f(tx)}" y="${top - 10}" text-anchor="${left ? 'start' : 'end'}">${tip}</text></g>`;
   }).join('');
   return `<svg class="chart line-chart" viewBox="0 0 ${W} ${H}" role="group" aria-label="${escapeText(label)}">
-    <path d="${area}" style="fill:${color};opacity:.12"/>
+    <defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:${color};stop-opacity:.3"/><stop offset="1" style="stop-color:${color};stop-opacity:0"/></linearGradient></defs>
+    ${grid}
+    ${area ? `<path d="${area}" fill="url(#${id})"/>` : ''}
     ${segments}
-    <circle cx="${lx.toFixed(1)}" cy="${ly.toFixed(1)}" r="4" style="fill:${color}"/>
-    <text x="${Math.min(lx, W - 4).toFixed(1)}" y="${Math.max(12, ly - 10).toFixed(1)}" text-anchor="${points.length === 1 ? 'middle' : 'end'}" style="fill:var(--text);font-weight:600">${escapeText(fmt(points.at(-1).value))}</text>
+    <circle cx="${f(lx)}" cy="${f(ly)}" r="9" class="lc-halo" style="fill:${color}"/>
+    <circle cx="${f(lx)}" cy="${f(ly)}" r="4.5" style="fill:${color}"/>
+    <text class="lc-last" x="${f(Math.min(lx, W - 4))}" y="${f(Math.max(14, ly - 14))}" text-anchor="${points.length === 1 ? 'middle' : 'end'}">${escapeText(fmt(points.at(-1).value))}</text>
     ${labels}${dots}</svg>`;
 }
 

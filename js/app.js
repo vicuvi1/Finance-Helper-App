@@ -4,7 +4,7 @@
 import { load, save, backupText, restoreJSON, requestPersistence, isSealed, openImported, wipeStore, hasSession, reopen, STORAGE_KEYS } from './store.js';
 import * as M from './model.js';
 import { formatMoney, evalAmount, centsToPlain } from './money.js';
-import { todayISO, monthKey, monthLabel, addMonths, daysInMonth, dayLabel, dowIndex, DOW_LONG, MONTHS, addDays } from './dates.js';
+import { todayISO, monthKey, monthLabel, addMonths, daysInMonth, dayLabel, dowIndex, DOW_LONG, DOW_SHORT, MONTHS, addDays } from './dates.js';
 import { convert, pairRate } from './fx.js';
 import { parseCSV, toCSV } from './csv.js';
 import { importRows, importWorkbook, importCheck, exportRows, toTSV, monthSheet, overviewSheet, detectColumns } from './importer.js';
@@ -41,8 +41,8 @@ import { workText } from './workhours.js';
 import { planSplit, splitTransfers, splitPrefs, isSplit } from './split.js';
 import { openBankImport, rowsFromFile, decodeText } from './screens/bankimport.js';
 import { guessMapping } from './bank.js';
-import { forecast } from './forecast.js';
-import { bindTilt } from './cards.js';
+import { forecast, isLiquid } from './forecast.js';
+import { bindTilt, cardHTML } from './cards.js';
 import { FREQS, markDone, dueItems } from './recurring.js';
 import { invoiceStatus } from './invoices.js';
 import { tableHTML, calendarHTML, dayLabelHTML, accountOptionsHTML, accountDisplayName } from './logviews.js';
@@ -679,58 +679,67 @@ function homeHeadline(s, hello) {
 // ---------- Screens ----------
 
 // Dedicated Safe-to-Spend card on Home with 7-day velocity sparkline.
+// Home: your spending cards as a small fanned wallet (the same designs as
+// Accounts); a tap opens the card.
+function wallet(sf) {
+  const pay = state.settings.pay;
+  const vals = M.accountValues(state).filter((v) => isLiquid(v.account) && !(pay?.on && v.account.id === pay.buffer))
+    .sort((a, b) => (b.inBase || 0) - (a.inBase || 0)).slice(0, 3);
+  if (!vals.length) return '';
+  const cards = vals.map((v, i) => `<div class="shw-card" style="--i:${i}">${cardHTML(v, { money, base: state.settings.currency })}</div>`).reverse().join('');
+  return `<div class="sh-wallet" style="--n:${vals.length}"><div class="shw-stack">${cards}</div>
+    <button type="button" class="card-link shw-cap" data-go="accounts">${money(Math.round(Math.max(0, sf.liquid) / 100) * 100)} in cards and cash →</button></div>`;
+}
+
 function safeCard(today) {
   if (!state.tx.length) return '';
   const sf = safeToSpend(state, today);
+  const cur = state.settings.currency;
   const left = sf.leftToday;
   const isOver = left < 0;
+  const empty = sf.pool <= 0;
   const onTrack = left >= sf.perDay / 4;
-  const statusCls = sf.pool <= 0 ? 'expense' : isOver ? 'expense' : onTrack ? 'income' : 'gold';
-  const statusLabel = sf.pool <= 0 ? 'Pool depleted' : isOver ? 'Over today\'s share' : onTrack ? 'On track' : 'Watch pace';
+  const tone = empty || isOver ? 'over' : onTrack ? 'ok' : 'watch';
+  const statusLabel = empty ? 'Nothing spare' : isOver ? 'Over today' : onTrack ? 'On track' : 'Go easy';
 
-  // 7-day sparkline
-  const sparkDays = [];
+  // The last 7 days against the daily share (bills and recurring don't count).
+  const week = [];
   for (let i = 6; i >= 0; i--) {
     const d = addDays(today, -i);
     const spent = state.tx.filter((t) => t.date === d && t.type === 'expense' && !t.loan && !t.recurring && !M.isBillCategory(state, t.category))
       .reduce((a, t) => a + M.B(t), 0);
-    sparkDays.push({ d, dayLabel: Number(d.slice(8)), spent });
+    week.push({ d, spent });
   }
-  const maxSpent = Math.max(sf.perDay, ...sparkDays.map((x) => x.spent), 1);
-  const w = 180, h = 38, pad = 6;
-  const barW = 16, gap = 8;
-  const bars = sparkDays.map((x, i) => {
-    const bh = Math.max(3, Math.round((x.spent / maxSpent) * (h - pad * 2)));
-    const bx = i * (barW + gap) + 4;
-    const by = h - pad - bh;
-    const isToday = x.d === today;
-    const col = x.spent > sf.perDay ? 'var(--expense)' : isToday ? 'var(--gold)' : 'var(--muted)';
-    return `<rect x="${bx}" y="${by}" width="${barW}" height="${bh}" rx="3" fill="${col}" opacity="${isToday ? 1 : 0.75}"><title>${x.d}: ${money(x.spent)}</title></rect><text x="${bx + barW / 2}" y="${h - 1}" font-size="8" fill="var(--muted)" text-anchor="middle">${x.dayLabel}</text>`;
+  const top = Math.max(sf.perDay, ...week.map((x) => x.spent), 1) * 1.15;
+  const avg = Math.round(week.reduce((a, x) => a + x.spent, 0) / 7);
+  const bars = week.map((x) => {
+    const pct = x.spent ? Math.max(4, (x.spent / top) * 100) : 2;
+    const cls = [x.spent > sf.perDay && sf.perDay > 0 ? 'over' : '', x.d === today ? 'today' : ''].join(' ').trim();
+    const label = x.d === today ? 'Today' : DOW_SHORT[dowIndex(x.d)];
+    return `<div class="sh-bar ${cls}" title="${esc(label)} ${Number(x.d.slice(8))}: ${esc(money(x.spent))}"><i style="height:${pct.toFixed(1)}%"></i><span>${label === 'Today' ? 'Today' : label.slice(0, 2)}</span></div>`;
   }).join('');
-  const targetY = Math.round(h - pad - (sf.perDay / maxSpent) * (h - pad * 2));
-  const targetLine = sf.perDay > 0 && targetY >= pad && targetY <= h - pad
-    ? `<line x1="2" y1="${targetY}" x2="${w - 2}" y2="${targetY}" stroke="var(--line)" stroke-dasharray="2 2" stroke-width="1"/>` : '';
+  const target = sf.perDay > 0 ? `<em class="sh-target" style="bottom:${((sf.perDay / top) * 100).toFixed(1)}%"><span>${esc(money(sf.perDay, { compact: true }))} a day</span></em>` : '';
+  const used = sf.perDay > 0 ? Math.min(100, (sf.spentToday / sf.perDay) * 100) : 100;
+  const fig = empty ? 0 : Math.max(0, left);
 
-  const sparkSvg = `<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" style="overflow:visible; display:block;" aria-label="7-day spending sparkline">${targetLine}${bars}</svg>`;
+  const sub = empty
+    ? `Bills and savings need <b>${money(sf.short)}</b> more before ${esc(shortDay(sf.payday))}.`
+    : isOver
+      ? `Over by <b>${money(-left)}</b>. From tomorrow: <b>${money(sf.tomorrow)}</b> a day until ${esc(shortDay(sf.payday))}.`
+      : `Spent <b>${money(sf.spentToday)}</b> of today's <b>${money(sf.perDay)}</b> · <b>${money(Math.max(0, sf.pool))}</b> for ${sf.days} day${sf.days === 1 ? '' : 's'}, until ${esc(shortDay(sf.payday))}`;
 
-  return `<section class="card safe-home-card" style="margin-bottom:14px; padding:18px 22px; display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:16px;">
-    <div style="min-width:220px;">
-      <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
-        <span class="label" style="margin:0;">Safe to spend today</span>
-        <span class="badge ${statusCls}" style="font-size:11px; padding:2px 8px; border-radius:12px; background:var(--surface-2); font-weight:600;">${statusLabel}</span>
-      </div>
-      <div style="display:flex; align-items:baseline; gap:10px;">
-        <b class="${statusCls}" style="font-family:var(--display); font-size:32px; line-height:1.1;">${money(Math.max(0, left))}</b>
-        <span class="muted small">of ${money(sf.perDay)}/day</span>
-      </div>
-      <p class="muted small" style="margin:6px 0 0;">
-        ${isOver ? `Over by ${money(-left)}. Tomorrow: ${money(sf.tomorrow)}/day` : `Pool: ${money(Math.max(0, sf.pool))} until ${shortDay(sf.payday)} (${sf.days}d)`}
-      </p>
+  return `<section class="card safe-hero sh-${tone}" aria-label="Safe to spend today">
+    <div class="sh-main">
+      <div class="sh-k">Safe to spend today <span class="sh-chip">${statusLabel}</span></div>
+      <b class="sh-fig">${formatMoney(fig, '')}<small>${esc(cur)}</small></b>
+      <div class="sh-meter" role="img" aria-label="${Math.round(used)}% of today's share spent"><i style="width:${used.toFixed(1)}%"></i></div>
+      <p class="sh-sub">${sub}</p>
     </div>
-    <div style="display:flex; flex-direction:column; align-items:flex-end; gap:4px;">
-      <span class="muted small">Last 7 days vs target</span>
-      ${sparkSvg}
+    <div class="sh-week">
+      <div class="sh-week-k"><span>Last 7 days</span><span>${money(avg, { compact: true })} a day on average</span></div>
+      <div class="sh-bars">${target}${bars}</div>
     </div>
+    ${wallet(sf)}
   </section>`;
 }
 

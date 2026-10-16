@@ -52,7 +52,7 @@ function netWorthCard(state) {
     <div class="kv"><span>Since last month</span>${sign(delta(1))}</div>
     <div class="kv"><span>Since ${esc(monthLabel(pts[0].key, true))}</span>${sign(last - pts[0].value)}</div>
     ${lineChart(pts.map((p) => ({ ...p, label: monthLabel(p.key, true).slice(0, 3) + (range > 12 && p.key.endsWith('-01') ? ` ${p.key.slice(2, 4)}` : ''), value: p.value })), (c) => ctx.money(c), { label: 'Net worth over time' })}
-    <div class="chart-legend"><span class="reconstructed">Reconstructed</span><span>Recorded balance</span></div>
+    <div class="chart-legend"><span class="reconstructed">Estimated from your records</span><span>Actual balance</span></div>
     <p class="muted small" style="margin:6px 0 0">${firstSnap && firstSnap === pts[0] ? 'From daily snapshots.' : `Earlier months are rebuilt from your records at today's rates, without crypto${firstSnap ? `; daily snapshots from ${esc(monthLabel(firstSnap.key))}` : '. A snapshot is saved every day from now on'}.`}</p>
   </section>`;
 }
@@ -147,8 +147,8 @@ export function view() {
     ${netWorthCard(state) || ''}
     <section class="card"><h2>Savings history <span class="right">${savingsChip(3, '3 months')}${savingsChip(6, '6 months')}${savingsChip(12, '1 year')}${savingsChip(120, 'All')}</span></h2>
     <div class="kv"><span>Change over selected period</span><b>${ctx.money(savingChange, { sign: true })}</b></div>
-    ${lineChart(hist, (c) => ctx.money(c))}<div class="chart-legend"><span class="reconstructed">Reconstructed</span><span>Current balance</span></div>
-    <p class="muted small">Historical savings are rebuilt from records at today's exchange rates. Hover or focus a point for its date and amount.</p></section>  </div>`;
+    ${lineChart(hist, (c) => ctx.money(c))}<div class="chart-legend"><span class="reconstructed">Estimated from your records</span><span>Today's balance</span></div>
+    <p class="muted small">Earlier months are worked out from your records at today's rates. Point at the chart to see a month.</p></section>  </div>`;
 }
 
 // ---------- Account detail and editor ----------

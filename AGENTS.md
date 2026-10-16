@@ -76,7 +76,11 @@ Rules that keep three agents from tripping over each other:
 - Colors only through the CSS tokens in `css/app.css`, defined for light and dark.
 - Look B "Midnight premium" (the owner's pick): dark by default (light in Settings), champagne
   gold accent, Fraunces (`--display`, bundled in `fonts/`) for page titles and big figures,
-  Geist for text. Home's top: month headline, `homeStrip`, `accountTiles`.
+  Geist for text. Home's top: month headline, then the hero `safeCard` (Safe to spend today, the
+  last 7 days against the daily share, and a fanned `wallet` of the spending cards on wide screens),
+  `payCard`, `homeStrip`. Design v2 (end of `css/app.css`): sentence-case labels, soft depth
+  instead of outlines, the sidebar is just the menu. Line charts (`lineChart`) are smooth
+  (monotone, never overshoot), with a gradient, a hover guide and plain words ("Estimated").
   Extra themes Ocean / Forest / Paper (`settings.theme`) set `data-design` and override tokens.
 - Safe to spend today: `js/safespend.js` (pure, tested): cards+cash (`isLiquid`) minus bills
   before the next recurring income (else the 1st) minus this month's savings plan not yet moved

@@ -5434,3 +5434,57 @@ details.card > summary { color: var(--text); font-size: 15px; }
 .tg-examples span { color: var(--muted); font-size: 14px; }
 /* Phone bar: the sidebar footer (Settings, lock, shortcuts) lives under More. */
 @media (max-width: 719px) { .side-foot-actions { display: none; } }
+
+/* Home hero: Safe to spend today, with the last 7 days beside it. */
+.safe-hero { --tone: var(--income); display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(260px, 0.75fr); gap: 28px 40px; align-items: center;
+  padding: 26px 30px; margin-bottom: 16px; overflow: hidden;
+  background: radial-gradient(90% 140% at 0% 0%, color-mix(in srgb, var(--tone) 13%, transparent), transparent 60%), var(--surface); }
+.safe-hero.sh-watch { --tone: var(--warn); }
+.safe-hero.sh-over { --tone: var(--expense); }
+.sh-k { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 15px; font-weight: 500; }
+.sh-chip { padding: 3px 10px; border-radius: 999px; font-size: 12.5px; font-weight: 600; color: var(--tone); background: color-mix(in srgb, var(--tone) 14%, transparent); }
+.sh-fig { display: flex; align-items: baseline; gap: 10px; margin: 8px 0 16px; color: var(--tone);
+  font: 500 clamp(44px, 4.6vw, 68px)/1 var(--display); letter-spacing: -0.02em; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sh-fig small { font: 600 16px/1 var(--font); letter-spacing: 0; color: var(--muted); }
+.sh-meter { height: 6px; max-width: 520px; border-radius: 99px; background: color-mix(in srgb, var(--text) 9%, transparent); overflow: hidden; }
+.sh-meter i { display: block; height: 100%; border-radius: inherit; background: var(--tone); }
+.sh-sub { margin: 12px 0 0; color: var(--muted); font-size: 14.5px; }
+.sh-sub b { color: var(--text); font-weight: 600; }
+.sh-week-k { display: flex; justify-content: space-between; gap: 12px; color: var(--muted); font-size: 13px; margin-bottom: 10px; }
+.sh-week-k span:first-child { color: var(--text); font-weight: 600; }
+.sh-bars { position: relative; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; height: 96px; margin-bottom: 22px; }
+.sh-bar { position: relative; display: flex; align-items: flex-end; height: 100%; }
+.sh-bar i { display: block; width: 100%; border-radius: 6px 6px 3px 3px; background: color-mix(in srgb, var(--text) 16%, transparent); transition: filter 0.2s; }
+.sh-bar.today i { background: var(--gold); }
+.sh-bar.over i { background: var(--expense); }
+.sh-bar:hover i { filter: brightness(1.25); }
+.sh-bar span { position: absolute; left: 0; right: 0; bottom: -20px; text-align: center; font-size: 11.5px; color: var(--muted); white-space: nowrap; }
+.sh-bar.today span { color: var(--text); font-weight: 600; }
+.sh-target { position: absolute; left: 0; right: 0; height: 0; border-top: 1px dashed color-mix(in srgb, var(--text) 28%, transparent); pointer-events: none; z-index: 1; }
+.sh-target span { position: absolute; right: 0; bottom: 3px; font: 600 11px/1 var(--font); font-style: normal; color: var(--muted); background: var(--surface); padding: 0 0 0 6px; }
+@media (max-width: 719px) {
+  .safe-hero { grid-template-columns: minmax(0, 1fr); padding: 20px; gap: 22px; }
+  .sh-bars { height: 80px; }
+}
+
+/* Line charts: soft grid, guide line under the pointer, a halo on today. */
+.line-chart .lc-grid { stroke: var(--text); stroke-opacity: 0.07; stroke-width: 1; }
+.line-chart .lc-halo { opacity: 0.18; }
+.line-chart .lc-last { fill: var(--text); font-weight: 600; font-size: 13px; paint-order: stroke; stroke: var(--surface); stroke-width: 5px; stroke-linejoin: round; }
+.chart-point .point-guide { stroke: var(--text); stroke-opacity: 0.25; stroke-dasharray: 3 3; visibility: hidden; }
+.chart-point:hover .point-guide, .chart-point:focus .point-guide { visibility: visible; }
+.chart-point .point-tip { font-size: 12.5px; font-weight: 600; }
+.line-chart:has(.chart-point:hover) .lc-last, .line-chart:has(.chart-point:focus) .lc-last { opacity: 0; }
+/* The wallet: up to three spending cards, fanned; they spread on hover. */
+.sh-wallet { display: none; }
+@media (min-width: 1280px) {
+  .safe-hero:has(.sh-wallet) { grid-template-columns: minmax(0, 1.2fr) minmax(240px, 0.8fr) 236px; }
+  .sh-wallet { display: flex; flex-direction: column; align-items: stretch; gap: 10px; align-self: center; }
+  .shw-stack { position: relative; height: calc(148px + (var(--n) - 1) * 32px); }
+  .shw-card { position: absolute; left: 0; right: 0; top: calc((var(--n) - 1 - var(--i)) * 32px);
+    transition: transform 0.35s var(--ease-out); transform: rotate(calc((var(--i) - 1) * -2.5deg)); }
+  .shw-card .bcard { zoom: 0.787; width: 300px; box-shadow: 0 1px 0 rgba(255, 255, 255, 0.08) inset, 0 14px 30px -14px rgba(0, 0, 0, 0.75); }
+  .sh-wallet:hover .shw-card { transform: translateY(calc((var(--n) - 1 - var(--i)) * -14px)) rotate(0deg); }
+  .shw-card:hover { z-index: 3; }
+  .shw-cap { align-self: center; font-size: 13px; }
+}
