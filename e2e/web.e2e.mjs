@@ -112,7 +112,12 @@ test('theme gallery persists choices and respects motion preferences', async () 
     const { page, errors, context } = await openPage(browser, server.url, { width, height: 900 });
     await page.emulateMedia({ reducedMotion: 'no-preference' });
     await page.goto(`${server.url}#settings`);
-    await page.waitForSelector('.style-picker');
+    // The moving background is an Extra (off for new installs): turn it on there.
+    const extras = async () => { await page.click('[data-act="set-tab"][data-sec="extras"]'); await page.waitForSelector('[data-set="themeMotion"]'); };
+    const general = async () => { await page.click('[data-act="set-tab"][data-sec="general"]'); await page.waitForSelector('.style-picker'); };
+    await extras();
+    await page.locator('[data-set="themeMotion"]').check();
+    await general();
     for (const theme of ['forest', 'ocean', 'paper', 'dark', 'light', 'system']) {
       await page.locator(`.style-choice:has(input[value="${theme}"])`).click();
       await page.reload();
@@ -125,10 +130,12 @@ test('theme gallery persists choices and respects motion preferences', async () 
     await page.locator('input[value="forest"]').focus();
     await page.keyboard.press('ArrowRight');
     assert.equal(await page.locator('[data-set="theme"]:checked').inputValue(), 'paper', 'radio gallery supports arrow keys');
+    await extras();
     await page.locator('[data-set="themeMotion"]').uncheck();
     await page.reload();
     await page.waitForSelector('.style-picker');
     assert.equal(await page.locator('#theme-atmosphere').count(), 0);
+    await extras();
     assert.equal(await page.locator('[data-set="themeMotion"]').isChecked(), false);
     await page.locator('[data-set="themeMotion"]').check();
     await page.emulateMedia({ reducedMotion: 'reduce' });

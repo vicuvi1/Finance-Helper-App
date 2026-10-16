@@ -401,7 +401,7 @@ function renderSidebar() {
   bottom.innerHTML = `${goalCapsule}
     <div class="sf-row"><span class="sf-today dow-${dowIndex(today)}" title="${DOW_LONG[dowIndex(today)]}, ${today}"><i aria-hidden="true"></i>${DOW_LONG[dowIndex(today)].slice(0, 3)}, ${Number(today.slice(8, 10))} ${MONTHS[Number(today.slice(5, 7)) - 1].slice(0, 3)}</span>
     <button type="button" class="sf-buddy" data-act="bd-toggle" aria-pressed="${Buddy.isOn()}" title="${Buddy.isOn() ? 'Hide' : 'Show'} ${esc(Buddy.buddyName())}">🤖 <span>${esc(Buddy.buddyName())}</span><b class="${Buddy.isOn() ? 'on' : ''}">${Buddy.isOn() ? 'On' : 'Off'}</b></button></div>
-    ${ambPill}`;
+    ${ambState.playing ? ambPill : ''}`;
 }
 
 // "Today · Saturday, 10 October" in today's weekday color.
@@ -792,10 +792,10 @@ function viewHome() {
   ${Telegram.alertBanner()}
   ${!DEMO && needsBackup ? `<div class="banner"><p>Your data lives only on this device. Make a backup.</p><button class="btn primary" data-act="export-json">Back up</button></div>` : ''}
   ${welcome}
-  ${Goals.homeCard({ featured: true })}
   ${safeCard(today)}
   ${payCard(today)}
   ${homeStrip(s, key)}
+  ${Goals.homeCard({ featured: true })}
   ${monthComparison(today)}
   ${quickRow()}
   <div class="dash">
@@ -1183,8 +1183,13 @@ function viewSettings() {
     </div>
     <p class="muted small" style="margin-bottom:0">From Google Sheets: File → Download → <b>Microsoft Excel (.xlsx)</b> and import the whole file: every month tab at once, you pick which. Bank statements: export CSV or Excel from maib / Victoriabank online banking. Importing the same thing twice is safe.</p>
   </section>`,
-    look: `<section class="card look-card"><h2>Look & Atmosphere</h2>
+    look: `<section class="card look-card"><h2>Look</h2>
     ${themePicker(st)}
+    <label class="field"><span>Currency</span><input type="text" data-set="currency" value="${esc(st.currency)}" maxlength="5"></label>
+  </section>
+`,
+    extras: `<section class="card look-card"><h2>Extras</h2>
+    <p class="muted small" style="margin-top:0">Nice-to-haves, kept out of the way: moving backgrounds, wallpapers, button sounds and focus music. Your numbers work the same with all of them off.</p>
     <label class="motion-setting"><span><b>Living atmosphere</b><small>Sakura petals, leaves, bubbles and starlight. Follows your device’s reduced-motion preference.</small></span><input type="checkbox" data-set="themeMotion" ${st.themeMotion !== false ? 'checked' : ''} aria-label="Living atmosphere"></label>
     <div class="field" style="margin-top:14px">
       <span style="font-weight:600;display:block;margin-bottom:6px">Atmospheric Wallpaper</span>
@@ -1207,7 +1212,6 @@ function viewSettings() {
     </div>
     <label class="motion-setting" style="margin-top:14px"><span><b>Tactile sounds</b><small>Mechanical micro-click on buttons, keys and coin chime on logging.</small></span><input type="checkbox" data-set="sound" ${st.sound !== false ? 'checked' : ''} aria-label="Tactile sounds"></label>
     <div style="margin:4px 0 10px"><button type="button" class="btn sm" data-act="test-sound">🔊 Test sounds</button></div>
-    <label class="field"><span>Currency</span><input type="text" data-set="currency" value="${esc(st.currency)}" maxlength="5"></label>
   </section>
   <section class="card ambient-card">
     <h2>Lo-Fi & Zen Ambient Music</h2>
@@ -1256,7 +1260,8 @@ function viewSettings() {
   };
   // One section at a time, picked on the left (like any settings screen).
   const sections = [
-    { id: 'general', icon: '⚙️', label: 'General', sub: 'Look, smart split, your hour', desc: 'Theme colors, procedural lo-fi ambient audio, smart split jars, and hourly valuation.', badgeText: 'Preferences', badgeClass: 'gold', html: () => cards.look + paySettingsCard() + cards.split + WorkHour.settingsCard() + cards.accounts + cards.goals },
+    { id: 'general', icon: '⚙️', label: 'General', sub: 'Look, pay yourself, smart split', desc: 'Theme, your salary from the buffer, smart split jars and your hourly value.', badgeText: 'Preferences', badgeClass: 'gold', html: () => cards.look + paySettingsCard() + cards.split + WorkHour.settingsCard() + cards.accounts + cards.goals },
+    { id: 'extras', icon: '✨', label: 'Extras', sub: 'Music, sounds, wallpapers', desc: 'Moving backgrounds, wallpapers, button sounds and focus music. All optional.', badgeText: 'Optional', badgeClass: 'accent', html: () => cards.extras },
     { id: 'categories', icon: '🏷️', label: 'Categories & rules', sub: 'Categories, jars, auto-rules', desc: 'Custom spending & income categories, jar assignments, and auto-sorting rules.', badgeText: 'Structure', badgeClass: 'accent', html: () => cards.categories + Rules.settingsCard() },
     { id: 'data', icon: '💾', label: 'Data & backups', sub: 'Import, export, backups, sync', desc: 'Device storage status, automated JSON backups, cloud sync, and Excel imports.', badgeText: 'Storage', badgeClass: 'income', html: () => cards.data + Backups.settingsCard() + Sync.settingsCard() },
     { id: 'connect', icon: '🔗', label: 'Telegram & Binance', sub: 'Your bot, crypto balances', desc: 'Personal Telegram bot integration for instant logging and Binance read-only portfolio.', badgeText: 'Integrations', badgeClass: 'accent', html: () => Telegram.settingsCard() + TgBlocks.settingsCard() + Binance.settingsCard() },

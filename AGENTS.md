@@ -67,6 +67,10 @@ tested); `js/app.js` only renders and handles taps.
   auto}`; the salary is a transfer with `salary: 'YYYY-MM'`. With it on, the buffer isn't
   spending money, payday = salary day, and saving happens in the buffer (Safe to spend keeps no
   savings plan back). Home `payCard` shows the salary and the buffer runway ("covers 3.4 months").
+- Calm by default: Home answers three questions first (can I spend today, how is my month, how
+  safe am I). Optional things (moving backgrounds, wallpapers, sounds, music) live in Settings →
+  Extras (`cards.extras`), start off for new installs, and never take sidebar space (the music
+  player shows there only while playing). Put new nice-to-haves there, not on Home.
 - No `alert`/`confirm`/`prompt`: confirmations are bottom sheets.
 - New app files go in `sw.js` `SHELL` (offline), `build.files` in
   `package.json` (desktop) and `scripts/build-preview.mjs` if outside css/js/icons.
