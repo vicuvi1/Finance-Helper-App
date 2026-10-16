@@ -120,7 +120,7 @@ export function view() {
   const sankey = sankeyChart(sankeyData, (c) => money(c), { mode: rs.sankeyMode || 'jars' });
 
   return `<header class="top"><div><h1>Reports</h1><div class="sub">${esc(r0.label)} · ${r.days} day${r.days === 1 ? '' : 's'} · ${r.count} record${r.count === 1 ? '' : 's'}</div></div>
-    <button class="btn" data-act="rep-export">Export to Excel</button></header>
+    <div class="btns rep-head-btns"><button class="btn" data-act="recap-open" data-key="${rs.preset === 'month' ? rs.month || monthKey(today) : addMonths(monthKey(today), -1)}">✨ ${rs.preset === 'month' && (rs.month || monthKey(today)) === monthKey(today) ? 'Recap so far' : 'Month recap'}</button><button class="btn" data-act="rep-export">Export to Excel</button></div></header>
   <div class="rep-bar">
     <div class="chips">${PRESETS.map((x) => `<button class="chip" data-act="rep-preset" data-preset="${x.id}" aria-pressed="${rs.preset === x.id}">${x.name}</button>`).join('')}</div>
     ${r0.step ? `<div class="month-switch"><button class="icon-btn" data-act="rep-step" data-step="-1" aria-label="Previous">‹</button><b>${esc(r0.label)}</b><button class="icon-btn" data-act="rep-step" data-step="1" aria-label="Next">›</button></div>` : ''}

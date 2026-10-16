@@ -6,11 +6,12 @@
 import { ctx, esc } from '../ctx.js';
 import * as M from '../model.js';
 import * as T from '../telegram.js';
-import { todayISO, weekday, DOW_LONG } from '../dates.js';
+import { todayISO, weekday, DOW_LONG, monthKey, addMonths } from '../dates.js';
 import { weeklyReview, cashAccounts, cashCheck } from '../review.js';
 import { evalAmount } from '../money.js';
 import * as Blocks from '../blocks.js';
 import { safeLine } from '../safespend.js';
+import { recapText } from '../recap.js';
 import { formatMoney } from '../money.js';
 
 const bot = () => window.desktop?.telegram;
@@ -206,6 +207,7 @@ async function handle(updates) {
       else if (cmd === '/review') { if (!late) sendWeekly(); }
       else if (cmd === '/cash') { if (!late) askCash(); }
       else if (cmd === '/safe' || text === '🟢 Safe') { if (!late) send(T.safeDetailsText(state, todayISO()), keyboard()); }
+      else if (cmd === '/recap') { if (!late) send(recapText(state, addMonths(monthKey(todayISO()), -1)), keyboard()); }
       else if (/^\/limit\b/.test(cmd)) {
         const arg = cmd.replace(/^\/limit\s*/, '').trim();
         if (arg === 'off') { state.settings.limit = { ...(state.settings.limit || {}), on: false }; state.settings.updatedAt = Date.now(); changed = true; send('🎯 Spending limit is off.'); }
@@ -316,6 +318,13 @@ function tick() {
     m.tgLastWeekly = today;
     ctx.persist();
     sendWeekly();
+  }
+  // Last month's recap, once, on the 1st (from 10:00).
+  const prevKey = addMonths(monthKey(today), -1);
+  if (p.recap !== false && today.endsWith('-01') && hm >= '10:00' && m.tgRecapSent !== prevKey && state.tx.some((t) => t.date.startsWith(prevKey))) {
+    m.tgRecapSent = prevKey;
+    ctx.persist();
+    send(`${recapText(state, prevKey)}\n\n<i>Open Finance Helper for the full story.</i>`, keyboard());
   }
   if (p.bills && hm >= '09:00' && m.tgLastBills !== today) {
     m.tgLastBills = today;
@@ -554,6 +563,7 @@ export function pushSnapshot() {
       goals: T.goalsText(state, today),
       rates: T.ratesText(state),
       limit: T.limitText(state, today),
+      recap: recapText(state, addMonths(monthKey(today), -1)),
     };
     const key = JSON.stringify(snap);
     if (key === lastSnap) return;

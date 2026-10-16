@@ -11,7 +11,6 @@ import { importRows, importWorkbook, importCheck, exportRows, toTSV, monthSheet,
 import { readWorkbook } from './xlsx-read.js';
 import { workbook } from './xlsx.js';
 import { refreshRates, backfillRates, recordRates } from './rates.js';
-import { rateAdvice, heldIn } from './fxsmart.js';
 import { ctx } from './ctx.js';
 import * as RatesScreen from './screens/rates.js';
 import * as AccountsScreen from './screens/accounts.js';
@@ -50,6 +49,8 @@ import { sheetHTML, monthTabs } from './sheetview.js';
 import { createHistory } from './history.js';
 import { searchTx, searchSummary, SEARCH_HINT } from './search.js';
 import { safeToSpend, shortDay, limitStatus, suggestLimit, everydaySpent } from './safespend.js';
+import { verdict, nextSteps } from './nextsteps.js';
+import { openRecap } from './screens/recap.js';
 import * as Pay from './payyourself.js';
 import { sound } from './audio.js';
 import { AmbientMusic } from './ambient.js';
@@ -733,12 +734,6 @@ function monthComparison(today) {
 }
 
 // The page title on Home says how the month is going.
-function homeHeadline(s, hello) {
-  if (s.income > 0 && s.net >= 0) return `You kept ${pct(s.savingsRate)} this month`;
-  if (s.income > 0) return 'You spent more than you earned';
-  if (s.expense > 0) return `${money(s.expense)} spent this month`;
-  return hello;
-}
 
 // ---------- Screens ----------
 
@@ -825,6 +820,22 @@ function quickRow() {
   return `<div class="picks home-picks" role="group" aria-label="Quick add"><span class="label">Quick add</span>${picks.map((p, i) => `<button type="button" class="pick" data-act="quick-pick" data-i="${i}">${p.fav ? '<span class="gold">★</span> ' : ''}${esc(p.note || catOf(p.category).name)} <b class="${p.type === 'income' ? 'income' : ''}">${formatMoney(p.amount, p.currency, { compact: true })}</b></button>`).join('')}</div>`;
 }
 
+// "Do this next": up to three things worth doing today (js/nextsteps.js).
+function stepsCard(today) {
+  if (!state.tx.length) return '';
+  const steps = nextSteps(state, today, { hidden: state.meta.stepsHidden || {}, demo: DEMO });
+  if (!steps.length) return '';
+  const attrs = (x) => (x.go ? `data-go="${esc(x.go)}"` : `data-act="${esc(x.act)}"${Object.entries(x.data || {}).map(([k, val]) => ` data-${k}="${esc(String(val))}"`).join('')}`);
+  return `<section class="steps" aria-label="Do this next">
+    <h2 class="steps-h">Do this next</h2>
+    <div class="steps-grid">${steps.map((x, i) => `<article class="step lvl-${x.level}" style="--i:${i}">
+      <span class="step-ic" aria-hidden="true">${esc(x.icon)}</span>
+      <div class="step-t"><b>${esc(x.title)}</b><p>${esc(x.text)}</p></div>
+      <div class="step-btns"><button type="button" class="btn sm ${x.level === 'nice' ? '' : 'primary'}" ${attrs(x)}>${esc(x.btn)}</button><button type="button" class="step-later" data-act="step-later" data-id="${esc(x.id)}">Later</button></div>
+    </article>`).join('')}</div>
+  </section>`;
+}
+
 function viewHome() {
   const today = todayISO();
   const key = monthKey(today);
@@ -833,17 +844,10 @@ function viewHome() {
   const fc = forecast(state, today, { days: 45 });
   const fcTip = fc.low.value < 0 && (state.recurring.length || state.tx.length > 20)
     ? [{ level: 'bad', title: `Money may run short around ${dayLabel(fc.low.date)}`, text: `With your bills and usual spending, cards and cash would be at ${money(Math.round(fc.low.value / 100) * 100)}. See the forecast on Plan.` }] : [];
-  const usd = rateAdvice(state, 'USD', today);
-  const usdHeld = usd?.verdict === 'high' ? heldIn(state, 'USD', M.accountBalances(state)) : 0;
-  const fxTip = usdHeld > 0 ? [{ level: 'good', title: 'Good day to convert USD', text: `1 USD = ${usd.rate.toFixed(2)} ${state.settings.currency}, ${usd.pct === 1 ? 'the highest in 90 days' : `higher than on ${Math.round(usd.pct * 100)}% of the last 90 days`}. You hold ${formatMoney(usdHeld, 'USD')}. See Rates.` }] : [];
-  const tips = [...fcTip, ...fxTip, ...M.insights(state, key, today).filter((t) => t.level !== 'info')].slice(0, 2);
+  const tips = [...fcTip, ...M.insights(state, key, today).filter((t) => t.level !== 'info')].slice(0, 2);
   const hour = new Date().getHours();
   const hello = hour < 5 ? 'Good night' : hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
-  const headline = homeHeadline(s, hello);
-
-  // Automatic backups and sync count too: no nagging when they already run.
-  const lastSafe = Math.max(state.meta.lastBackup || 0, state.meta.lastAutoBackup || 0, state.meta.lastSync || 0);
-  const needsBackup = state.tx.length >= 20 && Date.now() - lastSafe > 14 * 864e5;
+  const v = verdict(state, today);
 
   const welcome = state.tx.length ? '' : `<section class="card">
     <h2>Start here</h2>
@@ -855,13 +859,13 @@ function viewHome() {
     <p class="muted small" style="margin-bottom:0">Already have money in the wallet or safe? Set it under Settings → Accounts.</p>
   </section>`;
 
-  return `<header class="top"><div><div class="eyebrow">${esc(monthLabel(key))}</div><h1>Your goals, your progress</h1></div><div class="sub">${headline === hello ? '' : `${hello} · `}${dayLabel(today)}</div></header>
+  return `<header class="top home-top v-${v.tone}"><div><div class="eyebrow">${esc(monthLabel(key))} · ${hello}</div><h1>${esc(v.title)}</h1><div class="sub home-verdict">${esc(v.sub)}</div></div><div class="sub">${dayLabel(today)}</div></header>
   ${Updates.updateBanner()}
   ${DEMO ? '<div class="banner"><p>Live preview with <b>example data</b> (a made-up month). What you add here stays in this browser only.</p></div>' : ''}
   ${Telegram.alertBanner()}
-  ${!DEMO && needsBackup ? `<div class="banner"><p>Your data lives only on this device. Make a backup.</p><button class="btn primary" data-act="export-json">Back up</button></div>` : ''}
   ${welcome}
   ${safeCard(today)}
+  ${stepsCard(today)}
   ${payCard(today)}
   ${homeStrip(s, key)}
   ${Goals.homeCard({ featured: true })}
@@ -2616,6 +2620,22 @@ document.addEventListener('click', (e) => {
   else if (act === 'calc') Calc.toggle();
   else if (act === 'pay-setup') openPaySheet();
   else if (act === 'limit-setup') openLimitSheet();
+  else if (act === 'recap-open') openRecap(el.dataset.key || addMonths(monthKey(todayISO()), -1));
+  else if (act === 'step-later') {
+    const today = todayISO();
+    const hidden = Object.fromEntries(Object.entries(state.meta.stepsHidden || {}).filter(([, d]) => d === today));
+    hidden[el.dataset.id] = today;
+    state.meta.stepsHidden = hidden;
+    persist({ quiet: true });
+    render();
+  } else if (act === 'step-save') {
+    // From your fullest card or cash in the main currency, to your savings.
+    const base = state.settings.currency;
+    const liquid = M.accountValues(state).filter((v) => isLiquid(v.account) && (v.account.currency || base) === base)
+      .sort((a, b) => (b.inBase || 0) - (a.inBase || 0))[0]?.account;
+    const to = state.settings.savingsAccount || state.settings.accounts.find((a) => !a.archived && (a.savings || a.kind === 'savings'))?.id;
+    openTxSheet(null, { type: 'transfer', amountText: centsToPlain(Number(el.dataset.amount) || 0), from: liquid?.id, to, note: 'Savings' });
+  }
   else if (act === 'pay-now') payNow();
   else if (act === 'pay-hide') { state.meta.payHide = 1; persist(); toast('Hidden. Set it up any time from Settings → General → Pay yourself.'); }
   else if (act === 'quick-pick') {

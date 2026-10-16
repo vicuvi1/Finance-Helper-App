@@ -60,6 +60,45 @@ test('log a record, undo, redo, search, and it survives a reload', async () => {
   await context.close();
 });
 
+test('Home: a verdict, a spending limit that sets Safe to spend, and the month recap story', async () => {
+  const { page, errors, context } = await openPage(browser, server.url);
+  await page.goto(`${server.url}#home`);
+  await page.waitForSelector('#app header.top');
+  await page.keyboard.press('n');
+  await page.waitForSelector('#tx-amount');
+  await page.fill('#tx-amount', '200');
+  await page.fill('#tx-note', 'e2e lunch');
+  await page.click('.sheet button[type=submit]');
+  await page.waitForSelector('.safe-hero');
+  assert.match(await page.textContent('.home-top h1'), /month|today|limit|Tight/i, 'the title is a verdict');
+
+  // Set a limit from the hero: 3 000 a month.
+  await page.click('.sh-setlimit');
+  await page.waitForSelector('#limit-amount');
+  await page.fill('#limit-amount', '3000');
+  assert.match(await page.textContent('#limit-preview'), /a day/);
+  await page.click('#limit-form button[type=submit]');
+  await page.waitForSelector('.sh-limit');
+  const lim = await page.evaluate(() => JSON.parse(localStorage.getItem('finance-helper.state')).settings.limit);
+  assert.deepEqual(lim, { on: true, amount: 300000 });
+  assert.match(await page.textContent('.sh-limit'), /200\sMDL of 3\s000/);
+
+  // The recap: opens from Reports, moves with the arrow keys, closes with Esc.
+  await page.evaluate(() => { location.hash = 'reports'; });
+  await page.waitForSelector('[data-act="recap-open"]');
+  await page.click('[data-act="recap-open"]');
+  await page.waitForSelector('.recap .rc-slide.on');
+  await page.keyboard.press('ArrowRight');
+  await page.waitForFunction(() => document.querySelector('.recap')?.dataset.slide === '1');
+  assert.match(await page.textContent('.rc-slide.on'), /spent|kept/i);
+  await page.click('.rc-tap.next');
+  await page.waitForFunction(() => document.querySelector('.recap')?.dataset.slide === '2');
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => !document.querySelector('.recap'));
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
 test('import the sample sheet: records in, import check flags the stray row', async () => {
   const { page, errors, context } = await openPage(browser, server.url);
   await page.goto(`${server.url}#settings`);

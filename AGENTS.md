@@ -92,6 +92,14 @@ Rules that keep three agents from tripping over each other:
   for the days left in the month (today included); `safeToSpend` uses the smaller of the limit's
   and the money's daily share (`byLimit`). Sheet `openLimitSheet` (hero row, Settings → General),
   bot `/limit 8000`, `/limit`, `/limit off`. Tests: `tests/limit.test.js`.
+- Home's verdict and "Do this next": `js/nextsteps.js` (pure, tested). `verdict()` is the page title
+  ("A good month so far") and one line under it; `nextSteps()` gives up to 3 steps (salary due, bills,
+  late invoice, limit pace, savings to move, recap ready, nothing logged, USD high, goal near, limit
+  suggestion, backup), each with one action; "Later" hides that exact step until tomorrow
+  (`meta.stepsHidden`). Add new nudges there, not as new Home cards.
+- Month recap: numbers in `js/recap.js` (pure, tested), the full-screen story in `js/screens/recap.js`
+  (auto-advancing slides, hold/Space pauses, ←/→, Esc). Opens from a Home step (days 1–7, until seen:
+  `meta.recapSeen`) and Reports; the bot answers `/recap` and sends last month's on the 1st.
 - Jars: for the running month `jarStatus(state, key, today)` budgets on `expectedIncome` (regular
   incomes or the last 3 months' average, the larger) until real income passes it. Work-cost
   categories were moved once to "Business, outside the jars" (`moveWorkCostsOutOfJars`).

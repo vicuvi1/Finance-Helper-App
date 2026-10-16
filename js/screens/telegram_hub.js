@@ -6,9 +6,10 @@ import * as M from '../model.js';
 import * as B from '../blocks.js';
 import * as T from '../telegram.js';
 import { formatMoney, centsToPlain } from '../money.js';
-import { todayISO, dayLabel, monthLabel } from '../dates.js';
+import { todayISO, dayLabel, monthLabel, monthKey, addMonths } from '../dates.js';
 import * as Telegram from './telegram.js';
 import * as TgBlocks from './tgblocks.js';
+import { recapText } from '../recap.js';
 
 let hubTab = 'sync'; // 'sync' | 'buttons' | 'commands' | 'settings'
 let consoleCmd = '/today';
@@ -44,6 +45,9 @@ export function simulateCommand(cmd, state) {
   }
   if (lower === '/safe' || lower === 'safe' || lower === '🟢 safe') {
     return T.safeDetailsText(state, today);
+  }
+  if (lower === '/recap' || lower === 'recap') {
+    return recapText(state, addMonths(monthKey(today), -1));
   }
   if (lower === '/limit' || lower === 'limit') {
     return T.limitText(state, today);
@@ -315,6 +319,7 @@ function renderCommandsTab() {
           <li><code>/month</code><span>Month-to-date breakdown, top categories &amp; jar status</span></li>
           <li><code>/balance</code><span>All accounts, liquid cash, cards &amp; safe balances</span></li>
           <li><code>/safe</code><span>Daily safe-to-spend allowance &amp; pool until payday</span></li>
+          <li><code>/recap</code><span>Last month in a few lines: in, out, kept, where it went, one tip</span></li>
           <li><code>/limit</code><span>Your monthly spending limit; <code>/limit 8000</code> sets it, <code>/limit off</code> turns it off</span></li>
           <li><code>/goals</code><span>Visual progress bars and completion ETAs for goals</span></li>
           <li><code>/rates</code><span>Live official exchange rates &amp; crypto prices</span></li>

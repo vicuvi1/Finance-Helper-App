@@ -257,7 +257,7 @@ export function ratesText(state) {
 
 export const HELP = `Tap a block below to log it for today, or type: <code>coffee 35</code>, <code>taxi 45 maib</code>, <code>120+45 groceries</code>. Income starts with +: <code>+500 salary</code>. Another day: <code>coffee 35 yesterday</code>.
 
-🟢 /safe · 🚦 /limit · 🎯 /goals · 📊 /today · 📅 /month · 💰 /balance · 💵 /rates · 🧾 /last · ↩️ /undo
+🟢 /safe · 🚦 /limit · ✨ /recap · 🎯 /goals · 📊 /today · 📅 /month · 💰 /balance · 💵 /rates · 🧾 /last · ↩️ /undo
 🧱 /blocks: your buttons · <code>/addblock 🍕 Pizza 120</code> · <code>/delblock pizza</code>
 
 PC off? Keep sending: your messages are kept and the app logs them, with the right day, when it opens.`;
