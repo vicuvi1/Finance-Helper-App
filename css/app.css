@@ -5488,3 +5488,18 @@ details.card > summary { color: var(--text); font-size: 15px; }
   .shw-card:hover { z-index: 3; }
   .shw-cap { align-self: center; font-size: 13px; }
 }
+/* Telegram "Try a command": the answer looks like a chat message, not a console. */
+.tg-console-output-box { background: var(--surface-2); border: 0; border-radius: var(--radius); padding: 18px; min-height: 160px; }
+.tg-console-bubble { max-width: 560px; background: var(--surface-3); border: 0; border-radius: 16px 16px 16px 4px; color: var(--text);
+  font-size: 14px; line-height: 1.55; padding: 12px 16px; box-shadow: 0 6px 18px -12px rgb(0 0 0 / 50%); }
+.tg-cmds { margin: 8px 0 14px; }
+.tg-cmds li { grid-template-columns: 110px minmax(0, 1fr); padding: 9px 0; }
+.tg-botfather-help { border: 0; background: var(--surface-2); }
+/* Settings: the open section's title is page typography, not another box. */
+.set-hero-banner { background: none; border: 0; box-shadow: none; padding: 2px 4px 6px; margin-bottom: 8px; }
+.set-hero-banner::before, .set-hero-banner::after { content: none; }
+.set-hero-icon { background: var(--surface-2); border: 0; }
+.set-hero-title { font: 500 26px/1.15 var(--display); letter-spacing: -0.01em; }
+.set-hero-desc { font-size: 14.5px; margin-top: 4px; }
+.set-nav { box-shadow: var(--lift); border-color: var(--card-line); }
+.set-tab[aria-current="page"] { box-shadow: none; }

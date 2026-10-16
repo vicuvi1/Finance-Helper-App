@@ -1254,31 +1254,27 @@ function viewSettings() {
   };
   // One section at a time, picked on the left (like any settings screen).
   const sections = [
-    { id: 'general', icon: '⚙️', label: 'General', sub: 'Look, pay yourself, smart split', desc: 'Theme, your salary from the buffer, smart split jars and your hourly value.', badgeText: 'Preferences', badgeClass: 'gold', html: () => cards.look + paySettingsCard() + cards.split + WorkHour.settingsCard() + cards.accounts + cards.goals },
-    { id: 'extras', icon: '✨', label: 'Extras', sub: 'Music, sounds, wallpapers', desc: 'Moving backgrounds, wallpapers, button sounds and focus music. All optional.', badgeText: 'Optional', badgeClass: 'accent', html: () => cards.extras },
-    { id: 'categories', icon: '🏷️', label: 'Categories & rules', sub: 'Categories, jars, auto-rules', desc: 'Custom spending & income categories, jar assignments, and auto-sorting rules.', badgeText: 'Structure', badgeClass: 'accent', html: () => cards.categories + Rules.settingsCard() },
-    { id: 'data', icon: '💾', label: 'Data & backups', sub: 'Import, export, backups, sync', desc: 'Device storage status, automated JSON backups, cloud sync, and Excel imports.', badgeText: 'Storage', badgeClass: 'income', html: () => cards.data + Backups.settingsCard() + Sync.settingsCard() },
-    { id: 'connect', icon: '🔗', label: 'Telegram & Binance', sub: 'Your bot, crypto balances', desc: 'Personal Telegram bot integration for instant logging and Binance read-only portfolio.', badgeText: 'Integrations', badgeClass: 'accent', html: () => Telegram.settingsCard() + TgBlocks.settingsCard() + Binance.settingsCard() },
-    { id: 'buddy', icon: '🤖', label: 'Bit, your buddy', sub: 'Show, name, color', desc: 'Your offline interactive companion, avatar expression, cheer, and mascot styling.', badgeText: 'Companion', badgeClass: 'gold', html: () => Buddy.settingsCard() },
-    { id: 'security', icon: '🔒', label: 'Security', sub: 'PIN and encryption', desc: 'Hardware-backed AES-256 vault encryption and biometric/PIN screen protection.', badgeText: 'Vault', badgeClass: 'income', html: () => Security.settingsCard() },
-    { id: 'about', icon: 'ℹ️', label: 'About & updates', sub: 'Version, check, erase', desc: 'Application release telemetry, self-check diagnostics, and device data management.', badgeText: `v${APP_VERSION}`, badgeClass: 'gold', html: () => Updates.settingsCard() + SelfCheck.settingsCard() + cards.danger },
+    { id: 'general', icon: '⚙️', label: 'General', sub: 'Look, pay yourself, smart split', desc: 'How the app looks, paying yourself a salary, the jar split and what an hour of your work is worth.', html: () => cards.look + paySettingsCard() + cards.split + WorkHour.settingsCard() + cards.accounts + cards.goals },
+    { id: 'extras', icon: '✨', label: 'Extras', sub: 'Music, sounds, wallpapers', desc: 'Moving backgrounds, wallpapers, button sounds and focus music. All optional, all off to start.', html: () => cards.extras },
+    { id: 'categories', icon: '🏷️', label: 'Categories & rules', sub: 'Categories, jars, auto-rules', desc: 'Your categories, which jar each one fills, and rules that sort records for you.', html: () => cards.categories + Rules.settingsCard() },
+    { id: 'data', icon: '💾', label: 'Data & backups', sub: 'Import, export, backups, sync', desc: 'Where your data lives, automatic backups, sync between devices and Excel import.', html: () => cards.data + Backups.settingsCard() + Sync.settingsCard() },
+    { id: 'connect', icon: '🔗', label: 'Telegram & Binance', sub: 'Your bot, crypto balances', desc: 'Your own Telegram bot for logging from your phone, and Binance balances (read-only).', html: () => Telegram.settingsCard() + TgBlocks.settingsCard() + Binance.settingsCard() },
+    { id: 'buddy', icon: '🤖', label: 'Bit, your buddy', sub: 'Show, name, color', desc: 'Bit, the little robot that cheers you on: show or hide it, its name and color.', html: () => Buddy.settingsCard() },
+    { id: 'security', icon: '🔒', label: 'Security', sub: 'PIN and encryption', desc: 'A PIN when the app opens, and your data locked with a password.', html: () => Security.settingsCard() },
+    { id: 'about', icon: 'ℹ️', label: 'About & updates', sub: 'Version, check, erase', desc: 'Your version and updates, a quick health check, and erasing everything.', badgeText: `v${APP_VERSION}`, badgeClass: 'gold', html: () => Updates.settingsCard() + SelfCheck.settingsCard() + cards.danger },
   ];
   const cur = sections.find((x) => x.id === ui.settingsTab) || sections[0];
 
   return `<header class="top">
     <div>
       <h1>Settings</h1>
-      <div class="sub">Preferences, appearance, data vault &amp; diagnostics</div>
+      <div class="sub">How it looks, your data, the bot and security</div>
     </div>
   </header>
   ${installPrompt ? '<div class="banner"><p>Install the app for one-tap access, even offline.</p><button class="btn primary" data-act="install">Install</button></div>' : ''}
   ${isIOS ? '<div class="banner"><p>To install on iPhone: tap Share, then “Add to Home Screen”.</p></div>' : ''}
   <div class="set-layout">
     <nav class="set-nav" aria-label="Settings sections">
-      <div class="set-nav-header">
-        <span class="set-nav-title">Configuration</span>
-        <span class="set-badge-sm">Offline</span>
-      </div>
       <div class="set-nav-list">
         ${sections.map((x) => `<button type="button" class="set-tab" data-act="set-tab" data-sec="${x.id}" aria-current="${x.id === cur.id ? 'page' : 'false'}"><span class="set-ic" aria-hidden="true">${x.icon}</span><span class="set-t"><b>${x.label}</b><span>${x.sub}</span></span><span class="set-tab-chevron" aria-hidden="true">›</span></button>`).join('')}
       </div>
@@ -1296,9 +1292,7 @@ function viewSettings() {
             <p class="set-hero-desc">${cur.desc || cur.sub}</p>
           </div>
         </div>
-        <div class="set-hero-badges">
-          <span class="set-badge ${cur.badgeClass || 'gold'}">${cur.badgeText || 'Active'}</span>
-        </div>
+        ${cur.badgeText ? `<div class="set-hero-badges"><span class="set-badge ${cur.badgeClass || 'gold'}">${cur.badgeText}</span></div>` : ''}
       </div>
       <div class="set-grid">${cur.html()}</div>
     </div>

@@ -291,9 +291,7 @@ function renderCommandsTab() {
         </div>
 
         <div class="tg-console-output-box">
-          <div class="tg-console-bubble">
-            ${consoleOutput}
-          </div>
+          <div class="tg-console-bubble">${consoleOutput}</div>
         </div>
       </section>
 
@@ -306,31 +304,26 @@ function renderCommandsTab() {
           Add these to @BotFather and your phone suggests them when you type <code>/</code>.
         </p>
 
-        <table class="grid tg-cmd-table">
-          <thead>
-            <tr><th>Command</th><th>Description</th></tr>
-          </thead>
-          <tbody>
-            <tr><td><code>/today</code></td><td>Today's spending, budget remainder &amp; recent records</td></tr>
-            <tr><td><code>/month</code></td><td>Month-to-date breakdown, top categories &amp; jar status</td></tr>
-            <tr><td><code>/balance</code></td><td>All accounts, liquid cash, cards &amp; safe balances</td></tr>
-            <tr><td><code>/safe</code></td><td>Daily safe-to-spend allowance &amp; pool until payday</td></tr>
-            <tr><td><code>/goals</code></td><td>Visual progress bars and completion ETAs for goals</td></tr>
-            <tr><td><code>/rates</code></td><td>Live official exchange rates &amp; crypto prices</td></tr>
-            <tr><td><code>/last</code></td><td>List of last 10 recorded transactions</td></tr>
-            <tr><td><code>/undo</code></td><td>Instantly undo the last transaction logged via Telegram</td></tr>
-            <tr><td><code>/blocks</code></td><td>Display your custom reply keyboard buttons</td></tr>
-            <tr><td><code>/help</code></td><td>Syntax cheatsheet &amp; quick logging help</td></tr>
-          </tbody>
-        </table>
+        <ul class="tg-examples tg-cmds">
+          <li><code>/today</code><span>Today's spending, budget remainder &amp; recent records</span></li>
+          <li><code>/month</code><span>Month-to-date breakdown, top categories &amp; jar status</span></li>
+          <li><code>/balance</code><span>All accounts, liquid cash, cards &amp; safe balances</span></li>
+          <li><code>/safe</code><span>Daily safe-to-spend allowance &amp; pool until payday</span></li>
+          <li><code>/goals</code><span>Visual progress bars and completion ETAs for goals</span></li>
+          <li><code>/rates</code><span>Live official exchange rates &amp; crypto prices</span></li>
+          <li><code>/last</code><span>List of last 10 recorded transactions</span></li>
+          <li><code>/undo</code><span>Instantly undo the last transaction logged via Telegram</span></li>
+          <li><code>/blocks</code><span>Display your custom reply keyboard buttons</span></li>
+          <li><code>/help</code><span>Syntax cheatsheet &amp; quick logging help</span></li>
+        </ul>
 
         <div class="tg-botfather-help">
           <b>How to add them:</b>
           <ol class="small muted" style="margin:6px 0 0; padding-left:18px;">
             <li>In Telegram, message <b>@BotFather</b> and send <code>/setcommands</code>.</li>
             <li>Select your bot from the list.</li>
-            <li>Click <b>"Copy for @BotFather"</b> above, then paste and send the list.</li>
-            <li>Now your phone will auto-suggest all commands when you type <code>/</code>!</li>
+            <li>Click <b>Copy for @BotFather</b> above, then paste and send it.</li>
+            <li>Your phone now suggests them when you type <code>/</code>.</li>
           </ol>
         </div>
       </section>
