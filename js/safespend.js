@@ -3,7 +3,8 @@
 // spread over the days until that income (or the end of the month).
 // Pure and tested; Home and the Telegram bot show it.
 
-import { accountBalances, monthSummary, savingsJar, isBillCategory, B } from './model.js';
+import { accountBalances, personalMonth, savingsJar, isBillCategory, payOn, B } from './model.js';
+import { payStatus } from './payyourself.js';
 import { dueItems, upcomingItems } from './recurring.js';
 import { isLiquid } from './forecast.js';
 import { daysBetween, monthKey, addMonths } from './dates.js';
@@ -14,15 +15,20 @@ const lei = (c) => Math.floor(c / 100) * 100; // whole lei, rounded down: never 
 export function safeToSpend(state, today) {
   const base = state.settings.currency;
   const toBase = (c, cur) => (!cur || cur === base ? c : convert(c, cur, base, state.rates));
+  // Paying yourself a salary: the buffer isn't spending money, and payday is
+  // your salary day.
+  const pay = payOn(state) ? payStatus(state, today) : null;
+  const spendable = (a) => isLiquid(a) && !(pay && a.id === state.settings.pay.buffer);
   const accs = state.settings.accounts;
-  const liquidIds = new Set(accs.filter(isLiquid).map((a) => a.id));
+  const liquidIds = new Set(accs.filter(spendable).map((a) => a.id));
   const bal = accountBalances(state);
-  const liquid = accs.filter(isLiquid).reduce((a, acc) => a + (toBase(bal[acc.id] || 0, acc.currency) || 0), 0);
+  const liquid = accs.filter(spendable).reduce((a, acc) => a + (toBase(bal[acc.id] || 0, acc.currency) || 0), 0);
 
-  // Next income: the next recurring income after today; else the 1st of next month.
+  // Next income: your next salary, or the next recurring income after today,
+  // else the 1st of next month.
   const ahead = upcomingItems(state, today, 45);
-  const inc = ahead.find((x) => x.rule.type === 'income');
-  const payday = inc ? inc.date : `${addMonths(monthKey(today), 1)}-01`;
+  const inc = pay ? null : ahead.find((x) => x.rule.type === 'income');
+  const payday = pay ? pay.next : inc ? inc.date : `${addMonths(monthKey(today), 1)}-01`;
   const days = Math.max(1, daysBetween(today, payday));
 
   // Bills still to pay before then (late ones too).
@@ -34,7 +40,7 @@ export function safeToSpend(state, today) {
   // This month's savings plan, minus what already went to savings accounts.
   const key = monthKey(today);
   const jar = savingsJar(state);
-  const income = monthSummary(state, key).income;
+  const income = personalMonth(state, key).personalIncome; // what came in for you, not for the work
   const plan = jar?.savings ? Math.round((income * jar.pct) / 10000) * 100 : 0;
   let moved = 0;
   for (const t of state.tx) {
@@ -43,7 +49,9 @@ export function safeToSpend(state, today) {
     if (liquidIds.has(t.from) && !liquidIds.has(t.to)) moved += v;
     else if (!liquidIds.has(t.from) && liquidIds.has(t.to)) moved -= v;
   }
-  const savingsLeft = Math.max(0, plan - moved);
+  // With a salary, saving happens in the buffer (what stays after the salary),
+  // so the salary itself is money to live on.
+  const savingsLeft = pay ? 0 : Math.max(0, plan - moved);
 
   // Today's everyday spending counts against today's share, not the pool.
   // Bills paid today (rent, internet…) are not today's spending: they already
@@ -57,7 +65,7 @@ export function safeToSpend(state, today) {
   const tomorrow = days > 1 && pool - spentToday > 0 ? lei((pool - spentToday) / (days - 1)) : 0;
   return {
     liquid, bills, billsTotal, plan, moved, savingsLeft, spentToday, pool, perDay, leftToday, tomorrow,
-    payday, days, paydayFrom: inc ? inc.rule.note || 'Income' : null,
+    payday, days, paydayFrom: pay ? 'salary' : inc ? inc.rule.note || 'Income' : null,
     short: pool <= 0 ? -pool : 0,
   };
 }

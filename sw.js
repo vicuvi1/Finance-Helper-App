@@ -17,6 +17,7 @@ const SHELL = [
   './js/invoices.js',
   './js/forecast.js',
   './js/safespend.js',
+  './js/payyourself.js',
   './js/telegram.js',
   './js/review.js',
   './js/buddy.js',

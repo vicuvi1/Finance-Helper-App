@@ -5311,3 +5311,24 @@ body.locked .theme-atmosphere, body.printing .theme-atmosphere { display: none; 
 
 
 
+
+/* Work line and Pay yourself (Home) */
+.work-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 18px; margin: -6px 0 14px; padding: 10px 16px; font-size: 13px; color: var(--muted);
+  border: 1px dashed var(--line-strong); border-radius: var(--radius-sm); }
+.work-line .wl-k { color: var(--text); font-weight: 600; }
+.work-line b { color: var(--text); font-variant-numeric: tabular-nums; }
+.work-line b.income { color: var(--income); } .work-line b.expense { color: var(--expense); }
+.pay-card { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 12px 28px; align-items: center; }
+.pay-card .k { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 600; }
+.pay-card .k .card-link { text-transform: none; letter-spacing: 0; }
+.pay-card .pc-fig { display: block; font-family: var(--display); font-weight: 500; font-size: 30px; margin: 4px 0 2px; }
+.pay-card .pc-sub { color: var(--muted); font-size: 13px; }
+.pay-card .pc-runway { display: grid; gap: 2px; justify-items: end; text-align: right; }
+.pay-card .pc-runway b { font-family: var(--display); font-weight: 500; font-size: 22px; }
+.pay-card .pc-runway > span:last-child { font-size: 13px; font-weight: 600; }
+.pay-card .pc-act { grid-column: 1 / -1; }
+.pay-card.due { border-color: color-mix(in srgb, var(--gold) 45%, var(--line)); }
+.pay-card.short { border-color: color-mix(in srgb, var(--warn) 45%, var(--line)); }
+.pay-card.invite { grid-template-columns: minmax(0, 1fr) auto; }
+.pay-card.invite p { margin: 6px 0 0; color: var(--muted); font-size: 13.5px; max-width: 70ch; }
+@media (max-width: 719px) { .pay-card, .pay-card.invite { grid-template-columns: minmax(0, 1fr); } .pay-card .pc-runway { justify-items: start; text-align: left; } }

@@ -50,6 +50,7 @@ import { sheetHTML, monthTabs } from './sheetview.js';
 import { createHistory } from './history.js';
 import { searchTx, searchSummary, SEARCH_HINT } from './search.js';
 import { safeToSpend, shortDay } from './safespend.js';
+import * as Pay from './payyourself.js';
 import { sound } from './audio.js';
 import { AmbientMusic } from './ambient.js';
 import { openPalette, closePalette, isPaletteOpen } from './palette.js';
@@ -547,20 +548,129 @@ function jarsCard(key) {
 
 
 // Home's month strip (look B): earned, spent, kept, and the savings rate.
+// Home's month strip: YOUR money (what came in for you, what you lived on,
+// what you kept). The work's own numbers are in the line under it.
 function homeStrip(s, key) {
+  const p = M.personalMonth(state, key);
   const target = M.savingsJar(state)?.pct ?? 0;
-  const w = s.expense ? workText(state, s.expense, todayISO()) : '';
-  const r = Math.max(0, Math.min(1, s.savingsRate || 0));
-  const diff = Math.round((s.savingsRate || 0) * 100) - target;
-  const rate = s.income > 0 ? `<div class="ms-cell ms-rate"><span class="k"><span>Savings rate</span><span>goal ${target}%</span></span>
+  const w = p.personalSpent ? workText(state, p.personalSpent, todayISO()) : '';
+  const r = Math.max(0, Math.min(1, p.rate || 0));
+  const diff = Math.round((p.rate || 0) * 100) - target;
+  const rate = p.personalIncome > 0 ? `<div class="ms-cell ms-rate"><span class="k"><span>Savings rate</span><span>goal ${target}%</span></span>
       <div class="bar ${diff < 0 ? 'over' : ''}"><i style="width:${(r * 100).toFixed(1)}%"></i><span class="mark" style="left:${target}%"></span></div>
-      <p class="${diff < 0 ? 'bad' : ''}">${s.net < 0 ? `${money(-s.net)} more spent than earned` : diff >= 0 ? `${diff} points above your goal` : `${-diff} points below your goal`}</p></div>` : '';
-  return `<section class="m-strip" aria-label="${esc(monthLabel(key))}">
-    <div class="ms-cell"><span class="k">Earned</span><b class="${s.income ? 'income' : ''}">${countUp(s.income, 'm-in')}</b></div>
-    <div class="ms-cell"><span class="k">Spent</span><b class="${s.expense ? 'expense' : ''}">${countUp(s.expense, 'm-out')}</b>${w ? `<span class="work-time" title="What it cost in your work time (Settings → Your hour)">≈ ${w} of your work</span>` : ''}</div>
-    <div class="ms-cell"><span class="k">Monthly balance</span><b>${countUp(s.net, 'm-net')}</b></div>
+      <p class="${diff < 0 ? 'bad' : ''}">${p.kept < 0 ? `${money(-p.kept)} more than came in for you` : diff >= 0 ? `${diff} points above your goal` : `${-diff} points below your goal`}</p></div>` : '';
+  const inSub = p.pay ? (p.salary ? 'your salary' : 'salary not paid yet') + (p.otherIncome ? ` + ${money(p.otherIncome, { compact: true })} other` : '')
+    : p.workIncome ? 'work profit + other income' : '';
+  return `<section class="m-strip" aria-label="${esc(monthLabel(key))}: your money">
+    <div class="ms-cell"><span class="k">Came in for you</span><b class="${p.personalIncome > 0 ? 'income' : ''}">${countUp(p.personalIncome, 'm-in')}</b>${inSub ? `<span class="work-time">${esc(inSub)}</span>` : ''}</div>
+    <div class="ms-cell"><span class="k">You lived on</span><b class="${p.personalSpent ? 'expense' : ''}">${countUp(p.personalSpent, 'm-out')}</b>${w ? `<span class="work-time" title="What it cost in your work time (Settings → Your hour)">≈ ${w} of your work</span>` : p.workCosts ? '<span class="work-time">work costs not included</span>' : ''}</div>
+    <div class="ms-cell"><span class="k">Kept</span><b>${countUp(p.kept, 'm-net')}</b></div>
     ${rate}
+  </section>
+  ${workLine(p)}`;
+}
+
+// The work, on its own line: what clients paid, what the work cost, profit.
+function workLine(p) {
+  if (!p.workIncome && !p.workCosts) return '';
+  return `<div class="work-line" role="note"><span class="wl-k">💼 Work this month</span>
+    <span>Earned <b class="income">${money(p.workIncome)}</b></span><span>Costs <b>${money(p.workCosts)}</b></span>
+    <span>Profit <b class="${p.profit < 0 ? 'expense' : ''}">${money(p.profit)}</b></span>
+    ${p.workIncome ? '' : '<span class="muted">No client payment yet this month</span>'}</div>`;
+}
+
+// Pay yourself: the salary from your buffer, and how long the buffer lasts.
+function payCard(today) {
+  const st = Pay.payStatus(state, today);
+  if (!st.on) {
+    if (state.meta.payHide || !st.suggest.amount) return '';
+    return `<section class="card pay-card invite"><div class="pc-main"><span class="k">💸 Pay yourself a salary</span>
+      <p>Client money comes in lumps. Keep it in one <b>buffer</b> account and move yourself a fixed salary each month, about <b>${money(st.suggest.amount)}</b> (80% of your usual work profit). Every month then looks the same, and you see how many months you'd be fine without clients.</p></div>
+      <div class="btns"><button class="btn primary" data-act="pay-setup">Set it up</button><button class="btn" data-act="pay-hide">Not now</button></div></section>`;
+  }
+  const buf = M.account(state, state.settings.pay.buffer);
+  const months = Pay.runwayText(st.runway);
+  return `<section class="card pay-card ${st.due ? (st.short ? 'short' : 'due') : ''}">
+    <div class="pc-main"><span class="k">💸 Pay yourself <button class="card-link" data-act="pay-setup">Edit</button></span>
+      <b class="pc-fig">${money(st.amount)} <span class="muted small">a month</span></b>
+      <span class="pc-sub">${st.paid ? `Paid ${esc(dayLabel(st.paid.date))} · next ${esc(dayLabel(st.next))}` : st.due ? `Due since ${esc(dayLabel(st.date))}` : `Next salary ${esc(dayLabel(st.next))}`}</span></div>
+    <div class="pc-runway"><span class="k">Buffer · ${esc(buf?.name || '')}</span><b>${money(Math.round(st.bufferBalance / 100) * 100)}</b>
+      <span class="${st.runway < 3 ? 'expense' : st.runway >= 6 ? 'income' : ''}">covers ${esc(months)}</span></div>
+    ${st.due ? `<div class="pc-act">${st.short ? `<p class="lock-msg" style="margin:0 0 8px">The buffer has less than one salary. Pay what's there, or lower the salary.</p>` : ''}<button class="btn primary" data-act="pay-now">Pay yourself ${money(st.amount)}</button></div>` : ''}
   </section>`;
+}
+
+function paySettingsCard() {
+  const st = Pay.payStatus(state, todayISO());
+  return `<section class="card"><h2>Pay yourself</h2>
+    <p class="muted small" style="margin-top:0">${st.on ? `Salary <b>${money(st.amount)}</b> a month on day ${state.settings.pay.day}, from <b>${esc(M.account(state, state.settings.pay.buffer)?.name || '')}</b>. Buffer covers ${esc(Pay.runwayText(st.runway))}.`
+    : 'Keep client money in a buffer account and pay yourself a fixed monthly salary from it, so slow months don\'t hurt.'}</p>
+    <button class="btn block" data-act="pay-setup">${st.on ? 'Change' : 'Set it up'}</button></section>`;
+}
+
+function payNow() {
+  const tx = Pay.salaryTx(state, todayISO(), { id: M.uid() });
+  if (!tx) { toast('Needs an exchange rate between the buffer and your account first (Accounts → Rates).'); return; }
+  state.tx.push(tx);
+  commit();
+  toast(`Salary paid: ${formatMoney(tx.base, state.settings.currency)} to ${M.account(state, tx.to)?.name || 'your account'}.`);
+}
+
+function openPaySheet() {
+  const today = todayISO();
+  const p = state.settings.pay || {};
+  const sug = Pay.suggestSalary(state, today);
+  const accs = state.settings.accounts.filter((a) => !a.archived);
+  const opts = (sel) => accountOptionsHTML(accs, sel, { baseCur: state.settings.currency });
+  const guessBuffer = p.buffer || (accs.find((a) => a.currency && a.currency !== state.settings.currency && !a.savings && a.kind !== 'crypto') || accs.find((a) => a.kind === 'card'))?.id;
+  const guessTo = p.to || (accs.find((a) => a.kind === 'cash') || accs.find((a) => a.id !== guessBuffer))?.id;
+  openSheet(`<h3>Pay yourself <button type="button" class="icon-btn" data-close aria-label="Close">✕</button></h3>
+    <p class="muted small" style="margin-top:0">All client money goes into a <b>buffer</b>. Once a month the app moves your salary from it to your spending account, so every month looks the same.</p>
+    <form id="pay-form" autocomplete="off">
+      <label class="field"><span>Buffer (where client money lands)</span><select id="pay-buffer">${opts(guessBuffer)}</select></label>
+      <label class="field"><span>Salary goes to</span><select id="pay-to">${opts(guessTo)}</select></label>
+      <label class="field"><span>Salary per month (${esc(state.settings.currency)})</span><input id="pay-amount" type="text" inputmode="decimal" value="${p.amount ? centsToPlain(p.amount) : sug.amount ? centsToPlain(sug.amount) : ''}" placeholder="e.g. 15000"></label>
+      <p class="muted small" style="margin:-4px 0 10px">${sug.amount ? `Suggested ${money(sug.amount)}: 80% of your average work profit (${money(sug.average)}) over the last ${sug.months} month${sug.months === 1 ? '' : 's'}. The other 20% grows the buffer.` : 'Tip: pick about 80% of what your work usually brings in a month.'} Saving happens in the buffer, so Safe to spend treats the salary as money to live on.</p>
+      <label class="field"><span>Pay day</span><select id="pay-day">${Array.from({ length: 28 }, (_, i) => `<option value="${i + 1}" ${(p.day || 1) === i + 1 ? 'selected' : ''}>${i + 1}</option>`).join('')}</select></label>
+      <label class="field check"><input type="checkbox" id="pay-auto" ${p.auto ? 'checked' : ''}><span>Pay it automatically on pay day (when the app is open)</span></label>
+      <p class="lock-msg" id="pay-err" hidden></p>
+      <div class="btns">${p.on ? '<button type="button" class="btn danger" id="pay-off">Turn off</button>' : '<button type="button" class="btn" data-close>Not now</button>'}<button class="btn primary" type="submit">${p.on ? 'Save' : 'Start paying myself'}</button></div>
+    </form>`, (sheet) => {
+    sheet.querySelector('#pay-off')?.addEventListener('click', () => {
+      state.settings.pay = { ...state.settings.pay, on: false };
+      state.settings.updatedAt = Date.now();
+      commit(); closeSheet(); toast('Pay yourself is off. Your salaries so far stay in the log.');
+    });
+    sheet.querySelector('#pay-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const err = sheet.querySelector('#pay-err');
+      const buffer = sheet.querySelector('#pay-buffer').value;
+      const to = sheet.querySelector('#pay-to').value;
+      const amount = evalAmount(sheet.querySelector('#pay-amount').value);
+      const fail = (m) => { err.textContent = m; err.hidden = false; };
+      if (!buffer || !to) return fail('Pick both accounts.');
+      if (buffer === to) return fail('The buffer and the salary account must be different.');
+      if (!(amount > 0)) return fail('Type the salary, e.g. 15000.');
+      state.settings.pay = { on: true, buffer, to, amount, day: Number(sheet.querySelector('#pay-day').value) || 1, auto: sheet.querySelector('#pay-auto').checked };
+      state.settings.updatedAt = Date.now();
+      commit();
+      closeSheet();
+      const st = Pay.payStatus(state, todayISO());
+      toast(`Done. Your buffer covers ${Pay.runwayText(st.runway)}.${st.due ? ' This month\'s salary is ready to pay on Home.' : ''}`);
+    });
+  });
+}
+
+// On pay day, if you chose "automatically": the salary moves by itself.
+function autoPay() {
+  if (state._sealed || DEMO) return;
+  const st = Pay.payStatus(state, todayISO());
+  if (!st.on || !st.due || st.short || !state.settings.pay.auto) return;
+  const tx = Pay.salaryTx(state, todayISO(), { id: M.uid() });
+  if (!tx) return;
+  state.tx.push(tx);
+  persist({ quiet: true });
+  setTimeout(() => toast(`Salary paid: ${formatMoney(tx.base, state.settings.currency)} from your buffer.`), 1200);
 }
 
 // Compare identical elapsed days in the current and previous months.
@@ -684,6 +794,7 @@ function viewHome() {
   ${welcome}
   ${Goals.homeCard({ featured: true })}
   ${safeCard(today)}
+  ${payCard(today)}
   ${homeStrip(s, key)}
   ${monthComparison(today)}
   ${quickRow()}
@@ -1145,7 +1256,7 @@ function viewSettings() {
   };
   // One section at a time, picked on the left (like any settings screen).
   const sections = [
-    { id: 'general', icon: '⚙️', label: 'General', sub: 'Look, smart split, your hour', desc: 'Theme colors, procedural lo-fi ambient audio, smart split jars, and hourly valuation.', badgeText: 'Preferences', badgeClass: 'gold', html: () => cards.look + cards.split + WorkHour.settingsCard() + cards.accounts + cards.goals },
+    { id: 'general', icon: '⚙️', label: 'General', sub: 'Look, smart split, your hour', desc: 'Theme colors, procedural lo-fi ambient audio, smart split jars, and hourly valuation.', badgeText: 'Preferences', badgeClass: 'gold', html: () => cards.look + paySettingsCard() + cards.split + WorkHour.settingsCard() + cards.accounts + cards.goals },
     { id: 'categories', icon: '🏷️', label: 'Categories & rules', sub: 'Categories, jars, auto-rules', desc: 'Custom spending & income categories, jar assignments, and auto-sorting rules.', badgeText: 'Structure', badgeClass: 'accent', html: () => cards.categories + Rules.settingsCard() },
     { id: 'data', icon: '💾', label: 'Data & backups', sub: 'Import, export, backups, sync', desc: 'Device storage status, automated JSON backups, cloud sync, and Excel imports.', badgeText: 'Storage', badgeClass: 'income', html: () => cards.data + Backups.settingsCard() + Sync.settingsCard() },
     { id: 'connect', icon: '🔗', label: 'Telegram & Binance', sub: 'Your bot, crypto balances', desc: 'Personal Telegram bot integration for instant logging and Binance read-only portfolio.', badgeText: 'Integrations', badgeClass: 'accent', html: () => Telegram.settingsCard() + TgBlocks.settingsCard() + Binance.settingsCard() },
@@ -1264,6 +1375,7 @@ function offerMonthlyBill(tx) {
 }
 
 function render({ enter = false } = {}) {
+  autoPay();
   // Once: work costs ("Work fees", "Taxes") leave the personal jars.
   if (!state._sealed && !state.meta.workJarsMoved) {
     state.meta.workJarsMoved = 1;
@@ -2434,6 +2546,9 @@ document.addEventListener('click', (e) => {
   else if (act === 'more') openMoreSheet();
   else if (act === 'bd-toggle') Buddy.toggle();
   else if (act === 'calc') Calc.toggle();
+  else if (act === 'pay-setup') openPaySheet();
+  else if (act === 'pay-now') payNow();
+  else if (act === 'pay-hide') { state.meta.payHide = 1; persist(); toast('Hidden. Set it up any time from Settings → General → Pay yourself.'); }
   else if (act === 'quick-pick') {
     const p = M.quickPicks(state, todayISO(), 8)[Number(el.dataset.i)];
     if (p) openTxSheet(null, { type: p.type, note: p.note, category: p.category, account: p.account, amountText: centsToPlain(p.amount) });

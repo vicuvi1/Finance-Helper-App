@@ -60,6 +60,13 @@ tested); `js/app.js` only renders and handles taps.
 - Jars: for the running month `jarStatus(state, key, today)` budgets on `expectedIncome` (regular
   incomes or the last 3 months' average, the larger) until real income passes it. Work-cost
   categories were moved once to "Business, outside the jars" (`moveWorkCostsOutOfJars`).
+- Work vs personal: `personalMonth(state, key)` (model.js) splits a month into the work (income in
+  work categories `isWorkIncome`, costs = categories outside the jars `isWorkCost`, profit) and
+  you (`personalIncome`, `personalSpent`, `kept`). Home's strip and the jars use the personal side.
+- Pay yourself: `js/payyourself.js` (pure, tested). `settings.pay = {on, buffer, to, amount, day,
+  auto}`; the salary is a transfer with `salary: 'YYYY-MM'`. With it on, the buffer isn't
+  spending money, payday = salary day, and saving happens in the buffer (Safe to spend keeps no
+  savings plan back). Home `payCard` shows the salary and the buffer runway ("covers 3.4 months").
 - No `alert`/`confirm`/`prompt`: confirmations are bottom sheets.
 - New app files go in `sw.js` `SHELL` (offline), `build.files` in
   `package.json` (desktop) and `scripts/build-preview.mjs` if outside css/js/icons.

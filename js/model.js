@@ -447,12 +447,54 @@ export function splitIncome(state, cents) {
 // Your usual monthly income, in the main currency: the regular incomes in
 // Plan, or the average of the last 3 months that had income (the larger).
 export function expectedIncome(state, key) {
+  // Paying yourself a salary: that salary is your income.
+  if (payOn(state)) return state.settings.pay.amount;
   const base = state.settings.currency;
   const regular = (state.recurring || []).filter((r) => r.type === 'income' && !r.paused)
     .reduce((a, r) => a + ((r.currency || base) === base ? perMonth(r) : convert(perMonth(r), r.currency, base, state.rates) || 0), 0);
-  const past = [1, 2, 3].map((n) => monthSummary(state, addMonths(key, -n)).income).filter((x) => x > 0);
+  const past = [1, 2, 3].map((n) => personalMonth(state, addMonths(key, -n)).personalIncome).filter((x) => x > 0);
   const average = past.length ? Math.round(past.reduce((a, x) => a + x, 0) / past.length) : 0;
   return Math.max(regular, average);
+}
+
+// ---------- Work and personal money ----------
+// A freelancer's month mixes two things: the work (client income, work fees,
+// taxes) and the life it pays for. Income is work when its category says so
+// (Work, Side jobs, client…); spending is a work cost when it sits outside the
+// jars ("Business, outside the jars").
+const WORK_INCOME = /\b(work|job|jobs|client|clients|freelance|salary|salariu|lucru|proiect|project|invoice|factur\w*)\b/i;
+export function isWorkIncome(state, catId) {
+  const c = category(state, catId);
+  if (!c || c.type !== 'income') return false;
+  if (typeof c.work === 'boolean') return c.work;
+  return c.id === 'work' || c.id === 'side' || WORK_INCOME.test(c.name || '');
+}
+export const isWorkCost = (state, catId) => { const c = category(state, catId); return c?.type === 'expense' && c.jar === NO_JAR; };
+
+// Paying yourself a fixed salary from a buffer account (settings.pay).
+export const payOn = (state) => {
+  const p = state.settings.pay;
+  return !!(p?.on && p.buffer && p.to && p.amount > 0 && state.settings.accounts.some((a) => a.id === p.buffer));
+};
+
+// One month, split: the work (income, costs, profit) and you (what came in
+// for you, what you lived on, what you kept). Without "Pay yourself" what
+// came in for you is the work's profit plus other income (family, gifts);
+// with it, the salary moved from the buffer plus other income.
+export function personalMonth(state, key) {
+  const s = monthSummary(state, key);
+  const workIncome = s.incomes.filter((t) => isWorkIncome(state, t.category)).reduce((a, t) => a + B(t), 0);
+  const workCosts = s.expenses.filter((t) => isWorkCost(state, t.category)).reduce((a, t) => a + B(t), 0);
+  const otherIncome = s.income - workIncome;
+  const pay = payOn(state);
+  const salary = pay ? txInMonth(state, key).filter((t) => t.type === 'transfer' && t.salary).reduce((a, t) => a + B(t), 0) : 0;
+  const personalIncome = pay ? salary + otherIncome : s.income - workCosts;
+  const personalSpent = s.expense - workCosts;
+  const kept = personalIncome - personalSpent;
+  return {
+    key, workIncome, workCosts, profit: workIncome - workCosts, otherIncome, salary, pay,
+    personalIncome, personalSpent, kept, rate: personalIncome > 0 ? kept / personalIncome : null,
+  };
 }
 
 // How each jar is doing this month. Spending jars get income × pct as a budget;
@@ -462,8 +504,9 @@ export function expectedIncome(state, key) {
 // the pay hasn't come in yet.
 export function jarStatus(state, key, today = null) {
   const sum = monthSummary(state, key);
+  const mine = personalMonth(state, key);
   const usual = today && monthKey(today) === key ? expectedIncome(state, key) : 0;
-  const basis = Math.max(sum.income, usual);
+  const basis = Math.max(mine.personalIncome, usual);
   const spentByJar = {};
   for (const t of sum.expenses) {
     const j = jarOf(state, t.category);
@@ -473,9 +516,9 @@ export function jarStatus(state, key, today = null) {
   return state.settings.jars.map((j) => {
     // Whole lei: nobody budgets 2 446,30.
     const budget = Math.round((basis * j.pct) / 10000) * 100;
-    const est = basis > sum.income ? { basis, estimated: true } : { basis, estimated: false };
+    const est = basis > mine.personalIncome ? { basis, estimated: true } : { basis, estimated: false };
     if (j.savings) {
-      const kept = Math.max(0, sum.net);
+      const kept = Math.max(0, mine.kept);
       return { jar: j, budget, used: kept, left: kept - budget, ratio: budget ? kept / budget : null, savings: true, ...est };
     }
     const used = spentByJar[j.id] || 0;
