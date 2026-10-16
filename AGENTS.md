@@ -30,7 +30,33 @@ tested); `js/app.js` only renders and handles taps.
   `git log` first. If two changes touch the same screen, keep both.
 - Write commit messages that say what changed for the owner, in plain words.
 
-## Workflow the owner asked for
+## Who owns what (one area per agent)
+The owner runs Claude Code, Codex and Antigravity side by side. Each has an
+area; stay in yours. Role notes: `.agents/agents/*.md`.
+- **Claude Code**: features the owner asks for end to end, the Telegram bot
+  (`electron/telegram.cjs`, `js/telegram.js`, `js/screens/telegram.js`),
+  the bot server (`server/`) and Google relay, desktop (`electron/`), sync and
+  backups, CI and end-to-end tests, and releases.
+- **Codex**: the money math and its correctness: `js/model.js`,
+  `js/safespend.js`, `js/payyourself.js`, `js/forecast.js`, `js/fx.js`,
+  `js/calc.js`, and security (`js/store.js`, encryption, secrets). Reviews
+  any change to those files and keeps them pure and tested.
+- **Antigravity**: how it looks: `css/app.css`, themes, layout of screens,
+  Settings → Extras. Never changes numbers or math.
+Rules that keep three agents from tripping over each other:
+- One task per agent at a time. Finish it (tests green, pushed, released)
+  before starting the next.
+- A change outside your area stays as small as possible and says so in the
+  commit message ("also touches js/model.js: …") so the owner of that area can
+  check it.
+- Nothing new on Home or in the sidebar unless the owner asked for it; new
+  nice-to-haves go to Settings → Extras.
+- Never merge or push with red tests or red CI. If you break a test you
+  don't own, fix it or revert your change.
+- Screenshots and scratch files never go in the repo (use a temp folder).
+- If your push is rejected because someone pushed first: pull, take the next
+  free version number, run the tests again, push.
+
 - **Commit and push after every change**, one focused commit each, so any
   step can be rolled back. Run `npm test` (and `npm run e2e` for UI
   changes) before each push.

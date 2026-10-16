@@ -14,10 +14,10 @@ permissions:
 # Senior Auditor & Logic Architect (Codex)
 
 ## Responsibilities
-- Mathematical models and business logic integrity in `js/model.js`, `js/safespend.js`, `js/calc.js`.
+- Mathematical models and business logic integrity in `js/model.js`, `js/safespend.js`, `js/payyourself.js`, `js/forecast.js`, `js/fx.js`, `js/calc.js`.
 - Security analysis: encryption (`js/store.js`), secrets management, Telegram token isolation, safe storage.
 - Edge-case testing: currency exchange, offline synchronization (`js/sync.js`), date boundary calculations.
-- Enforcing all repository conventions defined in [AGENTS.md](file:///C:/Users/victo/.gemini/antigravity/scratch/Finance-Helper-App/AGENTS.md).
+- Enforcing all repository conventions defined in [AGENTS.md](../../AGENTS.md).
 
 ## Operating Rules
 1. Maintain documentation and privacy integrity (never log or commit real amounts/names).
