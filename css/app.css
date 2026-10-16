@@ -5332,3 +5332,105 @@ body.locked .theme-atmosphere, body.printing .theme-atmosphere { display: none; 
 .pay-card.invite { grid-template-columns: minmax(0, 1fr) auto; }
 .pay-card.invite p { margin: 6px 0 0; color: var(--muted); font-size: 13.5px; max-width: 70ch; }
 @media (max-width: 719px) { .pay-card, .pay-card.invite { grid-template-columns: minmax(0, 1fr); } .pay-card .pc-runway { justify-items: start; text-align: left; } }
+
+/* ==========================================================================
+   Design v2: calmer and bolder. Bigger page titles, labels in plain sentence
+   case (no shouting caps), cards lifted by soft depth instead of outlines,
+   screens that use the whole width, and a sidebar that is just the menu.
+   ========================================================================== */
+:root {
+  --card-line: color-mix(in srgb, var(--line) 55%, transparent);
+  --lift: 0 1px 0 rgb(255 255 255 / 4%) inset, 0 18px 40px -28px rgb(0 0 0 / 75%);
+}
+:root[data-theme="light"], :root[data-design="paper"] {
+  --lift: 0 1px 2px rgb(14 19 27 / 5%), 0 16px 36px -26px rgb(14 19 27 / 28%);
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) { --lift: 0 1px 2px rgb(14 19 27 / 5%), 0 16px 36px -26px rgb(14 19 27 / 28%); }
+}
+/* Forest: a touch more depth between the page and its cards. */
+:root[data-design="forest"] { --bg: #09140f; --surface: #13261d; --surface-2: #1a3126; }
+
+/* Type: one clear title per page, labels you read rather than decode. */
+.top h1 { font-size: clamp(30px, 2.5vw, 40px); line-height: 1.12; }
+.top .sub { font-size: 14.5px; margin-top: 6px; }
+.top .eyebrow { text-transform: none; letter-spacing: 0; font-size: 14px; font-weight: 600; color: var(--gold); }
+.card h2 { font-size: 16px; text-transform: none; letter-spacing: -0.005em; color: var(--text); font-weight: 600; }
+.card h2 .right { color: var(--muted); }
+.hero .label, .sc-label, .nav-h, .section-h, .log-kpi-label, .yr-hero .k, .yr-tile .k, .pay-card .k, .ss .k,
+details.card > summary, .home-picks .label, .mm-l, .gs-kpi-lbl, .sub-kpi-card .k, .wipe-sum-lbl, .inv-head,
+.dp-group > small, .tgb-g small, .set-nav-title, .tg-kpi-label, .sankey-col-hdr {
+  text-transform: none; letter-spacing: 0;
+}
+.hero .label, .section-h, .log-kpi-label, .yr-hero .k, .yr-tile .k, .pay-card .k, .ss .k, details.card > summary,
+.home-picks .label, .gs-kpi-lbl, .sub-kpi-card .k, .set-nav-title, .tg-kpi-label { font-size: 13.5px; }
+details.card > summary { color: var(--text); font-size: 15px; }
+
+/* Cards: soft depth, hairline edges. */
+.card, :root[data-design="forest"] .card, :root[data-design="paper"] .card { border-color: var(--card-line); box-shadow: var(--lift); }
+.set-grid > .card:hover { border-color: var(--line); }
+
+@media (min-width: 1100px) {
+  .app { padding: 40px 48px 56px; }
+  .card { padding: 22px 24px; }
+
+  /* Sidebar: brand, money at a glance, New record, search, the menu. */
+  .tabbar { gap: 2px; }
+  .sc-body, .sc-body:hover { border-color: transparent; box-shadow: none; transform: none;
+    background: radial-gradient(120% 120% at 100% 0%, color-mix(in srgb, var(--gold) 10%, transparent), transparent 60%), var(--surface-2); }
+  .sc-label { font-size: 12px; font-weight: 600; color: var(--muted); }
+  .nav-h { font-size: 12px; font-weight: 600; padding: 16px 8px 6px; opacity: 1; }
+  .nav-h::after { display: none; }
+  .side-foot:empty { padding: 0; }
+  .side-foot-actions { margin-top: auto; padding-top: 10px; border-top: 1px solid var(--card-line); }
+  .side-foot:not(:empty) + .side-foot-actions { margin-top: 0; }
+
+  /* Keyboard shortcuts: one small key next to the lock; the list opens above. */
+  .side-foot-actions .keys { position: relative; margin: 0; display: block; }
+  .side-foot-actions .keys summary { display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border-radius: 9px;
+    border: 1px solid var(--line); background: var(--surface-2); color: var(--muted); }
+  .side-foot-actions .keys summary::before { content: none; }
+  .side-foot-actions .keys summary:hover, .side-foot-actions .keys[open] summary { color: var(--gold); background: var(--surface-3); }
+  .side-foot-actions .keys summary svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+  .side-foot-actions .keys p { position: absolute; right: 0; bottom: calc(100% + 8px); z-index: 30; width: 220px; margin: 0; padding: 12px 14px;
+    background: var(--surface); border: 1px solid var(--line-strong); border-radius: 12px; box-shadow: var(--shadow-pop); font-size: 12px; }
+}
+
+/* Telegram: the whole width, plain words, no console look. */
+.view-telegram-hub { max-width: none; margin: 0; }
+.seg-tg-tabs { margin: 8px 0 22px; gap: 6px; padding: 4px; width: max-content; max-width: 100%;
+  background: var(--surface); border: 1px solid var(--card-line); border-radius: 999px; }
+.seg-tg-tabs .chip { border: 0; border-radius: 999px; background: transparent; padding: 8px 18px; font-size: 14px; color: var(--muted); }
+.seg-tg-tabs .chip:hover { color: var(--text); }
+.seg-tg-tabs .chip[aria-pressed="true"] { background: var(--gold-soft); color: var(--text); border: 0; }
+.seg-tg-tabs .chip .muted { margin-left: 4px; font-weight: 500; }
+.tg-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1px; margin-bottom: 18px;
+  background: var(--card-line); border-radius: var(--radius); overflow: hidden; box-shadow: var(--lift); }
+.tg-strip-cell { display: flex; flex-direction: column; gap: 4px; padding: 20px 24px; background: var(--surface); min-width: 0; }
+.tg-strip-cell .k { color: var(--muted); font-size: 13.5px; }
+.tg-strip-cell b { font: 500 26px/1.2 var(--display); letter-spacing: -0.01em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tg-strip-cell small { color: var(--muted); font-size: 13px; }
+.tg-strip-cell .card-link { align-self: flex-start; margin-top: 2px; }
+.tg-grid-2 { grid-template-columns: minmax(0, 1.5fr) minmax(320px, 1fr); gap: 18px; }
+@media (max-width: 900px) { .tg-grid-2 { grid-template-columns: minmax(0, 1fr); } }
+.tg-recent-feed { gap: 0; max-height: 560px; }
+.tg-feed-item { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; gap: 14px; padding: 12px 4px;
+  background: none; border: 0; border-radius: 0; border-bottom: 1px solid var(--card-line); }
+.tg-feed-item:last-child { border-bottom: 0; }
+.tg-feed-item .t { display: flex; flex-direction: column; min-width: 0; }
+.tg-feed-item .t b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tg-feed-item .amt { font: 500 17px/1 var(--display); white-space: nowrap; }
+.tg-feed-icon { width: 40px; height: 40px; background: var(--surface-2); }
+.tg-empty-feed { padding: 28px 16px 20px; }
+.tg-empty-feed p { max-width: 380px; margin: 6px auto 0; font-size: 14px; }
+.tg-empty-bubble { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; width: 220px; margin: 0 auto 18px; }
+.tg-empty-bubble span { padding: 8px 12px; border-radius: 14px 14px 4px 14px; background: color-mix(in srgb, var(--c1) 28%, var(--surface-2)); font-size: 14px; }
+.tg-empty-bubble span.in { align-self: flex-start; border-radius: 14px 14px 14px 4px; background: var(--surface-3); color: var(--income); }
+.tg-examples { list-style: none; margin: 0; padding: 0; }
+.tg-examples li { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: 14px; align-items: baseline;
+  padding: 11px 0; border-bottom: 1px solid var(--card-line); }
+.tg-examples li:last-child { border-bottom: 0; }
+.tg-examples code { font: 500 14px/1.4 var(--mono); color: var(--gold); white-space: pre-wrap; }
+.tg-examples span { color: var(--muted); font-size: 14px; }
+/* Phone bar: the sidebar footer (Settings, lock, shortcuts) lives under More. */
+@media (max-width: 719px) { .side-foot-actions { display: none; } }

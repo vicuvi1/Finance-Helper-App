@@ -83,16 +83,17 @@ export function simulateCommand(cmd, state) {
 
 function renderHeader(status) {
   const isLinked = !!status?.linked;
+  const broken = isLinked && status.errorCode;
   return `
     <header class="top tg-hub-top">
       <div>
-        <h1>Telegram Bot</h1>
-        <div class="sub">Phone sync, custom keyboard buttons, command center &amp; mobile automations</div>
+        <h1>Telegram bot</h1>
+        <div class="sub">Log money from your phone. The bot answers right away; this app picks it up.</div>
       </div>
       <div class="tg-hub-header-actions">
-        ${isLinked ? `<span class="set-badge income">● Linked @${esc(status.botName)}</span>` : '<span class="set-badge expense">● Disconnected</span>'}
-        <button type="button" class="btn primary" data-act="tg-load" title="Pull all spending sent from your phone">
-          📥 Sync from phone now
+        ${isLinked ? `<span class="set-badge ${broken ? 'expense' : 'income'}">● ${broken ? 'Not working' : `@${esc(status.botName)}`}</span>` : '<span class="set-badge">Not set up yet</span>'}
+        <button type="button" class="btn primary" data-act="tg-load" title="Get what you sent from your phone">
+          📥 Get messages now
         </button>
       </div>
     </header>
@@ -101,15 +102,32 @@ function renderHeader(status) {
 
 function renderTabs() {
   const blocks = B.blocks(ctx.state);
+  const tab = (id, label) => `<button type="button" class="chip" data-act="tg-hub-tab" data-tab="${id}" aria-pressed="${hubTab === id}">${label}</button>`;
   return `
     <div class="seg seg-tg-tabs" role="group" aria-label="Telegram sections">
-      <button type="button" class="chip" data-act="tg-hub-tab" data-tab="sync" aria-pressed="${hubTab === 'sync'}">📱 Phone Sync &amp; Feed</button>
-      <button type="button" class="chip" data-act="tg-hub-tab" data-tab="buttons" aria-pressed="${hubTab === 'buttons'}">🧱 Custom Buttons (${blocks.length})</button>
-      <button type="button" class="chip" data-act="tg-hub-tab" data-tab="commands" aria-pressed="${hubTab === 'commands'}">⚡ Commands &amp; Console</button>
-      <button type="button" class="chip" data-act="tg-hub-tab" data-tab="settings" aria-pressed="${hubTab === 'settings'}">⚙️ Setup &amp; Alerts</button>
+      ${tab('sync', 'From your phone')}
+      ${tab('buttons', `Buttons <span class="muted">${blocks.length}</span>`)}
+      ${tab('commands', 'Try a command')}
+      ${tab('settings', 'Setup &amp; reminders')}
     </div>
   `;
 }
+
+// Who answers your messages while this PC is off.
+function offlineLine(status) {
+  if (status?.server?.on) return { k: 'Your server', v: 'Answers right away, always on' };
+  if (status?.relay?.on) return { k: 'Google script', v: 'Answers within a minute' };
+  return { k: 'Waits for the PC', v: 'Telegram keeps messages for 24 h' };
+}
+
+const EXAMPLES = [
+  ['coffee 35', 'Spent 35 on coffee, from your usual card'],
+  ['groceries 140 card', 'Say which card or cash it came from'],
+  ['taxi 55 yesterday', 'For a day that already passed'],
+  ['+5000 salary', 'A plus sign means money came in'],
+  ['20+35+15 lunch', 'It adds up for you: 70'],
+  ['/today', 'How today looks (also /month, /safe)'],
+];
 
 function renderSyncTab(status) {
   const state = ctx.state;
@@ -120,110 +138,64 @@ function renderSyncTab(status) {
   const totalSpent = tgTx.filter((t) => t.type === 'expense').reduce((s, t) => s + M.B(t), 0);
   const totalEarned = tgTx.filter((t) => t.type === 'income').reduce((s, t) => s + M.B(t), 0);
   const cur = state.settings.currency;
+  const off = offlineLine(status);
 
   return `
-    <div class="tg-kpi-grid">
-      <div class="tg-kpi-card">
-        <span class="tg-kpi-label">Bot Connection</span>
-        <div class="tg-kpi-val">${isLinked ? `@${esc(status.botName)}` : 'Not linked'}</div>
-        <small class="muted">${isLinked && status.userName ? `Listens to ${esc(status.userName)}` : 'Set up token to connect'}</small>
+    <div class="tg-strip">
+      <div class="tg-strip-cell">
+        <span class="k">Your bot</span>
+        <b>${isLinked ? `@${esc(status.botName)}` : 'Not set up yet'}</b>
+        ${isLinked
+          ? `<small>${status.userName ? `Listens only to ${esc(status.userName)}` : 'Linked to your chat'}</small>`
+          : '<button type="button" class="card-link" data-act="tg-hub-tab" data-tab="settings">Set it up in 2 minutes →</button>'}
       </div>
-      <div class="tg-kpi-card">
-        <span class="tg-kpi-label">From Phone</span>
-        <div class="tg-kpi-val">${tgTx.length} <span style="font-size:14px; font-weight:normal;">records</span></div>
-        <small class="muted">−${esc(formatMoney(totalSpent, cur))} spent · +${esc(formatMoney(totalEarned, cur))} in</small>
+      <div class="tg-strip-cell">
+        <span class="k">Logged from your phone</span>
+        <b>${tgTx.length} record${tgTx.length === 1 ? '' : 's'}</b>
+        <small>${esc(formatMoney(totalSpent, cur))} spent · ${esc(formatMoney(totalEarned, cur))} came in</small>
       </div>
-      <div class="tg-kpi-card">
-        <span class="tg-kpi-label">PC-Off Queue</span>
-        <div class="tg-kpi-val" style="color:var(--income)">24h Safe</div>
-        <small class="muted">Messages wait on Telegram &amp; auto-pull on launch</small>
+      <div class="tg-strip-cell">
+        <span class="k">When this PC is off</span>
+        <b>${off.k}</b>
+        <small>${off.v}</small>
       </div>
     </div>
 
-    <section class="card tg-sync-hero-card">
-      <div class="tg-sync-hero-body">
-        <div>
-          <h2 style="margin:0 0 4px">Instant Mobile Sync</h2>
-          <p class="muted small" style="margin:0">
-            Log your daily expenses on your phone via Telegram while out and about. Click below to pull all new records right into your ledger.
-          </p>
-        </div>
-        <button type="button" class="btn primary tg-big-sync-btn" data-act="tg-load">
-          📥 Pull updates from phone now
-        </button>
-      </div>
-    </section>
-
     <div class="tg-grid-2">
-      <section class="card">
-        <div class="card-head-pill">
-          <h2>📱 Mobile Feed</h2>
-          <span class="set-badge accent">${tgTx.length} from Telegram</span>
-        </div>
-        <p class="muted small" style="margin-top:0">Recent records submitted from your phone via Telegram bot:</p>
-
+      <section class="card tg-feed-card">
+        <h2>Latest from your phone <span class="right">${tgTx.length ? `${tgTx.length} in total` : ''}</span></h2>
         ${recent.length ? `
-          <div class="list tg-recent-feed">
+          <div class="tg-recent-feed">
             ${recent.map((t) => {
               const c = M.category(state, t.category);
               const a = M.account(state, t.account);
               const sign = t.type === 'income' ? '+' : '−';
               return `
-                <div class="tx tg-feed-item">
-                  <div class="tg-feed-icon">${c?.emoji || (t.type === 'income' ? '💵' : '💸')}</div>
+                <div class="tg-feed-item">
+                  <div class="tg-feed-icon" aria-hidden="true">${c?.emoji || (t.type === 'income' ? '💵' : '💸')}</div>
                   <div class="t">
                     <b>${esc(t.note || c?.name || 'Expense')}</b>
                     <small class="muted">${esc(dayLabel(t.date))} · ${esc(c?.name || 'Category')} · ${esc(a?.name || 'Account')}</small>
                   </div>
-                  <div class="amt ${t.type === 'income' ? 'income' : 'expense'}" style="text-align:right">
-                    <b>${sign}${esc(formatMoney(t.amount, t.currency || cur))}</b>
-                    <span class="tg-feed-source-pill">Telegram</span>
-                  </div>
+                  <b class="amt ${t.type === 'income' ? 'income' : 'expense'}">${sign}${esc(formatMoney(t.amount, t.currency || cur))}</b>
                 </div>
               `;
             }).join('')}
           </div>
         ` : `
           <div class="tg-empty-feed">
-            <div style="font-size:32px; margin-bottom:8px;">💬</div>
-            <b>No records logged from Telegram yet</b>
-            <p class="muted small" style="max-width:320px; margin:6px auto 0;">
-              Open your bot on your phone and send e.g. <code>coffee 35</code> or tap a button. Then click "Sync from phone" to view it here!
-            </p>
+            <div class="tg-empty-bubble" aria-hidden="true"><span>coffee 35</span><span class="in">✓ Coffee · 35 MDL</span></div>
+            <b>Nothing from your phone yet</b>
+            <p class="muted">Send your bot a message like <code>coffee 35</code>, or tap one of your buttons. It shows up here.</p>
           </div>
         `}
       </section>
 
-      <section class="card">
-        <h2>⚡ Phone Fast-Log Cheatsheet</h2>
-        <p class="muted small" style="margin-top:0">Send any of these formats directly in your Telegram chat:</p>
-        
-        <div class="tg-cheatsheet-grid">
-          <div class="tg-cheat-card">
-            <code>coffee 35</code>
-            <span>Logs 35 in Food &amp; Dining using your last active card.</span>
-          </div>
-          <div class="tg-cheat-card">
-            <code>groceries 140 card</code>
-            <span>Specify which card or cash wallet to deduct from.</span>
-          </div>
-          <div class="tg-cheat-card">
-            <code>taxi 55 yesterday</code>
-            <span>Logs transaction dated yesterday instead of today.</span>
-          </div>
-          <div class="tg-cheat-card">
-            <code>+5000 salary</code>
-            <span>Prefix with <code>+</code> to log income into your main account.</span>
-          </div>
-          <div class="tg-cheat-card">
-            <code>20+35+15 lunch</code>
-            <span>Automatic math: calculates 70 and files in Food.</span>
-          </div>
-          <div class="tg-cheat-card">
-            <code>/today · /month · /safe</code>
-            <span>Query your current balances, spending, and safe daily allowance.</span>
-          </div>
-        </div>
+      <section class="card tg-howto">
+        <h2>How to write to your bot</h2>
+        <ul class="tg-examples">
+          ${EXAMPLES.map(([code, text]) => `<li><code>${esc(code)}</code><span>${esc(text)}</span></li>`).join('')}
+        </ul>
       </section>
     </div>
   `;
@@ -239,8 +211,8 @@ function renderButtonsTab() {
 
       <div class="tg-buttons-phone-preview">
         <section class="card">
-          <h2>📱 Live Phone Keyboard Preview</h2>
-          <p class="muted small" style="margin-top:0">How your buttons appear under your chat on Telegram on your phone:</p>
+          <h2>On your phone</h2>
+          <p class="muted small" style="margin-top:0">How your buttons look under the chat in Telegram:</p>
 
           <div class="tg-phone-frame">
             <div class="tg-phone-screen">
@@ -271,7 +243,7 @@ function renderButtonsTab() {
             </div>
           </div>
           <small class="muted" style="display:block; text-align:center; margin-top:8px;">
-            Keyboard automatically syncs to Telegram whenever you make edits.
+            Your phone gets the new buttons as soon as you change them.
           </small>
         </section>
       </div>
@@ -300,24 +272,21 @@ function renderCommandsTab() {
   return `
     <div class="tg-commands-grid">
       <section class="card tg-console-card">
-        <div class="card-head-pill">
-          <h2>⚡ Interactive Command Console</h2>
-          <span class="set-badge gold">Simulator &amp; Test</span>
-        </div>
+        <h2>Try it here</h2>
         <p class="muted small" style="margin-top:0">
-          Test any command or transaction input right in the app to see the exact reply the bot generates:
+          Type what you would send the bot and see its answer. Nothing is saved.
         </p>
 
         <div class="tg-quick-chips">
-          <span class="muted small" style="align-self:center;">Quick test:</span>
+          <span class="muted small" style="align-self:center;">Try:</span>
           ${chips.map((c) => `
             <button type="button" class="lq-chip" data-act="tg-hub-chip" data-cmd="${esc(c.cmd)}">${esc(c.label)}</button>
           `).join('')}
         </div>
 
         <div class="tg-console-input-row" style="margin-top:12px">
-          <input type="text" id="tg-console-input" class="input" value="${esc(consoleCmd)}" placeholder="Type a command (e.g. /today, /balance, /safe, or coffee 35)..." autocomplete="off">
-          <button type="button" class="btn primary" data-act="tg-hub-run">▶ Test command</button>
+          <input type="text" id="tg-console-input" class="input" value="${esc(consoleCmd)}" placeholder="e.g. /today, /safe or coffee 35" autocomplete="off">
+          <button type="button" class="btn primary" data-act="tg-hub-run">▶ Show the answer</button>
           <button type="button" class="btn" data-act="tg-hub-send-phone" title="Send this response directly to your phone's Telegram chat">📱 Send to my phone</button>
         </div>
 
@@ -330,11 +299,11 @@ function renderCommandsTab() {
 
       <section class="card">
         <div class="card-head-pill">
-          <h2>📋 Bot Commands Catalog</h2>
+          <h2>What the bot understands</h2>
           <button type="button" class="btn small" data-act="tg-hub-copy-cmds">📋 Copy for @BotFather</button>
         </div>
         <p class="muted small" style="margin-top:0">
-          List of commands your bot understands. You can register them in @BotFather to enable native autocomplete on your phone:
+          Add these to @BotFather and your phone suggests them when you type <code>/</code>.
         </p>
 
         <table class="grid tg-cmd-table">
@@ -356,7 +325,7 @@ function renderCommandsTab() {
         </table>
 
         <div class="tg-botfather-help">
-          <b>How to register commands in Telegram:</b>
+          <b>How to add them:</b>
           <ol class="small muted" style="margin:6px 0 0; padding-left:18px;">
             <li>In Telegram, message <b>@BotFather</b> and send <code>/setcommands</code>.</li>
             <li>Select your bot from the list.</li>

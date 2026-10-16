@@ -384,24 +384,9 @@ function renderSidebar() {
     <button type="button" class="amb-next-mini" data-act="amb-next" title="Next track">⏭</button>
   </div>`;
 
-  const goalCapsule = gs.target ? `<button type="button" class="sf-goal" data-go="goals" title="${esc(g.name)} (${Math.round(gs.ratio * 100)}%)">
-    <div class="sf-goal-top">
-      <span class="sf-goal-name">${esc(g.emoji || '🎯')} ${esc(g.name)}</span>
-      <span class="sf-goal-pct">${Math.round(gs.ratio * 100)}%</span>
-    </div>
-    <div class="sf-goal-track">
-      <div class="sf-goal-fill" style="width:${Math.min(100, Math.max(3, Math.round(gs.ratio * 100)))}%"></div>
-    </div>
-    <div class="sf-goal-sub">
-      <span>${money(Math.round(gs.remaining / 100) * 100, { compact: true })} to go</span>
-      <span>Target: ${money(Math.round(g.target / 100) * 100, { compact: true })}</span>
-    </div>
-  </button>` : '';
-
-  bottom.innerHTML = `${goalCapsule}
-    <div class="sf-row"><span class="sf-today dow-${dowIndex(today)}" title="${DOW_LONG[dowIndex(today)]}, ${today}"><i aria-hidden="true"></i>${DOW_LONG[dowIndex(today)].slice(0, 3)}, ${Number(today.slice(8, 10))} ${MONTHS[Number(today.slice(5, 7)) - 1].slice(0, 3)}</span>
-    <button type="button" class="sf-buddy" data-act="bd-toggle" aria-pressed="${Buddy.isOn()}" title="${Buddy.isOn() ? 'Hide' : 'Show'} ${esc(Buddy.buddyName())}">🤖 <span>${esc(Buddy.buddyName())}</span><b class="${Buddy.isOn() ? 'on' : ''}">${Buddy.isOn() ? 'On' : 'Off'}</b></button></div>
-    ${ambState.playing ? ambPill : ''}`;
+  // The sidebar is the menu: the goal lives on Home and in the Goals badge,
+  // Bit in Settings → Bit; only the music shows here, and only while playing.
+  bottom.innerHTML = ambState.playing ? ambPill : '';
 }
 
 // "Today · Saturday, 10 October" in today's weekday color.

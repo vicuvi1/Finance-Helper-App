@@ -49,12 +49,13 @@ test('view renders telegram hub header and subtabs', () => {
   ctx.ui = { tab: 'telegram' };
 
   const html = TelegramHub.view();
-  assert.ok(html.includes('Telegram Bot'), 'must display Telegram Bot title');
+  assert.ok(html.includes('Telegram bot'), 'must display Telegram bot title');
   assert.ok(html.includes('data-act="tg-load"'), 'must provide sync button');
   assert.ok(html.includes('seg-tg-tabs'), 'must provide segmented subtabs');
-  assert.ok(html.includes('Phone Sync'), 'must render sync tab button');
-  assert.ok(html.includes('Custom Buttons'), 'must render buttons tab button');
-  assert.ok(html.includes('Commands &amp; Console'), 'must render commands tab button');
+  assert.ok(html.includes('From your phone'), 'must render sync tab button');
+  assert.ok(html.includes('data-tab="buttons"'), 'must render buttons tab button');
+  assert.ok(html.includes('Try a command'), 'must render commands tab button');
+  assert.ok(html.includes('When this PC is off'), 'says who answers while the PC is off');
 });
 
 test('index.html and app.js include telegram navigation and shortcuts', () => {

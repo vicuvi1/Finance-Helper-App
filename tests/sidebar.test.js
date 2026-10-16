@@ -45,14 +45,13 @@ test('app.js and css/app.css: sidebar logic, masking, and styling', () => {
   assert.ok(appJs.includes('spark-dot'), 'app.js includes spark-dot in sparkline');
   assert.ok(appJs.includes('spark-pulse'), 'app.js includes spark-pulse in sparkline');
 
-  // Modern Goal capsule
-  assert.ok(appJs.includes('sf-goal-track'), 'app.js has sf-goal-track for goal capsule');
-  assert.ok(appJs.includes('sf-goal-fill'), 'app.js has sf-goal-fill progress bar');
+  // The sidebar is the menu: no goal box or date/Bit row (goal on Home, Bit in Settings)
+  assert.ok(!appJs.includes('sf-goal-track'), 'no goal capsule in the sidebar');
+  assert.ok(!appJs.includes('class="sf-row"'), 'no date/Bit row in the sidebar');
 
   // CSS definitions
   assert.ok(appCss.includes('.side-search'), 'app.css has .side-search styles');
   assert.ok(appCss.includes('.sc-mask-btn'), 'app.css has .sc-mask-btn styles');
   assert.ok(appCss.includes('.sc-badge'), 'app.css has .sc-badge trend badge styles');
-  assert.ok(appCss.includes('.sf-goal-fill'), 'app.css has .sf-goal-fill styles');
   assert.ok(appCss.includes('.side-foot-actions'), 'app.css has .side-foot-actions styles');
 });
