@@ -5658,3 +5658,9 @@ details.card > summary { color: var(--text); font-size: 15px; }
 .spend-t b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .spend-t small { color: var(--muted); font-size: 12.5px; }
 .spend-bal { font-variant-numeric: tabular-nums; white-space: nowrap; font-weight: 600; }
+/* 7-day bars: the amount sits on top of each bar. */
+.sh-bar i { position: relative; }
+.sh-val { position: absolute; left: 50%; bottom: calc(100% + 3px); transform: translateX(-50%); font: 600 11px/1 var(--font); color: var(--muted); white-space: nowrap; }
+.sh-bar.today .sh-val { color: var(--text); }
+.sh-bars { margin-top: 16px; }
+.sh-week-k { flex-wrap: wrap; } .sh-week-k span:first-child { white-space: nowrap; }

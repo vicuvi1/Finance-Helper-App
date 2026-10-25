@@ -116,7 +116,7 @@ export function typeOptions(t) {
     <option value="loan-borrowed" ${curType === 'loan-borrowed' ? 'selected' : ''}>⚡ Borrowed</option>`;
 }
 
-function cells(state, t) {
+function cells(state, t, { who = true } = {}) {
   const { categories, accounts } = state.settings;
   const isLoan = Boolean(t.loan);
   const typeSel = `<select data-col="type" aria-label="Type" class="${isLoan ? 'sel-loan' : `sel-${t.type}`}">${typeOptions(t)}</select>`;
@@ -136,7 +136,7 @@ function cells(state, t) {
   return `<td><span class="dcell">${shown}<input type="date" class="dpick" data-col="date" value="${esc(t.date)}" aria-label="Date"></span></td>
     <td>${typeSel}</td><td>${cat}</td>
     <td><span class="note-cell">${loanBadge}<input type="text" data-col="note" value="${esc(t.note)}" placeholder="${isLoan ? 'Loan note' : 'What for?'}" aria-label="Note"></span></td>
-    <td>${isT ? '' : `<input type="text" data-col="person" list="people-list" value="${esc(state.people.find((p) => p.id === t.person)?.name || t.personName || '')}" placeholder="—" aria-label="Who" autocomplete="off">`}</td>
+    ${who ? `<td>${isT ? '' : `<input type="text" data-col="person" list="people-list" value="${esc(state.people.find((p) => p.id === t.person)?.name || t.personName || '')}" placeholder="—" aria-label="Who" autocomplete="off">`}</td>` : ''}
     <td>${acc}</td>
     <td><span class="amt-cell ${t.type}"><span class="amt-sign" aria-hidden="true">${signPrefix}</span><input type="text" inputmode="decimal" class="amt" data-col="amount" value="${t.amount ? plain(t.amount) : ''}" placeholder="0" aria-label="Amount" autocomplete="off">${debtTag || (!isBaseCur ? `<span class="cur-tag">${esc(t.currency)}</span>` : `<span class="cur-tag cur-faint">${esc(state.settings.currency || 'MDL')}</span>`)}</span></td>`;
 }
@@ -148,7 +148,8 @@ export function dayLabelHTML(date, today) {
   return `<span class="dow-pill dow-${di}">${DOW_LONG[di]}</span><b>${Number(date.slice(8, 10))} ${MONTHS[Number(date.slice(5, 7)) - 1]}</b>${rel ? `<span class="rel-tag${rel === 'Today' ? ' today-tag' : ''}">${rel}</span>` : ''}`;
 }
 
-function dayRow(date, d, today, fmt, year) {
+function dayRow(date, d, today, fmt0, year, span = 9) {
+  const fmt = (c) => fmt0(Math.round(c / 100) * 100); // day totals in whole lei
   const parts = [
     d.in ? `<span class="day-stat-pill in">+${fmt(d.in)}</span>` : '',
     d.out ? `<span class="day-stat-pill out">−${fmt(d.out)}</span>` : '',
@@ -156,12 +157,18 @@ function dayRow(date, d, today, fmt, year) {
     d.loanIn ? `<span class="day-stat-pill loan-in">⚡ +${fmt(d.loanIn)} back</span>` : '',
     `<span class="day-stat-pill count">${d.n} record${d.n === 1 ? '' : 's'}</span>`
   ].filter(Boolean).join('');
-  return `<tr class="day-row dow-${dowIndex(date)}${date === today ? ' is-today' : ''}" aria-hidden="true"><td colspan="9"><div class="dr-wrap"><span class="dr">${dayLabelHTML(date, today)}${year ? `<span class="muted">${date.slice(0, 4)}</span>` : ''}</span><div class="dr-sum">${parts}</div></div></td></tr>`;
+  return `<tr class="day-row dow-${dowIndex(date)}${date === today ? ' is-today' : ''}" aria-hidden="true"><td colspan="${span}"><div class="dr-wrap"><span class="dr">${dayLabelHTML(date, today)}${year ? `<span class="muted">${date.slice(0, 4)}</span>` : ''}</span><div class="dr-sum">${parts}</div></div></td></tr>`;
 }
 
-export function tableHTML(state, list, { sort, draft, fmt, selected = new Set(), years = false }) {
+export function tableHTML(state, list, { sort, draft, fmt: fmtExact, selected = new Set(), years = false }) {
+  const fmt = (c) => fmtExact(Math.round(c / 100) * 100); // totals in whole lei
   const rows = sortRows(state, list, sort);
   const today = todayISO();
+  // The "Who" column only when someone is tagged this month: its width goes
+  // to the note and the account otherwise.
+  const who = list.some((t) => t.person) || !!draft?.personName;
+  const cols = who ? COLUMNS : COLUMNS.filter((c) => c.id !== 'person');
+  const span = cols.length + 2;
   // Sorted by date: a header row for each day with its weekday and totals.
   const byDate = sort.col === 'date';
   const perDay = {};
@@ -181,9 +188,9 @@ export function tableHTML(state, list, { sort, draft, fmt, selected = new Set(),
     const newDay = t.date !== prevDate;
     prevDate = t.date;
     const isLoan = Boolean(t.loan);
-    const head = byDate && newDay ? dayRow(t.date, perDay[t.date], today, fmt, years) : '';
+    const head = byDate && newDay ? dayRow(t.date, perDay[t.date], today, fmt, years, span) : '';
     const on = selected.has(t.id);
-    return `${head}<tr data-id="${esc(t.id)}" class="t-${t.type}${isLoan ? ' is-loan' : ''}${newDay ? ' newday' : ''}${t.date === today ? ' is-today' : ''}${on ? ' selected' : ''}"><td class="selc"><input type="checkbox" class="sel" data-act="sel" data-id="${esc(t.id)}" ${on ? 'checked' : ''} aria-label="Select this record"></td>${cells(state, t)}
+    return `${head}<tr data-id="${esc(t.id)}" class="t-${t.type}${isLoan ? ' is-loan' : ''}${newDay ? ' newday' : ''}${t.date === today ? ' is-today' : ''}${on ? ' selected' : ''}"><td class="selc"><input type="checkbox" class="sel" data-act="sel" data-id="${esc(t.id)}" ${on ? 'checked' : ''} aria-label="Select this record"></td>${cells(state, t, { who })}
       <td><button type="button" class="row-del" data-act="row-del" data-id="${esc(t.id)}" aria-label="Delete this record" title="Delete">×</button></td></tr>`;
   }).join('');
   const income = list.filter((t) => t.type === 'income' && !t.loan).reduce((a, t) => a + B(t), 0);
@@ -198,17 +205,17 @@ export function tableHTML(state, list, { sort, draft, fmt, selected = new Set(),
       <col style="width:120px">
       <col style="width:170px">
       <col style="min-width:220px">
-      <col style="width:130px">
-      <col style="width:140px">
+      ${who ? '<col style="width:130px">' : ''}
+      <col style="width:${who ? 140 : 190}px">
       <col style="width:145px">
       <col style="width:40px">
     </colgroup>
-    <thead><tr><th class="selc"><input type="checkbox" class="sel" data-act="sel-all" ${list.length && list.every((t) => selected.has(t.id)) ? 'checked' : ''} aria-label="Select all shown"></th>${COLUMNS.map((c) => `<th class="${c.num ? 'num' : ''}"><button type="button" data-act="sort" data-col="${c.id}" aria-label="Sort by ${c.label}">${c.label}${arrow(c.id)}</button></th>`).join('')}<th></th></tr></thead>
+    <thead><tr><th class="selc"><input type="checkbox" class="sel" data-act="sel-all" ${list.length && list.every((t) => selected.has(t.id)) ? 'checked' : ''} aria-label="Select all shown"></th>${cols.map((c) => `<th class="${c.num ? 'num' : ''}"><button type="button" data-act="sort" data-col="${c.id}" aria-label="Sort by ${c.label}">${c.label}${arrow(c.id)}</button></th>`).join('')}<th></th></tr></thead>
     <tbody>${body}
-      ${draft ? `<tr class="draft t-${draft.loan ? (draft.type === 'income' ? 'loan-borrowed' : 'loan-lent') : draft.type}" data-draft><td class="selc"></td>${cells(state, { ...draft, amount: 0 })}
+      ${draft ? `<tr class="draft t-${draft.loan ? (draft.type === 'income' ? 'loan-borrowed' : 'loan-lent') : draft.type}" data-draft><td class="selc"></td>${cells(state, { ...draft, amount: 0 }, { who })}
         <td><button type="button" class="row-add" data-act="row-add" aria-label="Add this record" title="Add (Enter)">＋</button></td></tr>` : ''}
     </tbody>
-    <tfoot><tr><td colspan="9" class="tbl-footer-td">
+    <tfoot><tr><td colspan="${span}" class="tbl-footer-td">
       <div class="tbl-footer-bar">
         <div class="tbl-footer-left">
           <span class="tbl-footer-badge count"><b>${list.length}</b> record${list.length === 1 ? '' : 's'}</span>

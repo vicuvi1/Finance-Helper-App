@@ -146,7 +146,7 @@ export function view() {
   <div class="acc-charts">
     ${netWorthCard(state) || ''}
     <section class="card"><h2>Savings history <span class="right">${savingsChip(3, '3 months')}${savingsChip(6, '6 months')}${savingsChip(12, '1 year')}${savingsChip(120, 'All')}</span></h2>
-    <div class="kv"><span>Change over selected period</span><b>${ctx.money(savingChange, { sign: true })}</b></div>
+    <div class="kv"><span>Change over selected period</span><b>${ctx.money(Math.round(savingChange / 100) * 100, { sign: true })}</b></div>
     ${lineChart(hist, (c) => ctx.money(c))}<div class="chart-legend"><span class="reconstructed">Estimated from your records</span><span>Today's balance</span></div>
     <p class="muted small">Earlier months are worked out from your records at today's rates. Point at the chart to see a month.</p></section>  </div>`;
 }

@@ -92,6 +92,7 @@ const sheetRoot = document.getElementById('sheet-root');
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const money = (c, opts) => formatMoney(c, state.settings.currency, opts);
+const whole = (c) => Math.round(c / 100) * 100; // whole lei for totals
 const pct = (r) => (r == null ? '–' : `${Math.round(r * 100)}%`);
 const catOf = (id) => M.category(state, id) || { name: 'Unknown', emoji: '❔' };
 const accOf = (id) => M.account(state, id) || { name: 'Unknown', emoji: '❔' };
@@ -116,8 +117,9 @@ function bigMoney(c) {
   return `<span class="fig" data-count="${c}" data-ck="total">${formatMoney(c, '')}</span><span class="cur-sm">${esc(state.settings.currency)}</span>`;
 }
 
-// Money that counts up to its value when a screen opens.
-const countUp = (c, key, opts) => `<span data-count="${c}" data-ck="${key}" data-cur="1"${opts?.sign ? ' data-sign="1"' : ''}>${money(c, opts)}</span>`;
+// Money that counts up to its value when a screen opens. Totals are whole lei:
+// the bani belong on single records, not on sums.
+const countUp = (c, key, opts) => (c = Math.round(c / 100) * 100, `<span data-count="${c}" data-ck="${key}" data-cur="1"${opts?.sign ? ' data-sign="1"' : ''}>${money(c, opts)}</span>`);
 
 // Save. Each save is an undo step, except quiet ones: changes that didn't
 // come from you (sync, the daily net-worth snapshot, Binance balances).
@@ -560,8 +562,8 @@ function homeStrip(s, key) {
 function workLine(p) {
   if (!p.workIncome && !p.workCosts) return '';
   return `<div class="work-line" role="note"><span class="wl-k">💼 Work this month</span>
-    <span>Earned <b class="income">${money(p.workIncome)}</b></span><span>Costs <b>${money(p.workCosts)}</b></span>
-    <span>Profit <b class="${p.profit < 0 ? 'expense' : ''}">${money(p.profit)}</b></span>
+    <span>Earned <b class="income">${money(whole(p.workIncome))}</b></span><span>Costs <b>${money(whole(p.workCosts))}</b></span>
+    <span>Profit <b class="${p.profit < 0 ? 'expense' : ''}">${money(whole(p.profit))}</b></span>
     ${p.workIncome ? '' : '<span class="muted">No client payment yet this month</span>'}</div>`;
 }
 
@@ -827,15 +829,22 @@ function safeCard(today) {
       .reduce((a, t) => a + M.B(t), 0);
     week.push({ d, spent });
   }
-  const top = Math.max(sf.perDay, ...week.map((x) => x.spent), 1) * 1.15;
+  // Scale to what you really spent; the daily share joins the scale only when
+  // it is near it, otherwise it is named above the chart (no flat bars).
+  const maxSpent = Math.max(...week.map((x) => x.spent), 0);
+  const shareFits = sf.perDay > 0 && (maxSpent === 0 ? false : sf.perDay <= maxSpent * 2.5);
+  const top = Math.max(maxSpent, shareFits ? sf.perDay : 0, 1) * 1.2;
   const avg = Math.round(week.reduce((a, x) => a + x.spent, 0) / 7);
   const bars = week.map((x) => {
-    const pct = x.spent ? Math.max(4, (x.spent / top) * 100) : 2;
+    const pct = x.spent ? Math.max(6, (x.spent / top) * 100) : 2;
     const cls = [x.spent > sf.perDay && sf.perDay > 0 ? 'over' : '', x.d === today ? 'today' : ''].join(' ').trim();
     const label = x.d === today ? 'Today' : DOW_SHORT[dowIndex(x.d)];
-    return `<div class="sh-bar ${cls}" title="${esc(label)} ${Number(x.d.slice(8))}: ${esc(money(x.spent))}"><i style="height:${pct.toFixed(1)}%"></i><span>${label === 'Today' ? 'Today' : label.slice(0, 2)}</span></div>`;
+    const val = x.spent ? `<b class="sh-val">${esc(formatMoney(whole(x.spent), '', { compact: true }))}</b>` : '';
+    return `<div class="sh-bar ${cls}" title="${esc(label)} ${Number(x.d.slice(8))}: ${esc(money(x.spent))}"><i style="height:${pct.toFixed(1)}%">${val}</i><span>${label === 'Today' ? 'Today' : label.slice(0, 2)}</span></div>`;
   }).join('');
-  const target = sf.perDay > 0 ? `<em class="sh-target" style="bottom:${((sf.perDay / top) * 100).toFixed(1)}%"><span>${esc(money(sf.perDay, { compact: true }))} a day</span></em>` : '';
+  const target = shareFits
+    ? `<em class="sh-target" style="bottom:${((sf.perDay / top) * 100).toFixed(1)}%"><span>${esc(money(sf.perDay, { compact: true }))} a day</span></em>`
+    : '';
   const used = sf.perDay > 0 ? Math.min(100, (sf.spentToday / sf.perDay) * 100) : 100;
   const fig = empty ? 0 : Math.max(0, left);
 
@@ -845,7 +854,7 @@ function safeCard(today) {
       ? `Over by <b>${money(-left)}</b>. From tomorrow: <b>${money(sf.tomorrow)}</b> a day until ${esc(shortDay(sf.payday))}.`
       : sf.byLimit
         ? `Spent <b>${money(sf.spentToday)}</b> of today's <b>${money(sf.perDay)}</b> · your limit decides today`
-        : `Spent <b>${money(sf.spentToday)}</b> of today's <b>${money(sf.perDay)}</b> · <b>${money(Math.max(0, sf.pool))}</b> for ${sf.days} day${sf.days === 1 ? '' : 's'}, until ${esc(shortDay(sf.payday))}`;
+        : `Spent <b>${money(sf.spentToday)}</b> of today's <b>${money(sf.perDay)}</b> · <b>${money(whole(Math.max(0, sf.pool)))}</b> for ${sf.days} day${sf.days === 1 ? '' : 's'}, until ${esc(shortDay(sf.payday))}`;
   const lim = sf.limit;
   const limitRow = lim
     ? `<button type="button" class="sh-limit ${lim.left < 0 ? 'over' : lim.projected > lim.amount ? 'pace' : ''}" data-act="limit-setup" title="Change your spending limit">
@@ -865,7 +874,7 @@ function safeCard(today) {
       ${limitRow}
     </div>
     <div class="sh-week">
-      <div class="sh-week-k"><span>Last 7 days</span><span>${money(avg, { compact: true })} a day on average</span></div>
+      <div class="sh-week-k"><span>Last 7 days</span><span>${money(whole(avg), { compact: true })} a day on average${!shareFits && sf.perDay > 0 ? ` · your share ${money(sf.perDay, { compact: true })}` : ''}</span></div>
       <div class="sh-bars">${target}${bars}</div>
     </div>
     ${wallet(sf)}
@@ -1174,7 +1183,10 @@ function onSheetEnter(el) {
 function draftRow() {
   const inMonth = monthKey(todayISO()) === ui.month ? todayISO() : `${ui.month}-01`;
   if (!ui.draft || !ui.draft.date.startsWith(ui.month)) {
-    ui.draft = { type: 'expense', date: inMonth, category: '', note: '', account: ui.draft?.account || state.settings.accounts[0]?.id, from: state.settings.accounts[0]?.id, to: state.settings.savingsAccount };
+    // The new row starts on the account you used last (your wallet, usually).
+    const last = M.sortTx(state.tx).find((t) => t.type !== 'transfer' && M.account(state, t.account) && !M.account(state, t.account).archived);
+    const acc = ui.draft?.account || last?.account || state.settings.accounts[0]?.id;
+    ui.draft = { type: 'expense', date: inMonth, category: '', note: '', account: acc, from: acc, to: state.settings.savingsAccount };
   }
   return ui.draft;
 }
