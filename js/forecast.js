@@ -2,13 +2,49 @@
 // crypto) day by day for the next weeks, from recurring bills and income,
 // unpaid invoices and your usual day-to-day spending. Pure and tested.
 
-import { accountBalances, B } from './model.js';
+import { accountBalances, isBillCategory, isWorkCost, payOn, B } from './model.js';
 import { dueItems, upcomingItems } from './recurring.js';
 import { invoiceStatus, invoiceTotal } from './invoices.js';
 import { addDays, daysBetween } from './dates.js';
 import { convert } from './fx.js';
 
 export const isLiquid = (a) => !a.archived && !a.savings && a.kind !== 'savings' && a.kind !== 'crypto';
+
+// Where your everyday spending came from over the last 60 days: account ids
+// with their share, biggest first.
+export function spentFrom(state, today, window = 60) {
+  const since = addDays(today, -window + 1);
+  const by = new Map();
+  let total = 0;
+  for (const t of state.tx) {
+    if (t.type !== 'expense' || t.loan || t.recurring || t.date < since || t.date > today) continue;
+    if (isBillCategory(state, t.category) || isWorkCost(state, t.category)) continue;
+    by.set(t.account, (by.get(t.account) || 0) + B(t));
+    total += B(t);
+  }
+  return [...by.entries()].map(([id, amount]) => ({ id, amount, share: total ? amount / total : 0 })).sort((a, b) => b.amount - a.amount);
+}
+
+// Spending money: the accounts you live from. Your own pick
+// (settings.spendFrom) when you made one. Otherwise cards and cash that aren't
+// savings, crypto or business (work money), plus any account a fifth or more
+// of your everyday spending comes from (a wallet marked as savings, say).
+// With Pay yourself on, never the buffer.
+export function spendingIds(state, today = null) {
+  const accs = state.settings.accounts.filter((a) => !a.archived);
+  const pick = Array.isArray(state.settings.spendFrom) && state.settings.spendFrom.length ? state.settings.spendFrom : null;
+  const ids = new Set(pick
+    ? accs.filter((a) => pick.includes(a.id)).map((a) => a.id)
+    : accs.filter((a) => isLiquid(a) && a.kind !== 'business').map((a) => a.id));
+  if (!pick && today) {
+    for (const x of spentFrom(state, today)) {
+      const a = accs.find((y) => y.id === x.id);
+      if (a && a.kind !== 'crypto' && x.share >= 0.2) ids.add(a.id);
+    }
+  }
+  if (payOn(state)) ids.delete(state.settings.pay.buffer);
+  return ids;
+}
 
 // Everyday spending per day over the last `window` days, leaving out what
 // recurring items already cover and loans.
@@ -25,7 +61,8 @@ export function forecast(state, today, { days = 60 } = {}) {
   const base = state.settings.currency;
   const toBase = (c, cur) => (cur === base ? c : convert(c, cur, base, state.rates));
   const bal = accountBalances(state);
-  const start = state.settings.accounts.filter(isLiquid).reduce((a, acc) => a + (toBase(bal[acc.id] || 0, acc.currency) || 0), 0);
+  const spend = spendingIds(state, today);
+  const start = state.settings.accounts.filter((a) => spend.has(a.id)).reduce((a, acc) => a + (toBase(bal[acc.id] || 0, acc.currency) || 0), 0);
   const end = addDays(today, days);
   const events = [];
   for (const { rule, date } of [...dueItems(state, today), ...upcomingItems(state, today, days)]) {

@@ -8,6 +8,7 @@
 import { personalMonth, savingsJar, mainGoal, goalStatus, accountBalances } from './model.js';
 import { safeToSpend, limitStatus, suggestLimit, shortDay } from './safespend.js';
 import { payStatus } from './payyourself.js';
+import { spendingIds, spentFrom } from './forecast.js';
 import { dueItems, upcomingItems } from './recurring.js';
 import { invoiceStatus, invoiceTotal } from './invoices.js';
 import { rateAdvice, heldIn } from './fxsmart.js';
@@ -52,6 +53,22 @@ export function nextSteps(state, today, { hidden = {}, max = 3, demo = false } =
   const out = [];
   const add = (s) => { if (hidden[s.id] !== today) out.push(s); };
   const sf = safeToSpend(state, today);
+
+  // 0. Once: check which accounts count as spending money, when the app had
+  // to guess (business money left out, a wallet marked as savings counted).
+  if (!(Array.isArray(state.settings.spendFrom) && state.settings.spendFrom.length)) {
+    const accs = state.settings.accounts.filter((a) => !a.archived);
+    const ids = spendingIds(state, today);
+    const bal = accountBalances(state);
+    const biz = accs.filter((a) => a.kind === 'business' && (bal[a.id] || 0) > 0 && !ids.has(a.id));
+    const guessed = spentFrom(state, today).map((x) => accs.find((a) => a.id === x.id)).filter((a) => a && ids.has(a.id) && (a.savings || a.kind === 'savings'));
+    if (biz.length || guessed.length) {
+      const names = accs.filter((a) => ids.has(a.id)).map((a) => a.name);
+      add({ id: 'spend:check', level: 'do', icon: '👛', title: 'Check your spending money',
+        text: `Safe to spend counts ${names.slice(0, 3).join(', ')}${names.length > 3 ? '…' : ''}.${biz.length ? ` ${biz.map((a) => a.name).join(', ')} is work money, so it's left out.` : ''}`,
+        btn: 'Check', act: 'spend-setup' });
+    }
+  }
 
   // 1. This month's salary is due.
   const pay = payStatus(state, today);

@@ -82,7 +82,9 @@ Rules that keep three agents from tripping over each other:
   instead of outlines, the sidebar is just the menu. Line charts (`lineChart`) are smooth
   (monotone, never overshoot), with a gradient, a hover guide and plain words ("Estimated").
   Extra themes Ocean / Forest / Paper (`settings.theme`) set `data-design` and override tokens.
-- Safe to spend today: `js/safespend.js` (pure, tested): cards+cash (`isLiquid`) minus bills
+- Safe to spend today: `js/safespend.js` (pure, tested): spending money (`spendingIds` in forecast.js: your
+  pick `settings.spendFrom`, else cards+cash that aren't savings/crypto/business plus any account ≥20% of
+  everyday spending comes from; never the Pay-yourself buffer) minus bills
   before the next recurring income (else the 1st) minus this month's savings plan not yet moved
   to savings, over the days left. Home `safeCard`, bot `safeLine` in expense replies and /today.
   Bills (`isBillCategory`: category `bill` flag, else Home & bills / Subscriptions / rent-like

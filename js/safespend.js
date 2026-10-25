@@ -9,7 +9,7 @@
 import { accountBalances, personalMonth, savingsJar, isBillCategory, isWorkCost, payOn, B } from './model.js';
 import { payStatus } from './payyourself.js';
 import { dueItems, upcomingItems } from './recurring.js';
-import { isLiquid } from './forecast.js';
+import { spendingIds } from './forecast.js';
 import { daysBetween, monthKey, addMonths, addDays, daysInMonth } from './dates.js';
 import { convert } from './fx.js';
 
@@ -57,7 +57,8 @@ export function safeToSpend(state, today) {
   // Paying yourself a salary: the buffer isn't spending money, and payday is
   // your salary day.
   const pay = payOn(state) ? payStatus(state, today) : null;
-  const spendable = (a) => isLiquid(a) && !(pay && a.id === state.settings.pay.buffer);
+  const spendIds = spendingIds(state, today);
+  const spendable = (a) => spendIds.has(a.id);
   const accs = state.settings.accounts;
   const liquidIds = new Set(accs.filter(spendable).map((a) => a.id));
   const bal = accountBalances(state);

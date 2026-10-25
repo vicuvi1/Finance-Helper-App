@@ -40,7 +40,7 @@ import { workText } from './workhours.js';
 import { planSplit, splitTransfers, splitPrefs, isSplit } from './split.js';
 import { openBankImport, rowsFromFile, decodeText } from './screens/bankimport.js';
 import { guessMapping } from './bank.js';
-import { forecast, isLiquid } from './forecast.js';
+import { forecast, spendingIds, spentFrom } from './forecast.js';
 import { bindTilt, cardHTML } from './cards.js';
 import { FREQS, markDone, dueItems } from './recurring.js';
 import { invoiceStatus } from './invoices.js';
@@ -647,6 +647,64 @@ function openPaySheet() {
   });
 }
 
+// ---------- Spending money ----------
+// Which accounts Safe to spend counts. The app guesses (cards and cash, not
+// savings or business, plus the account you really spend from); you can pick.
+function spendFromLine() {
+  const ids = spendingIds(state, todayISO());
+  const names = state.settings.accounts.filter((a) => ids.has(a.id)).map((a) => a.name);
+  return `<button type="button" class="sh-from" data-act="spend-setup" title="Choose which accounts count">Counting ${names.length ? esc(names.slice(0, 3).join(', ')) + (names.length > 3 ? ` +${names.length - 3}` : '') : 'no accounts'} · <u>change</u></button>`;
+}
+
+function spendSettingsCard() {
+  const ids = spendingIds(state, todayISO());
+  const names = state.settings.accounts.filter((a) => ids.has(a.id)).map((a) => a.name);
+  const own = Array.isArray(state.settings.spendFrom) && state.settings.spendFrom.length;
+  return `<section class="card"><h2>Spending money</h2>
+    <p class="muted small" style="margin-top:0">Safe to spend counts <b>${esc(names.join(', ') || 'nothing yet')}</b>${own ? ' (your choice)' : ', guessed from where you spend'}. Savings and business accounts stay out unless you add them.</p>
+    <button class="btn block" data-act="spend-setup">Choose accounts</button></section>`;
+}
+
+function openSpendSheet() {
+  const today = todayISO();
+  const ids = spendingIds(state, today);
+  const from = new Map(spentFrom(state, today).map((x) => [x.id, x.share]));
+  const vals = M.accountValues(state).filter((v) => !v.account.archived);
+  const why = (a) => {
+    const share = from.get(a.id);
+    if (share >= 0.05) return `${Math.round(share * 100)}% of your everyday spending lately`;
+    if (a.kind === 'business') return 'Work money: better paid out as a salary';
+    if (a.savings || a.kind === 'savings') return 'Savings';
+    if (a.kind === 'crypto') return 'Crypto';
+    return 'Not used for spending lately';
+  };
+  openSheet(`<h3>Spending money <button type="button" class="icon-btn" data-close aria-label="Close">✕</button></h3>
+    <p class="muted small" style="margin-top:0">Tick the accounts you live from. Safe to spend shares out what's in them, minus bills, until payday.</p>
+    <form id="spend-form" class="spend-list">
+      ${vals.map((v) => `<label class="spend-row"><input type="checkbox" name="acc" value="${esc(v.account.id)}" ${ids.has(v.account.id) ? 'checked' : ''}>
+        <span class="spend-t"><b>${esc(v.account.name)}</b><small>${esc(why(v.account))}</small></span>
+        <span class="spend-bal">${formatMoney(v.own, v.account.currency || state.settings.currency)}</span></label>`).join('')}
+      <p class="lock-msg" id="spend-err" hidden></p>
+      <div class="btns"><button type="button" class="btn" id="spend-auto">Let the app guess</button><button class="btn primary" type="submit">Save</button></div>
+    </form>`, (sheet) => {
+    sheet.querySelector('#spend-auto').addEventListener('click', () => {
+      delete state.settings.spendFrom;
+      state.settings.updatedAt = Date.now();
+      commit(); closeSheet(); toast('Spending money is guessed from where you spend.');
+    });
+    sheet.querySelector('#spend-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const picked = [...sheet.querySelectorAll('input[name=acc]:checked')].map((i) => i.value);
+      if (!picked.length) { const err = sheet.querySelector('#spend-err'); err.textContent = 'Tick at least one account.'; err.hidden = false; return; }
+      state.settings.spendFrom = picked;
+      state.settings.updatedAt = Date.now();
+      commit();
+      closeSheet();
+      toast(`Saved. Safe to spend today: ${money(Math.max(0, safeToSpend(state, todayISO()).leftToday))}.`);
+    });
+  });
+}
+
 // ---------- Spending limit ----------
 // One number for the month's everyday spending (not bills, rent or work
 // costs). Safe to spend then never gives a day more than its fair share of
@@ -741,13 +799,13 @@ function monthComparison(today) {
 // Home: your spending cards as a small fanned wallet (the same designs as
 // Accounts); a tap opens the card.
 function wallet(sf) {
-  const pay = state.settings.pay;
-  const vals = M.accountValues(state).filter((v) => isLiquid(v.account) && !(pay?.on && v.account.id === pay.buffer))
+  const ids = spendingIds(state, todayISO());
+  const vals = M.accountValues(state).filter((v) => ids.has(v.account.id))
     .sort((a, b) => (b.inBase || 0) - (a.inBase || 0)).slice(0, 3);
   if (!vals.length) return '';
   const cards = vals.map((v, i) => `<div class="shw-card" style="--i:${i}">${cardHTML(v, { money, base: state.settings.currency })}</div>`).reverse().join('');
   return `<div class="sh-wallet" style="--n:${vals.length}"><div class="shw-stack">${cards}</div>
-    <button type="button" class="card-link shw-cap" data-go="accounts">${money(Math.round(Math.max(0, sf.liquid) / 100) * 100)} in cards and cash →</button></div>`;
+    <button type="button" class="card-link shw-cap" data-act="spend-setup">${money(Math.round(Math.max(0, sf.liquid) / 100) * 100)} spending money →</button></div>`;
 }
 
 function safeCard(today) {
@@ -803,6 +861,7 @@ function safeCard(today) {
       <b class="sh-fig">${formatMoney(fig, '')}<small>${esc(cur)}</small></b>
       <div class="sh-meter" role="img" aria-label="${Math.round(used)}% of today's share spent"><i style="width:${used.toFixed(1)}%"></i></div>
       <p class="sh-sub">${sub}</p>
+      ${spendFromLine()}
       ${limitRow}
     </div>
     <div class="sh-week">
@@ -1333,7 +1392,7 @@ function viewSettings() {
   };
   // One section at a time, picked on the left (like any settings screen).
   const sections = [
-    { id: 'general', icon: '⚙️', label: 'General', sub: 'Look, spending limit, pay yourself', desc: 'How the app looks, your monthly spending limit, paying yourself a salary, the jar split and what an hour of your work is worth.', html: () => cards.look + limitSettingsCard() + paySettingsCard() + cards.split + WorkHour.settingsCard() + cards.accounts + cards.goals },
+    { id: 'general', icon: '⚙️', label: 'General', sub: 'Look, spending limit, pay yourself', desc: 'How the app looks, your monthly spending limit, paying yourself a salary, the jar split and what an hour of your work is worth.', html: () => cards.look + limitSettingsCard() + spendSettingsCard() + paySettingsCard() + cards.split + WorkHour.settingsCard() + cards.accounts + cards.goals },
     { id: 'extras', icon: '✨', label: 'Extras', sub: 'Music, sounds, wallpapers', desc: 'Moving backgrounds, wallpapers, button sounds and focus music. All optional, all off to start.', html: () => cards.extras },
     { id: 'categories', icon: '🏷️', label: 'Categories & rules', sub: 'Categories, jars, auto-rules', desc: 'Your categories, which jar each one fills, and rules that sort records for you.', html: () => cards.categories + Rules.settingsCard() },
     { id: 'data', icon: '💾', label: 'Data & backups', sub: 'Import, export, backups, sync', desc: 'Where your data lives, automatic backups, sync between devices and Excel import.', html: () => cards.data + Backups.settingsCard() + Sync.settingsCard() },
@@ -2620,6 +2679,7 @@ document.addEventListener('click', (e) => {
   else if (act === 'calc') Calc.toggle();
   else if (act === 'pay-setup') openPaySheet();
   else if (act === 'limit-setup') openLimitSheet();
+  else if (act === 'spend-setup') openSpendSheet();
   else if (act === 'recap-open') openRecap(el.dataset.key || addMonths(monthKey(todayISO()), -1));
   else if (act === 'step-later') {
     const today = todayISO();
@@ -2631,7 +2691,8 @@ document.addEventListener('click', (e) => {
   } else if (act === 'step-save') {
     // From your fullest card or cash in the main currency, to your savings.
     const base = state.settings.currency;
-    const liquid = M.accountValues(state).filter((v) => isLiquid(v.account) && (v.account.currency || base) === base)
+    const ids = spendingIds(state, todayISO());
+    const liquid = M.accountValues(state).filter((v) => ids.has(v.account.id) && (v.account.currency || base) === base)
       .sort((a, b) => (b.inBase || 0) - (a.inBase || 0))[0]?.account;
     const to = state.settings.savingsAccount || state.settings.accounts.find((a) => !a.archived && (a.savings || a.kind === 'savings'))?.id;
     openTxSheet(null, { type: 'transfer', amountText: centsToPlain(Number(el.dataset.amount) || 0), from: liquid?.id, to, note: 'Savings' });

@@ -5645,3 +5645,16 @@ details.card > summary { color: var(--text); font-size: 15px; }
   .rc-ring { width: 120px; height: 120px; }
 }
 @media (prefers-reduced-motion: reduce) { .rc-slide { transition: none; transform: none; } .recap, .recap.out { animation: none; } }
+
+/* Spending money: which accounts Safe to spend counts. */
+.sh-from { display: block; margin-top: 8px; padding: 0; border: 0; background: none; font: inherit; font-size: 13px; color: var(--muted); cursor: pointer; text-align: left; }
+.sh-from u { text-decoration-color: var(--line-strong); text-underline-offset: 3px; }
+.sh-from:hover { color: var(--text); }
+.spend-list { display: grid; gap: 8px; }
+.spend-row { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--card-line); border-radius: 12px; cursor: pointer; }
+.spend-row:has(input:checked) { border-color: color-mix(in srgb, var(--gold) 55%, var(--line)); background: var(--gold-soft); }
+.spend-row input { width: 18px; height: 18px; accent-color: var(--gold); }
+.spend-t { display: grid; min-width: 0; }
+.spend-t b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.spend-t small { color: var(--muted); font-size: 12.5px; }
+.spend-bal { font-variant-numeric: tabular-nums; white-space: nowrap; font-weight: 600; }
