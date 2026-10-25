@@ -64,3 +64,15 @@ test('steps: a nudge after three days with nothing logged, and never more than t
   assert.ok(nextSteps(s, '2026-10-16').length <= 3);
   assert.equal(nextSteps(s, '2026-10-16')[0].id, 'pay:2026-10'); // the salary comes first
 });
+
+test('steps: an invitation to pay yourself when client money sits in a business account', () => {
+  const s = state();
+  s.settings.accounts.push({ id: 'biz', name: 'Business', kind: 'business', currency: 'MDL', start: 0, color: 2 });
+  for (const m of ['07', '08', '09']) s.tx.push(tx(`2026-${m}-05`, 'income', 2000000, { category: 'work', account: 'biz' }));
+  const step = nextSteps(s, '2026-10-13', { max: 9 }).find((x) => x.id === 'pay:invite');
+  assert.ok(step);
+  assert.equal(step.act, 'pay-setup');
+  assert.match(step.text, /in Business/);
+  s.meta.payHide = 1;
+  assert.ok(!nextSteps(s, '2026-10-13', { max: 9 }).some((x) => x.id === 'pay:invite'));
+});

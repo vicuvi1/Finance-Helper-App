@@ -65,7 +65,7 @@ export function nextSteps(state, today, { hidden = {}, max = 3, demo = false } =
     if (biz.length || guessed.length) {
       const names = accs.filter((a) => ids.has(a.id)).map((a) => a.name);
       add({ id: 'spend:check', level: 'do', icon: '👛', title: 'Check your spending money',
-        text: `Safe to spend counts ${names.slice(0, 3).join(', ')}${names.length > 3 ? '…' : ''}.${biz.length ? ` ${biz.map((a) => a.name).join(', ')} is work money, so it's left out.` : ''}`,
+        text: `Safe to spend counts ${names.slice(0, 3).join(', ')}${names.length > 3 ? ` and ${names.length - 3} more` : ''}.${biz.length ? ` ${biz.map((a) => a.name).join(', ')} is work money, so it's left out.` : ''}`,
         btn: 'Check', act: 'spend-setup' });
     }
   }
@@ -85,6 +85,15 @@ export function nextSteps(state, today, { hidden = {}, max = 3, demo = false } =
     add({ id: `bill:${rule.id}:${date}`, level: late ? 'bad' : 'do', icon: '🔔', title: `${late ? 'Late: ' : ''}${rule.note || 'Bill'} ${formatMoney(rule.amount, rule.currency)}`,
       text: late ? `Was due ${shortDay(date)}. Paid it? Mark it so the numbers stay right.` : date === today ? 'Due today.' : 'Due tomorrow.',
       btn: 'Paid', act: 'rec-log', data: { id: rule.id, date } });
+  }
+
+  // 2b. Client money mixed with your spending money: pay yourself a salary.
+  if (!pay.on && pay.suggest?.amount > 0 && !state.meta?.payHide) {
+    const bal = accountBalances(state);
+    const biz = state.settings.accounts.find((a) => !a.archived && a.kind === 'business' && (bal[a.id] || 0) > 0);
+    add({ id: 'pay:invite', level: 'nice', icon: '💸', title: `Pay yourself ${fmt(pay.suggest.amount)} a month`,
+      text: `Client money comes in lumps. Keep it${biz ? ` in ${biz.name}` : ' in one account'} and move yourself a fixed salary: every month looks the same, and you see how long you'd be fine without clients.`,
+      btn: 'Set it up', act: 'pay-setup' });
   }
 
   // 3. A client is late paying.

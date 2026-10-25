@@ -570,12 +570,8 @@ function workLine(p) {
 // Pay yourself: the salary from your buffer, and how long the buffer lasts.
 function payCard(today) {
   const st = Pay.payStatus(state, today);
-  if (!st.on) {
-    if (state.meta.payHide || !st.suggest.amount) return '';
-    return `<section class="card pay-card invite"><div class="pc-main"><span class="k">💸 Pay yourself a salary</span>
-      <p>Client money comes in lumps. Keep it in one <b>buffer</b> account and move yourself a fixed salary each month, about <b>${money(st.suggest.amount)}</b> (80% of your usual work profit). Every month then looks the same, and you see how many months you'd be fine without clients.</p></div>
-      <div class="btns"><button class="btn primary" data-act="pay-setup">Set it up</button><button class="btn" data-act="pay-hide">Not now</button></div></section>`;
-  }
+  // Not set up: the invitation is a "Do this next" step (js/nextsteps.js).
+  if (!st.on) return '';
   const buf = M.account(state, state.settings.pay.buffer);
   const months = Pay.runwayText(st.runway);
   return `<section class="card pay-card ${st.due ? (st.short ? 'short' : 'due') : ''}">
@@ -787,10 +783,13 @@ function autoPay() {
 function monthComparison(today) {
   const current = monthKey(today), previous = addMonths(current, -1);
   const day = Number(today.slice(8));
-  const totals = (key) => M.monthSummary({ ...state, tx: state.tx.filter((t) => Number(t.date.slice(8)) <= day) }, key);
-  const now = totals(current), before = totals(previous);
-  const comparison = (label, amount, was) => '<span>' + label + ': <b>' + (was ? (amount >= was ? '+' : '−') + Math.round(Math.abs(amount - was) / Math.abs(was) * 100) + '%' : 'No prior activity') + '</b></span>';
-  return '<div class="month-comparison"><span>Days 1–' + day + ' vs ' + esc(monthLabel(previous)) + ', through day ' + Math.min(day, daysInMonth(previous)) + '</span>' + comparison('Income', now.income, before.income) + comparison('Spending', now.expense, before.expense) + '</div>';
+  const upTo = (key) => `${key}-${String(Math.min(day, daysInMonth(key))).padStart(2, '0')}`;
+  const income = (key) => M.monthSummary({ ...state, tx: state.tx.filter((t) => Number(t.date.slice(8)) <= day) }, key).income;
+  // Everyday spending only: rent and other bills land on one day and would
+  // make any month look like +100%.
+  const spent = (key) => everydaySpent(state, `${key}-01`, upTo(key));
+  const comparison = (label, amount, was) => `<span>${label}: <b>${was ? `${amount >= was ? '+' : '−'}${Math.round((Math.abs(amount - was) / Math.abs(was)) * 100)}%` : 'No prior activity'}</b></span>`;
+  return `<div class="month-comparison"><span>Days 1–${day} vs ${esc(monthLabel(previous))}</span>${comparison('Income', income(current), income(previous))}${comparison('Everyday spending', spent(current), spent(previous))}</div>`;
 }
 
 // The page title on Home says how the month is going.
