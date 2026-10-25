@@ -21,7 +21,7 @@ concurrency:
 
 jobs:
   version:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       version: ${{ steps.v.outputs.version }}
       release: ${{ steps.v.outputs.release }}
@@ -44,7 +44,8 @@ jobs:
   # The whole app, end to end (web screens, logging, undo, import, and the
   # desktop window really opening). A release is only built when this passes.
   e2e:
-    runs-on: ubuntu-latest
+    # Pinned: Playwright can't install its browser on ubuntu-latest (26.04) yet.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -63,7 +64,7 @@ jobs:
       # one adds its files to it.
       max-parallel: 1
       matrix:
-        os: [windows-latest, ubuntu-latest]
+        os: [windows-latest, ubuntu-24.04]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
