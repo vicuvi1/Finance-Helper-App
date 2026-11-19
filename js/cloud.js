@@ -261,11 +261,12 @@ export function createCloud({ transport, store, app, now = () => Date.now() }) {
     /** This device changed Money (an edit, an import…): the next round sends it. */
     changed() { if (!cfg.dirtyAt) cfg.dirtyAt = Math.max(now(), (Number(cfg.seen) || 0) + 1); else cfg.dirtyAt = Math.max(now(), cfg.dirtyAt); save(); },
     async signIn(pin, { setupKey = '' } = {}) {
-      const body = setupKey ? { setup: setupKey, pin: String(pin) } : { pin: String(pin), ...(cfg.session ? { prev: cfg.session } : {}) };
+      // With the server's setup key: a new PIN (the first one, or a reset when it was forgotten).
+      const body = setupKey ? { reset: setupKey, pin: String(pin) } : { pin: String(pin), ...(cfg.session ? { prev: cfg.session } : {}) };
       let r;
       try { r = await call('/api/login', body, ''); } catch (e) {
-        if (e.status === 401) throw new Error('Wrong PIN.');
-        if (e.status === 409 && e.body?.setup) throw new Error('No PIN is set on this server yet. Enter the server setup key once to set the first PIN.');
+        if (e.status === 401) throw new Error(setupKey ? 'Wrong setup key. Copy CRON_SECRET from Vercel → your project → Settings → Environment Variables.' : 'Wrong PIN. Forgot it? Open "Forgot your PIN?" below.');
+        if (e.status === 409 && e.body?.setup) throw new Error('No PIN is set on this server yet. Open "Forgot your PIN?" below and set one with the server setup key.');
         throw e;
       }
       cfg.session = r.session;

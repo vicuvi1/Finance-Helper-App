@@ -177,22 +177,28 @@ export function openSignIn({ first = false, keep = false } = {}) {
   ctx.openSheet(`<h3>${first ? 'Sign in to load your Money' : keep ? 'Keep this device in step' : 'Sign in to Cloud sync'} <button type="button" class="icon-btn" data-close aria-label="Close">✕</button></h3>
     <p class="muted" style="margin-top:0">${keep ? 'This device is not syncing, so the web and desktop apps can show different numbers. Sign in with your server PIN: the records here and on the server are merged (the newest edit of each wins, nothing is deleted).' : 'Your server PIN (the one Life System used). It is checked by the server and never stored here.'}</p>
     <form id="cloud-form">
-      <label class="field"><span>PIN</span><input id="cloud-pin" type="password" inputmode="numeric" autocomplete="current-password" required minlength="4" maxlength="12" data-testid="cloud-pin"></label>
-      <details style="margin:8px 0"><summary class="muted small">First time on a new server?</summary>
-        <label class="field"><span>Server setup key (only to set the very first PIN)</span><input id="cloud-setup" type="password" autocomplete="off"></label></details>
+      <label class="field"><span id="cloud-pin-label">PIN</span><input id="cloud-pin" type="password" inputmode="numeric" autocomplete="current-password" required minlength="4" maxlength="12" data-testid="cloud-pin"></label>
+      <details id="cloud-forgot" style="margin:8px 0" data-testid="cloud-forgot"><summary class="muted small">Forgot your PIN? (or first time on this server)</summary>
+        <p class="muted small" style="margin:6px 0">Paste the server's setup key and type a <b>new</b> PIN above (4 to 8 digits). The key is <b>CRON_SECRET</b> in Vercel → your project → Settings → Environment Variables. Every other device is signed out and signs in again with the new PIN.</p>
+        <label class="field"><span>Server setup key</span><input id="cloud-setup" type="password" autocomplete="off" data-testid="cloud-setup"></label></details>
       <p class="muted small" id="cloud-err" role="alert" style="color:var(--danger, #e66)"></p>
       <div class="btns">${first || keep ? '<button type="button" class="btn" data-close>Not now</button>' : '<button type="button" class="btn" data-close>Cancel</button>'}<button class="btn primary" data-testid="cloud-pin-go">Sign in</button></div>
     </form>`, (sheet) => {
     const form = sheet.querySelector('#cloud-form');
     sheet.querySelector('#cloud-pin').focus();
+    sheet.querySelector('#cloud-forgot').addEventListener('toggle', (e) => {
+      sheet.querySelector('#cloud-pin-label').textContent = e.target.open ? 'New PIN' : 'PIN';
+      sheet.querySelector('[data-testid="cloud-pin-go"]').textContent = e.target.open ? 'Set the new PIN and sign in' : 'Sign in';
+    });
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       const err = sheet.querySelector('#cloud-err');
       err.textContent = 'Signing in…';
       try {
-        await cloud.signIn(sheet.querySelector('#cloud-pin').value, { setupKey: sheet.querySelector('#cloud-setup').value.trim() });
+        const setupKey = sheet.querySelector('#cloud-forgot').open ? sheet.querySelector('#cloud-setup').value.trim() : '';
+        await cloud.signIn(sheet.querySelector('#cloud-pin').value, { setupKey });
         ctx.closeSheet();
-        ctx.toast('Signed in. Syncing your Money…');
+        ctx.toast(setupKey ? 'New PIN set. Use it on your other devices too. Syncing your Money…' : 'Signed in. Syncing your Money…');
         const r = await cloud.sync();
         after(r);
         ctx.toast(r.ok ? (r.got ? `Synced: ${r.got} records came from the server` : 'Synced') : r.error);

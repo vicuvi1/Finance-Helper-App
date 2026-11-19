@@ -1,6 +1,6 @@
 {
   "name": "finance-helper-app",
-  "version": "1.87.0",
+  "version": "1.88.0",
   "private": true,
   "description": "Personal finance app: log every lei, see where money goes, hit your savings goal. Works offline; web and desktop stay in step through your own server. No build step.",
   "author": "vicuvi1",

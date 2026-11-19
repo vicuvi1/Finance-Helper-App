@@ -332,6 +332,28 @@ export async function changePin(cfg, current, next, sid, now = Date.now(), fetch
   return { status: 200, body: { session: makeSession(cfg, now, await liveEpoch(cfg, fetchImpl, now), sid || undefined) } }
 }
 
+/**
+ * Forgot the PIN (standalone Money app): the server's setup key (PIN_SETUP_SECRET, else
+ * CRON_SECRET: only someone who can open the Vercel project has it) sets a new PIN, whether
+ * one was set or not. Wrong keys count like wrong PINs (same lockout). Every other device is
+ * signed out (the session epoch moves), so an old PIN or a lost device opens nothing.
+ */
+export async function resetPin(cfg, key, pin, now = Date.now(), fetchImpl = fetch, ip = 'unknown', env = process.env) {
+  const want = String(env.PIN_SETUP_SECRET || env.CRON_SECRET || '').trim()
+  if (!want) return { status: 503, body: { error: 'A PIN reset needs CRON_SECRET in the server settings (Vercel → Environment Variables)' } }
+  pin = String(pin ?? '')
+  if (!/^\d{4,8}$/.test(pin)) return { status: 400, body: { error: 'PIN must be 4 to 8 digits' } }
+  const refused = await guardedTry(cfg, async () => sameSecret(String(key ?? '').trim(), want), 'Wrong setup key', now, fetchImpl, ip)
+  if (refused) return refused
+  await authState(cfg, fetchImpl)
+  const hash = await hashPinServer(pin)
+  await run(cfg, [
+    ["UPDATE sys_auth SET value = ? WHERE key = 'pin_hash'", [hash]],
+    ["DELETE FROM settings WHERE key = 'pin_hash'"]
+  ], fetchImpl)
+  return { status: 200, body: { session: await signOutAll(cfg, now, fetchImpl, null) } }
+}
+
 /** The caller's IP (Vercel puts the real one first in x-forwarded-for). */
 export const clientIp = (req) => String(req.headers['x-real-ip'] || String(req.headers['x-forwarded-for'] || '').split(',')[0] || req.socket?.remoteAddress || 'unknown').trim()
 

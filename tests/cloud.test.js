@@ -148,3 +148,24 @@ test('a copy Life System wrote (manifest + pieces) reads as it is, and Life keep
   const dv = turso.db.prepare("SELECT value FROM settings WHERE key = 'data_version'").all()[0]?.value;
   assert.ok(dv, 'Life devices are told something changed');
 });
+
+test('forgot the PIN: the setup key sets a new one, the old PIN and old sessions stop working', async () => {
+  const before = await transport('/api/login', { pin: '2468' });
+  assert.equal(before.status, 200);
+  const oldSession = before.json.session;
+  assert.equal((await transport('/api/money', { op: 'read' }, oldSession)).status, 200);
+  // A wrong key is refused and changes nothing.
+  assert.equal((await transport('/api/login', { reset: 'wrong', pin: '1357' })).status, 401);
+  assert.equal((await transport('/api/login', { pin: '2468' })).status, 200);
+  // A PIN that is not 4 to 8 digits is refused.
+  assert.equal((await transport('/api/login', { reset: SETUP, pin: '12' })).status, 400);
+  // The app's "Forgot your PIN?": the key and a new PIN sign this device in.
+  const c = client();
+  await assert.rejects(c.cloud.signIn('1357', { setupKey: 'nope' }), /Wrong setup key/);
+  assert.equal(await c.cloud.signIn('1357', { setupKey: SETUP }), true);
+  assert.equal((await c.cloud.sync()).ok, true);
+  // The old PIN and every older session are done.
+  assert.equal((await transport('/api/login', { pin: '2468' })).status, 401);
+  assert.equal((await transport('/api/money', { op: 'read' }, oldSession)).status, 401);
+  assert.equal((await transport('/api/login', { pin: '1357' })).status, 200);
+});
