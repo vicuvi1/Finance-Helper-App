@@ -351,6 +351,18 @@ export function init() {
   });
   injectStyle();
   paintStatus();
+  // Once (1.86.0): the moving background starts off, like on new installs. Say so, and where to turn it back on.
+  try {
+    if (!ctx.DEMO && !localStorage.getItem('fh-calm-bg-1')) {
+      localStorage.setItem('fh-calm-bg-1', '1');
+      if (ctx.state.settings?.themeMotion === true) {
+        ctx.state.settings.themeMotion = false;
+        ctx.persist?.();
+        ctx.render();
+        setTimeout(() => ctx.toast('The moving background is off now. Turn it back on in Settings → Extras.'), 1200);
+      }
+    }
+  } catch { /* no storage: nothing to change */ }
   if (!ctx.DEMO) {
     window.addEventListener('online', () => { paintStatus(); soon(500); });
     window.addEventListener('offline', paintStatus);

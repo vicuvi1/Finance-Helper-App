@@ -36,7 +36,7 @@ export function verdict(state, today) {
   let title;
   let tone = 'good';
   if (!state.tx.length) { title = 'Let\'s set up your month'; tone = 'calm'; }
-  else if (sf.pool <= 0) { title = `Tight until ${shortDay(sf.payday)}`; tone = 'bad'; }
+  else if (sf.pool <= 0) { title = `Bills and savings first until ${shortDay(sf.payday)}`; tone = 'warn'; }
   else if (sf.limit && sf.limit.left < 0) { title = 'Over your limit this month'; tone = 'bad'; }
   else if (sf.leftToday < 0) { title = 'A bit over today'; tone = 'warn'; }
   else if (sf.limit && sf.limit.projected > sf.limit.amount) { title = 'Spending faster than your limit'; tone = 'warn'; }

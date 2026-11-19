@@ -31,7 +31,7 @@ test('verdict: over today, or tight until payday', () => {
   s.tx.push(tx('2026-10-13', 'expense', 900000));
   assert.equal(verdict(s, '2026-10-13').title, 'A bit over today');
   s.tx.push(tx('2026-10-12', 'expense', 2000000, { category: 'home', note: 'rent' }));
-  assert.match(verdict(s, '2026-10-13').title, /^Tight until 20 Oct/);
+  assert.match(verdict(s, '2026-10-13').title, /^Bills and savings first until 20 Oct/);
 });
 
 test('steps: the bill due tomorrow and the savings still to move; "Later" hides one until tomorrow', () => {

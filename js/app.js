@@ -272,7 +272,7 @@ let ambientKey = '';
 function applyAtmosphere() {
   // Calm inside Life (its Match theme has no floating flecks), and never
   // with reduced motion.
-  const active = state.settings.themeMotion !== false && !window.matchMedia('(prefers-reduced-motion: reduce)').matches && themeChoice() !== 'life';
+  const active = state.settings.themeMotion === true && !window.matchMedia('(prefers-reduced-motion: reduce)').matches && themeChoice() !== 'life';
   const key = active ? themeChoice() || 'system' : '';
   if (key === ambientKey) return;
   ambientKey = key;
@@ -338,7 +338,7 @@ function applyTheme() {
   if (choice === 'life') document.documentElement.dataset.look = 'life';
   else delete document.documentElement.dataset.look;
   // Calm: inside Life, or with "Living atmosphere" off, nothing loops forever.
-  document.documentElement.toggleAttribute('data-calm', inLifeNow() || state.settings.themeMotion === false);
+  document.documentElement.toggleAttribute('data-calm', inLifeNow() || state.settings.themeMotion !== true);
   const t = choice === 'life' ? lifeMode() : design ? (design === 'paper' ? 'light' : 'dark') : choice;
   if (t === 'dark' || t === 'light') {
     document.documentElement.dataset.theme = t;
@@ -1024,8 +1024,9 @@ function safeCard(today) {
   const isOver = left < 0;
   const empty = sf.pool <= 0;
   const onTrack = left >= sf.perDay / 4;
-  const tone = empty || isOver ? 'over' : onTrack ? 'ok' : 'watch';
-  const statusLabel = empty ? 'Nothing spare' : isOver ? 'Over today' : onTrack ? 'On track' : 'Go easy';
+  // Nothing spare is a calm "wait" (amber), not an alarm: the bills and savings simply come first.
+  const tone = isOver && !empty ? 'over' : empty || !onTrack ? 'watch' : 'ok';
+  const statusLabel = empty ? `Until ${shortDay(sf.payday)}` : isOver ? 'Over today' : onTrack ? 'On track' : 'Go easy';
 
   // The last 7 days against the daily share (bills and recurring don't count).
   const week = [];
@@ -1146,7 +1147,7 @@ function viewHome() {
   ${MoneyB.askBox()}
   ${stepsCard(today)}
   ${payCard(today)}
-  ${Checkup.card(today) || CashCount.card(today)}
+  ${CashCount.card(today)}
   ${homeStrip(s, key)}
   ${Spending.spendingCard({ key: 'home', period: ui.spendPeriod })}
   ${Goals.homeCard({ featured: true })}
@@ -1661,7 +1662,7 @@ function viewSettings() {
 `,
     extras: `<section class="card look-card"><h2>Extras</h2>
     <p class="muted small" style="margin-top:0">Nice-to-haves, kept out of the way: moving backgrounds, wallpapers, button sounds and focus music. Your numbers work the same with all of them off.</p>
-    <label class="motion-setting"><span><b>Living atmosphere</b><small>Sakura petals, leaves, bubbles and starlight. Follows your device’s reduced-motion preference.</small></span><input type="checkbox" data-set="themeMotion" ${st.themeMotion !== false ? 'checked' : ''} aria-label="Living atmosphere"></label>
+    <label class="motion-setting"><span><b>Living atmosphere</b><small>Sakura petals, leaves, bubbles and starlight. Follows your device’s reduced-motion preference.</small></span><input type="checkbox" data-set="themeMotion" ${st.themeMotion === true ? 'checked' : ''} aria-label="Living atmosphere"></label>
     <div class="field" style="margin-top:14px">
       <span style="font-weight:600;display:block;margin-bottom:6px">Atmospheric Wallpaper</span>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px">

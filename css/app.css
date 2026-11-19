@@ -5541,7 +5541,7 @@ details.card > summary { color: var(--text); font-size: 15px; }
 /* The wallet: up to three spending cards, fanned; they spread on hover. */
 .sh-wallet { display: none; }
 @media (min-width: 1280px) {
-  .safe-hero:has(.sh-wallet) { grid-template-columns: minmax(0, 1.2fr) minmax(240px, 0.8fr) 236px; }
+  .safe-hero:has(.sh-wallet) { grid-template-columns: minmax(0, 1fr) minmax(260px, 1fr) 236px; }
   .sh-wallet { display: flex; flex-direction: column; align-items: stretch; gap: 10px; align-self: center; }
   .shw-stack { position: relative; height: calc(148px + (var(--n) - 1) * 32px); }
   .shw-card { position: absolute; left: 0; right: 0; top: calc((var(--n) - 1 - var(--i)) * 32px);
@@ -6335,3 +6335,10 @@ html[data-in-life] .lt-eye svg { width: 18px; height: 18px; fill: none; stroke: 
 .day-chips .chip { font-size: 12.5px; padding: 5px 11px; }
 .day-chips .chip.on { background: var(--gold-soft); color: var(--gold); border-color: transparent; font-weight: 600; }
 .qa-day { font-weight: 600; color: var(--gold); }
+
+/* Safe to spend on wide screens: the number, the reason and the limit sit together, the 7 days right next to them. */
+@media (min-width: 720px) {
+  .safe-hero { grid-template-columns: minmax(0, 1fr) minmax(260px, 1fr); }
+  .safe-hero .sh-meter, .safe-hero .sh-limit { max-width: none; }
+}
+@media (min-width: 1280px) { .safe-hero:has(.sh-wallet) { grid-template-columns: minmax(0, 1fr) minmax(260px, 1fr) 236px; } }
