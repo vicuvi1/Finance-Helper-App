@@ -2,7 +2,7 @@
 // private app:// origin so ES modules and saved data work like on the web,
 // and nothing is loaded from the internet.
 
-const { app, BrowserWindow, protocol, net, shell, Menu, ipcMain, safeStorage, globalShortcut, Tray, nativeImage, dialog, powerMonitor } = require('electron');
+const { app, BrowserWindow, protocol, net, shell, Menu, ipcMain, safeStorage, globalShortcut, Tray, nativeImage, dialog, powerMonitor, Notification } = require('electron');
 const { createTelegram } = require('./telegram.cjs');
 const { createBinance } = require('./binance.cjs');
 const { createDrive } = require('./gdrive.cjs');
@@ -108,6 +108,41 @@ ipcMain.handle('fetch-text', async (_e, url) => {
 });
 
 ipcMain.handle('app-info', () => ({ version: app.getVersion(), platform: process.platform, packaged: app.isPackaged }));
+
+// ---------- Cloud sync with your own server ----------
+// The page's sync (js/cloud.js) talks to the server through here, so no
+// cross-site rules are needed and the session only ever goes to the server
+// address the person chose: https only (http just for 127.0.0.1 in tests),
+// only the sign-in and Money endpoints, JSON in and out.
+const CLOUD_PATHS = new Set(['/api/login', '/api/money']);
+ipcMain.handle('cloud-request', async (_e, base, p, body, token) => {
+  let u;
+  try { u = new URL(String(p), String(base)); } catch { return { status: 0, json: { error: 'Bad server address' } }; }
+  const local = !app.isPackaged && u.protocol === 'http:' && u.hostname === '127.0.0.1';
+  if ((u.protocol !== 'https:' && !local) || !CLOUD_PATHS.has(u.pathname)) return { status: 0, json: { error: 'Not allowed' } };
+  try {
+    const r = await net.fetch(u.href, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'User-Agent': `FinanceHelper/${app.getVersion()}`, ...(token ? { Authorization: `Bearer ${String(token)}` } : {}) },
+      body: JSON.stringify(body ?? {}),
+    });
+    const text = await r.text();
+    let json = null;
+    try { json = JSON.parse(text); } catch { json = { error: text.slice(0, 200) }; }
+    return { status: r.status, json };
+  } catch (err) {
+    return { status: 0, json: { error: String(err?.message || err).split('\n')[0] } };
+  }
+});
+
+// ---------- Notifications (budget warnings, salary watch, reminders) ----------
+ipcMain.handle('notify', (_e, title, body) => {
+  if (!Notification.isSupported()) return false;
+  const n = new Notification({ title: String(title || 'Finance Helper').slice(0, 80), body: String(body || '').slice(0, 300) });
+  n.on('click', () => { const w = BrowserWindow.getAllWindows()[0]; if (w) { if (w.isMinimized()) w.restore(); w.show(); w.focus(); } });
+  n.show();
+  return true;
+});
 
 // ---------- Binance (read-only key, stored encrypted) ----------
 

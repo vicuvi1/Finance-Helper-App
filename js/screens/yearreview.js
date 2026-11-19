@@ -5,9 +5,10 @@ import { ctx, esc } from '../ctx.js';
 import { formatMoney } from '../money.js';
 import { todayISO, monthLabel, dayLabel } from '../dates.js';
 import { yearReview, taxSummary } from '../yearreview.js';
-import { yearOverview } from '../model.js';
 import { workbook } from '../xlsx.js';
 import { workText } from '../workhours.js';
+import * as YearSummary from './yearsummary.js';
+import * as Tips from '../tips.js';
 
 let year = null;
 const curYear = () => year || Number(todayISO().slice(0, 4));
@@ -35,11 +36,10 @@ export function view() {
   const nw = r.netWorth.end - r.netWorth.start;
   const work = workText(state, r.expense, today);
   const hasData = r.records > 0;
-  const chart = yearBars(yearOverview(state, y).rows, money);
 
   return `<header class="top"><div><h1>${y} in review</h1><div class="sub">${r.partial ? `So far, up to ${dayLabel(today)}` : 'The whole year'} · ${r.records} records</div></div>
     <div class="month-switch"><button class="icon-btn" data-act="yr-step" data-step="-1" aria-label="Previous year">‹</button><b>${y}</b><button class="icon-btn" data-act="yr-step" data-step="1" aria-label="Next year" ${y >= Number(today.slice(0, 4)) ? 'disabled' : ''}>›</button></div></header>
-  ${!hasData ? `<div class="empty"><b>Nothing logged in ${y}</b>Pick another year.</div>` : `
+  ${!hasData ? Tips.EMPTY.year(y) : `
   <section class="card yr-hero">
     <div class="yr-big"><span class="k">You kept</span><span class="fig">${ctx.countUp(r.net, 'yr-net')}</span><span class="yr-pct">${kept} of what you earned</span>${vsLine(r.net, r.vs?.net)}</div>
     <div class="yr-split">
@@ -58,7 +58,7 @@ export function view() {
     ${tile('📈', 'Net worth', `${nw >= 0 ? '+' : '−'}${money(Math.abs(Math.round(nw / 100) * 100))}`, `${money(Math.round(r.netWorth.start / 100) * 100)} → ${money(Math.round(r.netWorth.end / 100) * 100)}`)}
     ${r.goalsDone.length ? tile('🎯', 'Goals reached', String(r.goalsDone.length), esc(r.goalsDone.join(', '))) : ''}
   </div>
-  <section class="card"><h2>Month by month</h2>${chart}<div class="legend"><span><i style="background:var(--income)"></i>Earned</span><span><i style="background:var(--expense)"></i>Spent</span></div></section>`}
+  ${YearSummary.card(y, today)}`}
   <section class="card yr-tax"><h2>Income for taxes · ${y} <button class="btn right" data-act="yr-tax-export" ${t.rows.length ? '' : 'disabled'}>Export for taxes (.xlsx)</button></h2>
     <div class="yr-tax-total"><span class="fig">${money(t.total)}</span><span class="muted">${t.rows.length} income record${t.rows.length === 1 ? '' : 's'} in ${esc(base)}, at the rate of each day</span></div>
     ${t.rows.length ? `<div class="yr-tax-grid">
@@ -68,16 +68,6 @@ export function view() {
     </div>` : ''}
     <p class="muted small" style="margin-bottom:0">Every income except loans and moves between your accounts. The export lists each one with its date, payer, original currency, rate and amount in ${esc(base)}. Tax rules depend on your status; check the numbers with an accountant or the tax office.</p>
   </section>`;
-}
-
-// Earned and spent for all 12 months, as bars; hover a month for its numbers.
-function yearBars(rows, money) {
-  const max = Math.max(1, ...rows.map((m) => Math.max(m.income, m.expense)));
-  const h = (v) => (v ? Math.max(2, (v / max) * 100) : 0);
-  return `<div class="yr-bars" role="img" aria-label="Earned and spent per month">${rows.map((m) => {
-    const label = monthLabel(m.key);
-    return `<div class="yr-m${m.income || m.expense ? '' : ' none'}" title="${label}: earned ${money(m.income)}, spent ${money(m.expense)}"><div class="yr-bb"><i class="in" style="height:${h(m.income)}%"></i><i class="out" style="height:${h(m.expense)}%"></i></div><span>${label.slice(0, 3)}</span></div>`;
-  }).join('')}</div>`;
 }
 
 // Same as model B(): the amount in your currency.

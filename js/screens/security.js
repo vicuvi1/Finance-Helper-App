@@ -6,6 +6,7 @@
 import { ctx } from '../ctx.js';
 import { createLock, checkPin, validPin, waitAfter } from '../lock.js';
 import { isEncrypted, unlockStore, lockStore, enableEncryption, disableEncryption, load } from '../store.js';
+import * as Privacy from '../privacy.js';
 
 const AUTO = [1, 5, 15, 60, 0]; // minutes; 0 = only when the app starts
 let locked = false;
@@ -133,6 +134,18 @@ export function settingsCard() {
   </section>`;
 }
 
+// Hiding amounts: they start hidden and hide again by themselves (js/privacy.js).
+export function privacyCard() {
+  const after = Privacy.hideAfter();
+  const label = (m) => (m ? `${m} minute${m === 1 ? '' : 's'}` : 'Only when I close the window');
+  return `<section class="card" data-testid="privacy-card"><h2>Hide amounts</h2>
+    <p class="muted small" style="margin-top:0">Every amount shows as dots until you press Space (or the eye). Press Space again to hide them.</p>
+    <label class="field check"><input id="privacy-on-open" type="checkbox" ${Privacy.hideOnOpen() ? 'checked' : ''}><span>Hide amounts when the app opens</span></label>
+    <label class="field"><span>Hide again after</span><select id="privacy-after">${Privacy.AFTER_CHOICES.map((m) => `<option value="${m}" ${m === after ? 'selected' : ''}>${label(m)}</option>`).join('')}</select></label>
+    <p class="muted small">Amounts also hide when the window is minimised. With "Only when I close the window" they stay shown until you hide them.</p>
+  </section>`;
+}
+
 function pinSheet(mode) {
   const needOld = mode !== 'set';
   ctx.openSheet(`<h3>${mode === 'remove' ? 'Remove PIN' : mode === 'change' ? 'Change PIN' : 'Set a PIN'} <button type="button" class="icon-btn" data-close aria-label="Close">✕</button></h3>
@@ -223,6 +236,8 @@ export function onClick(act) {
 }
 
 export function onChange(el) {
+  if (el.id === 'privacy-on-open') { Privacy.setHideOnOpen(el.checked); return true; }
+  if (el.id === 'privacy-after') { Privacy.setHideAfter(Number(el.value)); return true; }
   if (el.id !== 'lock-after') return false;
   meta().lockAfter = Number(el.value);
   ctx.persist();

@@ -1,0 +1,64 @@
+/* The long view (Reports → Long view, js/screens/longview.js). Loaded by the
+   screen itself so app.css stays untouched. Only theme tokens, so every look
+   (dark, light, the designs, inside Life System) works. */
+
+.view-longview header.top { align-items: center; gap: 12px; flex-wrap: wrap; }
+.lv-cur { margin: 0; min-width: 180px; }
+.lv-cur button { padding: 6px 10px; font-size: 13px; }
+.lv-books { margin-bottom: 12px; }
+.lv-note { margin: 8px 0 0; }
+
+.lv-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 14px; }
+.lv-metric { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; display: grid; gap: 4px; align-content: start; min-width: 0; }
+.lv-metric .k { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.07em; font-weight: 600; }
+.lv-metric b { font-size: 22px; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lv-metric .small { line-height: 1.35; }
+
+.lv-two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.lv-two > .card { margin-bottom: 14px; }
+.lv-seg { margin: 0; display: inline-grid; min-width: 160px; }
+.lv-seg button { padding: 4px 10px; font-size: 12.5px; }
+.lv-yoy-ctl { display: inline-flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.lv-yoy-ctl .month-switch { margin: 0; }
+
+.lv-nw .line-chart { display: block; width: 100%; max-height: 230px; margin: 0 auto; }
+.lv-nw-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; margin-top: 12px; }
+.lv-table { font-size: 13px; }
+.lv-table caption { text-align: left; color: var(--muted); font-size: 12px; font-weight: 600; padding: 0 0 6px; }
+.lv-table th, .lv-table td { padding: 6px 6px; border-bottom: 1px solid var(--line); text-align: left; }
+.lv-table th { color: var(--muted); font-weight: 600; font-size: 12px; }
+.lv-table .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.lv-table tr.on td { background: var(--gold-soft); }
+.lv-row { cursor: pointer; }
+.lv-row:hover td, .lv-row:focus-visible td { background: var(--surface-2); outline: none; }
+.lv-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid var(--gold); margin-right: 5px; vertical-align: 0; }
+.lv-dot.snap { background: var(--gold); }
+
+.lv-lead { margin: 2px 0 4px; font-size: 15px; }
+.lv-lead b { font-size: 24px; font-variant-numeric: tabular-nums; margin-right: 4px; }
+.lv-rw-text { font-weight: 600; font-size: 16px; }
+
+.lv-sbars { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 4px; align-items: end; margin: 10px 0; }
+.lv-sb { display: grid; justify-items: center; gap: 2px; }
+.lv-sb-up, .lv-sb-down { width: 100%; height: 64px; display: flex; justify-content: center; }
+.lv-sb-up { align-items: flex-end; }
+.lv-sb-down { align-items: flex-start; height: 20px; border-top: 1px solid var(--line); overflow: hidden; }
+.lv-sb i { display: block; width: 70%; max-width: 22px; border-radius: 4px 4px 0 0; background: var(--income); }
+.lv-sb-down i { border-radius: 0 0 4px 4px; background: var(--expense); }
+.lv-sb.run i { opacity: 0.55; }
+.lv-sb span { font-size: 10.5px; color: var(--muted); }
+.lv-sb.none span { opacity: 0.6; }
+
+.lv-movers { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin: 8px 0 12px; }
+.lv-movers h3 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 0 0 6px; }
+.lv-movers ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.lv-movers li { display: flex; justify-content: space-between; gap: 8px; font-size: 13.5px; }
+.lv-movers li b { font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+@media (max-width: 900px) {
+  .lv-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .lv-two, .lv-nw-grid { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 420px) {
+  .lv-metrics, .lv-movers { grid-template-columns: minmax(0, 1fr); }
+}

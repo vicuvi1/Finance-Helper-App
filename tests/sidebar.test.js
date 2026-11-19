@@ -35,8 +35,9 @@ test('app.js and css/app.css: sidebar logic, masking, and styling', () => {
   const appCss = readFileSync(new URL('../css/app.css', import.meta.url), 'utf8');
 
   // Mask balance support
-  assert.ok(appJs.includes('maskBalance:'), 'app.js initializes maskBalance');
-  assert.ok(appJs.includes("act === 'toggle-mask'"), 'app.js handles toggle-mask action');
+  // Hiding amounts moved to js/privacy.js (shared with the H key, Space and the eye buttons).
+  assert.ok(appJs.includes("import * as Privacy from './privacy.js'"), 'app.js uses the privacy module');
+  assert.ok(appJs.includes("act === 'toggle-mask'") && appJs.includes('Privacy.toggle()'), 'app.js handles toggle-mask action');
   assert.ok(appJs.includes("e.key === 'h' || e.key === 'H'"), 'app.js binds H shortcut to balance masking');
   assert.ok(appJs.includes("act === 'cmd-palette'"), 'app.js handles cmd-palette action');
   assert.ok(appJs.includes("act === 'lock-app'"), 'app.js handles lock-app action');

@@ -7,6 +7,8 @@ import { dueItems, upcomingItems } from './recurring.js';
 import { invoiceStatus, invoiceTotal } from './invoices.js';
 import { addDays, daysBetween } from './dates.js';
 import { convert } from './fx.js';
+import { countsAsSpending, signed } from './catshare.js';
+import { linesOf } from './splits.js';
 
 export const isLiquid = (a) => !a.archived && !a.savings && a.kind !== 'savings' && a.kind !== 'crypto';
 
@@ -16,11 +18,11 @@ export function spentFrom(state, today, window = 60) {
   const since = addDays(today, -window + 1);
   const by = new Map();
   let total = 0;
-  for (const t of state.tx) {
-    if (t.type !== 'expense' || t.loan || t.recurring || t.date < since || t.date > today) continue;
+  for (const t of linesOf(state)) { // a split record per line: bills and work costs apart
+    if (!countsAsSpending(t) || t.recurring || t.date < since || t.date > today) continue;
     if (isBillCategory(state, t.category) || isWorkCost(state, t.category)) continue;
-    by.set(t.account, (by.get(t.account) || 0) + B(t));
-    total += B(t);
+    by.set(t.account, (by.get(t.account) || 0) + signed(t, B(t)));
+    total += signed(t, B(t));
   }
   return [...by.entries()].map(([id, amount]) => ({ id, amount, share: total ? amount / total : 0 })).sort((a, b) => b.amount - a.amount);
 }
@@ -50,11 +52,11 @@ export function spendingIds(state, today = null) {
 // recurring items already cover and loans.
 export function dailySpend(state, today, window = 90) {
   const since = addDays(today, -window + 1);
-  const list = state.tx.filter((t) => t.type === 'expense' && !t.loan && !t.recurring && t.date >= since && t.date <= today);
+  const list = state.tx.filter((t) => countsAsSpending(t) && !t.recurring && t.date >= since && t.date <= today);
   if (!list.length) return 0;
   const first = list.reduce((m, t) => (t.date < m ? t.date : m), today);
   const span = Math.max(14, daysBetween(first, today) + 1);
-  return Math.round(list.reduce((a, t) => a + B(t), 0) / span);
+  return Math.round(list.reduce((a, t) => a + signed(t, B(t)), 0) / span);
 }
 
 export function forecast(state, today, { days = 60 } = {}) {

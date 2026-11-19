@@ -1,0 +1,308 @@
+// The standalone app's own pieces, kept out of the files copied from Life
+// System (scripts/sync-from-mega.mjs) so a new copy never loses them. Wired
+// into js/app.js by four small hooks (scripts/standalone-patches.mjs):
+//  - Settings → Data & backups: "Cloud sync" (sign in with the server PIN,
+//    status, Sync now) and "Import from Life System";
+//  - the update badge next to the app's name (desktop: update available /
+//    downloading / restart; web: reload to update);
+//  - notifications (budget warnings, salary watch, check-up) on this device;
+//  - on the web, a sign-in sheet the first time (to load Money from the server).
+
+import { ctx, esc } from './ctx.js';
+import { createCloud, DEFAULT_URL } from './cloud.js';
+import { readLifeFile, incomingState, previewImport, mergeImport } from './lifeimport.js';
+import { runNotices } from './notifier.js';
+import { openImported, deviceStorage, flushSave } from './store.js';
+import { todayISO } from './dates.js';
+import { isMoneyHidden } from './money.js';
+import { updateStatus, onUpdateChange, watchServiceWorker, webUpdateWaiting } from './screens/updates.js';
+
+const isDesktop = () => typeof window !== 'undefined' && !!window.desktop?.isDesktop;
+const isWeb = () => !isDesktop() && typeof location !== 'undefined' && /^https?:$/.test(location.protocol);
+/** Where the server is: the desktop's chosen address, or (web) this site itself. */
+const baseUrl = () => (isDesktop() ? cloud?.config.url || DEFAULT_URL : cloud?.config.url || location.origin);
+
+function transport(path, body, token) {
+  if (isDesktop()) return window.desktop.cloud.request(baseUrl(), path, body, token);
+  const base = baseUrl();
+  const url = base === location.origin ? path : `${base}${path}`;
+  return fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    body: JSON.stringify(body),
+  }).then(async (r) => ({ status: r.status, json: await r.json().catch(() => null) }));
+}
+
+let cloud = null;
+let timer = null;
+let started = false;
+// Web: is there a Money server on this site? (GitHub Pages or a plain file server has none: no card, no sign-in.)
+let serverHere = null;
+async function probeServer() {
+  if (isDesktop()) return true;
+  try {
+    const r = await transport('/api/money', { op: 'read' }, '');
+    serverHere = r.status === 401 || r.status === 200 || r.status === 503;
+  } catch { serverHere = false; }
+  refreshCard();
+  return serverHere;
+}
+
+function soon(ms = 3000) {
+  clearTimeout(timer);
+  timer = setTimeout(() => cloud?.sync().then(after), ms);
+}
+function after(r) {
+  if (r?.again) soon(1500);
+  else if (r && !r.ok && cloud.config.signedIn && cloud.config.dirty) soon(60_000);
+  refreshCard();
+}
+
+const ago = (ms) => {
+  if (!ms) return 'never';
+  const s = Math.round((Date.now() - ms) / 1000);
+  if (s < 60) return 'just now';
+  if (s < 3600) return `${Math.round(s / 60)} min ago`;
+  if (s < 86400) return `${Math.round(s / 3600)} h ago`;
+  return new Date(ms).toLocaleDateString();
+};
+
+/** The Cloud sync card (Settings → Data & backups). */
+export function cloudCard() {
+  if (!cloud || ctx.DEMO) return '';
+  if (!isDesktop() && !serverHere && !cloud.config.signedIn) return '<section class="card" id="cloud-card" hidden></section>';
+  const st = cloud.status;
+  const cfg = cloud.config;
+  const line = !cfg.signedIn
+    ? 'Not signed in. Sign in with your server PIN to keep the web and desktop apps in step.'
+    : st.busy ? 'Syncing…'
+      : st.state === 'error' ? esc(st.error)
+        : st.state === 'skipped' ? esc(st.note)
+          : cfg.dirty ? 'Your latest changes are waiting to be sent.'
+            : `Synced ${ago(cfg.okAt)}. The server has everything this device has.`;
+  const tone = !cfg.signedIn ? '' : st.state === 'error' ? 'danger' : cfg.dirty || st.busy ? 'accent' : 'success';
+  return `<section class="card" id="cloud-card" data-testid="cloud-card"><h2>Cloud sync</h2>
+    <div class="set-status-box ${tone}"><div class="set-sb-icon">${cfg.signedIn ? (st.state === 'error' ? '⚠️' : '☁️') : '🔑'}</div>
+      <div class="set-sb-content"><b>${cfg.signedIn ? 'Signed in' : 'Signed out'}</b><p class="muted small" style="margin:2px 0 0" data-testid="cloud-status">${line}</p>${st.note && st.state === 'ok' ? `<p class="muted small" style="margin:4px 0 0">${esc(st.note)}</p>` : ''}</div></div>
+    ${isDesktop() ? `<label class="field" style="margin-top:12px"><span>Server address</span><input id="cloud-url" type="url" value="${esc(baseUrl())}" placeholder="${DEFAULT_URL}" data-testid="cloud-url"></label>` : ''}
+    ${cfg.signedIn
+      ? `<div class="btns" style="margin-top:12px"><button class="btn primary" data-act="cloud-sync" data-testid="cloud-sync">Sync now</button><button class="btn" data-act="cloud-signout">Sign out</button></div>`
+      : `<div class="btns" style="margin-top:12px"><button class="btn primary" data-act="cloud-signin" data-testid="cloud-signin">Sign in</button></div>`}
+    <p class="muted small" style="margin-bottom:0">Each record's newest edit wins and nothing is deleted by syncing. Your data stays on this device too and works offline.</p>
+  </section>`;
+}
+
+/** The Import from Life System card. */
+export function importCard() {
+  if (ctx.DEMO) return '';
+  return `<section class="card" id="life-import-card"><h2>Import from Life System</h2>
+    <p class="muted small" style="margin-top:0">Bring your Money data over from Life System in one step. In Life System open <b>Data center → Money → Download</b> (or use a full backup), then pick that file here. You see what changes first; a backup is made before anything is merged, and nothing here is deleted.</p>
+    <button class="btn block" data-act="life-import" data-testid="life-import">Import from Life System…</button>
+    <input type="file" id="life-import-file" accept=".json,application/json" hidden data-testid="life-import-file">
+  </section>`;
+}
+
+export const dataCards = () => cloudCard() + importCard();
+
+function refreshCard() {
+  const el = document.getElementById('cloud-card');
+  if (el) el.outerHTML = cloudCard();
+}
+export const _probe = probeServer;
+
+// ---------- Sign in ----------
+
+export function openSignIn({ first = false } = {}) {
+  ctx.openSheet(`<h3>${first ? 'Sign in to load your Money' : 'Sign in to Cloud sync'} <button type="button" class="icon-btn" data-close aria-label="Close">✕</button></h3>
+    <p class="muted" style="margin-top:0">Your server PIN (the one Life System used). It is checked by the server and never stored here.</p>
+    <form id="cloud-form">
+      <label class="field"><span>PIN</span><input id="cloud-pin" type="password" inputmode="numeric" autocomplete="current-password" required minlength="4" maxlength="12" data-testid="cloud-pin"></label>
+      <details style="margin:8px 0"><summary class="muted small">First time on a new server?</summary>
+        <label class="field"><span>Server setup key (only to set the very first PIN)</span><input id="cloud-setup" type="password" autocomplete="off"></label></details>
+      <p class="muted small" id="cloud-err" role="alert" style="color:var(--danger, #e66)"></p>
+      <div class="btns">${first ? '<button type="button" class="btn" data-close>Use without syncing</button>' : '<button type="button" class="btn" data-close>Cancel</button>'}<button class="btn primary" data-testid="cloud-pin-go">Sign in</button></div>
+    </form>`, (sheet) => {
+    const form = sheet.querySelector('#cloud-form');
+    sheet.querySelector('#cloud-pin').focus();
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const err = sheet.querySelector('#cloud-err');
+      err.textContent = 'Signing in…';
+      try {
+        await cloud.signIn(sheet.querySelector('#cloud-pin').value, { setupKey: sheet.querySelector('#cloud-setup').value.trim() });
+        ctx.closeSheet();
+        ctx.toast('Signed in. Syncing your Money…');
+        const r = await cloud.sync();
+        after(r);
+        ctx.toast(r.ok ? (r.got ? `Synced: ${r.got} records came from the server` : 'Synced') : r.error);
+        ctx.render();
+      } catch (e2) {
+        err.textContent = e2.message;
+      }
+    });
+  });
+}
+
+// ---------- Import from Life System ----------
+
+async function backupFirst(label) {
+  try { await ctx.backupNow?.(); } catch { /* desktop/Drive backup is a bonus */ }
+  if (!isDesktop()) {
+    try { ctx.download(`finance-helper-before-life-import-${todayISO()}.json`, JSON.stringify({ app: 'finance-helper', exportedAt: new Date().toISOString(), note: label, ...ctx.state }), 'application/json'); } catch { /* ignore */ }
+  }
+}
+
+async function onImportFile(text) {
+  let read;
+  try { read = readLifeFile(text); } catch (e) { ctx.toast(e.message); return; }
+  if (read.kind === 'sealed') {
+    ctx.openSheet(`<h3>Money was locked with its PIN <button type="button" class="icon-btn" data-close aria-label="Close">✕</button></h3>
+      <p class="muted" style="margin-top:0">Enter the Money PIN you used in Life System. The file is opened here only.</p>
+      <form id="li-pin-form"><label class="field"><span>Money PIN</span><input id="li-pin" type="password" inputmode="numeric" required></label>
+      <p class="muted small" id="li-err" role="alert"></p>
+      <div class="btns"><button type="button" class="btn" data-close>Cancel</button><button class="btn primary">Open</button></div></form>`, (sheet) => {
+      sheet.querySelector('#li-pin').focus();
+      sheet.querySelector('#li-pin-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        try {
+          const plain = await openImported(read.box, sheet.querySelector('#li-pin').value);
+          ctx.closeSheet();
+          onImportFile(plain);
+        } catch { sheet.querySelector('#li-err').textContent = 'Wrong PIN for this file.'; }
+      });
+    });
+    return;
+  }
+  if (ctx.state._sealed) { ctx.toast('Unlock the app first.'); return; }
+  const incoming = incomingState(read.state);
+  const p = previewImport(ctx.state, incoming);
+  const range = p.first ? ` from ${p.first} to ${p.last}` : '';
+  ctx.openSheet(`<h3>Import from Life System <button type="button" class="icon-btn" data-close aria-label="Close">✕</button></h3>
+    <p class="muted" style="margin-top:0">${esc(read.from)}: ${p.records} records${range}.</p>
+    <div class="set-kv-list" data-testid="life-import-preview">
+      <div class="kv"><span>New records to add</span><b>${p.add}</b></div>
+      <div class="kv"><span>Records with a newer edit in the file</span><b>${p.update}</b></div>
+      <div class="kv"><span>Already the same here</span><b>${p.same}</b></div>
+      <div class="kv"><span>Only on this device (kept)</span><b>${p.keep}</b></div>
+      ${p.other ? `<div class="kv"><span>New people, bills, invoices, goals</span><b>${p.other}</b></div>` : ''}
+    </div>
+    <p class="muted small">A backup of this device's data is made first${isDesktop() ? ' (Documents → Finance Helper → Backups)' : ' (downloaded as a file)'}. Nothing is deleted; Ctrl+Z undoes the import.</p>
+    <div class="btns"><button class="btn" data-close>Cancel</button><button class="btn primary" id="li-go" data-testid="life-import-go">Back up and import</button></div>`, (sheet) => {
+    sheet.querySelector('#li-go').addEventListener('click', async () => {
+      sheet.querySelector('#li-go').disabled = true;
+      await backupFirst('Before importing from Life System');
+      const merged = mergeImport(ctx.state, incoming);
+      // An undoable change like any other (one step), then the cloud gets it.
+      Object.assign(ctx.state, merged);
+      for (const k of Object.keys(ctx.state)) if (!(k in merged)) delete ctx.state[k];
+      ctx.commit();
+      ctx.closeSheet();
+      ctx.toast(`Imported from Life System: ${p.add} new, ${p.update} updated`);
+    });
+  });
+}
+
+// ---------- Update badge (next to the app's name) ----------
+
+function paintBadge() {
+  const brand = document.querySelector('.tabbar .brand');
+  if (!brand) return;
+  let b = document.getElementById('update-badge');
+  const u = updateStatus();
+  const web = webUpdateWaiting();
+  const show = web || ['available', 'downloading', 'ready', 'error'].includes(u.status) && u.status !== 'error';
+  if (!show) { b?.remove(); return; }
+  if (!b) {
+    b = document.createElement('button');
+    b.type = 'button';
+    b.id = 'update-badge';
+    b.className = 'btn small primary';
+    b.dataset.testid = 'update-badge';
+    b.style.cssText = 'margin-left:auto;padding:4px 10px;font-size:12px;white-space:nowrap';
+    brand.appendChild(b);
+  }
+  const label = web ? 'Reload to update' : u.status === 'ready' ? 'Restart to update' : u.status === 'downloading' ? `Downloading ${u.percent}%` : 'Update available';
+  b.textContent = label;
+  b.dataset.act = web ? 'update-reload' : u.status === 'ready' ? 'update-install' : u.status === 'available' ? 'update-download' : 'go-updates';
+  b.title = label;
+}
+
+// ---------- Clicks ----------
+
+export function onClick(act) {
+  if (act === 'cloud-signin') { openSignIn(); return true; }
+  if (act === 'cloud-signout') { cloud.signOut(); refreshCard(); ctx.toast('Signed out of Cloud sync. Your data stays on this device.'); return true; }
+  if (act === 'cloud-sync') {
+    cloud.sync({ check: true }).then((r) => { after(r); ctx.toast(r.ok ? (r.got ? `Synced: ${r.got} records came in` : 'Synced: the server has everything') : r.error || r.skipped); });
+    refreshCard();
+    return true;
+  }
+  if (act === 'life-import') { document.getElementById('life-import-file')?.click(); return true; }
+  if (act === 'go-updates') { location.hash = '#settings'; return true; }
+  return false;
+}
+
+// ---------- Start ----------
+
+function notifyNow() {
+  if (ctx.DEMO || ctx.state._sealed) return;
+  runNotices(ctx.state, todayISO(), { hidden: isMoneyHidden() }).catch(() => {});
+}
+
+export function init() {
+  if (started || typeof document === 'undefined') return;
+  started = true;
+  // Where Money is kept on this device (IndexedDB behind a localStorage-like store): for tests and the console.
+  try {
+    const st = deviceStorage() || globalThis.localStorage;
+    // A read writes a waiting save first (saves wait 400 ms to group a burst of changes).
+    globalThis.__fhStore = { getItem: (k) => { flushSave(); return st.getItem(k); }, setItem: (k, v) => st.setItem(k, v), removeItem: (k) => st.removeItem(k), flush: () => st.flush?.() };
+  } catch { /* no storage */ }
+  cloud = createCloud({
+    transport,
+    store: globalThis.localStorage,
+    app: {
+      getState: () => ctx.state,
+      setState: (next) => { ctx.replaceState(next); if (!document.querySelector('.sheet')) ctx.render(); },
+      backup: (label) => backupFirst(label),
+      locked: () => !!ctx.state._sealed,
+    },
+  });
+  cloud.subscribe(() => refreshCard());
+  // "Backup before a risky step" (js/dupes.js): the desktop's own backup folder.
+  if (isDesktop()) globalThis.__fhBackupBefore = () => ctx.backupNow?.();
+  // Every change you make (js/screens/sync.js changed() calls this): sent a few seconds later, many changes as one.
+  let noteTimer = null;
+  globalThis.__fhCloudChanged = () => {
+    if (ctx.DEMO) return;
+    cloud.changed();
+    if (cloud.config.signedIn) soon();
+    clearTimeout(noteTimer);
+    noteTimer = setTimeout(notifyNow, 5000);
+  };
+  document.addEventListener('change', (e) => {
+    if (e.target?.id === 'cloud-url') { cloud.setUrl(e.target.value); ctx.toast('Server address saved'); }
+    if (e.target?.id === 'life-import-file') {
+      const f = e.target.files?.[0];
+      e.target.value = '';
+      if (f) f.text().then(onImportFile);
+    }
+  });
+  if (!ctx.DEMO) {
+    window.addEventListener('online', () => soon(500));
+    window.addEventListener('focus', () => soon(1000));
+    setInterval(() => cloud.config.signedIn && cloud.sync().then(after), 5 * 60_000);
+    if (cloud.config.signedIn) soon(1500);
+    // Web, first visit with nothing here: sign in to load Money from the server.
+    else if (isWeb()) probeServer().then((here) => { if (here && !(ctx.state.tx || []).length && !ctx.state._sealed && !document.querySelector('.sheet')) openSignIn({ first: true }); });
+    notifyNow();
+    setInterval(notifyNow, 30 * 60_000);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) notifyNow(); });
+  }
+  onUpdateChange(paintBadge);
+  watchServiceWorker();
+  paintBadge();
+}
+
+/** For tests and the console: the cloud engine. */
+export const cloudEngine = () => cloud;

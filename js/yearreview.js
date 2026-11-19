@@ -2,7 +2,10 @@
 // summary for taxes. Pure; js/screens/yearreview.js shows them.
 
 import { report, yearOverview, rebuiltTotal, category, person, account, B } from './model.js';
+import { withArchive } from './archive.js';
 import { addDays } from './dates.js';
+import { countsAsIncome } from './catshare.js';
+import { linesOf } from './splits.js';
 
 // Longest run of days in a row with at least one record, within the year.
 function longestStreak(dates) {
@@ -19,6 +22,7 @@ function longestStreak(dates) {
 }
 
 export function yearReview(state, year, today) {
+  state = withArchive(state);
   const from = `${year}-01-01`;
   const end = `${year}-12-31`;
   const to = end < today ? end : today;
@@ -27,11 +31,11 @@ export function yearReview(state, year, today) {
   const months = yearOverview(state, year).rows.filter((m) => m.income || m.expense);
   const best = [...months].sort((a, b) => b.net - a.net)[0] || null;
   const priciest = [...months].sort((a, b) => b.expense - a.expense)[0] || null;
-  const inYear = state.tx.filter((t) => t.date >= from && t.date <= to);
+  const inYear = linesOf(state).filter((t) => t.date >= from && t.date <= to); // split records per line
   const nameOf = (id) => category(state, id)?.name || 'Other';
   const topClient = (() => {
     const per = {};
-    for (const t of inYear) if (t.type === 'income' && !t.loan && t.person) per[t.person] = (per[t.person] || 0) + B(t);
+    for (const t of inYear) if (countsAsIncome(t) && t.person) per[t.person] = (per[t.person] || 0) + B(t);
     const [id, amount] = Object.entries(per).sort((a, b) => b[1] - a[1])[0] || [];
     return id ? { name: person(state, id)?.name || 'Someone', amount } : null;
   })();
@@ -50,7 +54,7 @@ export function yearReview(state, year, today) {
     topSource: r.sources.rows[0] ? { name: nameOf(r.sources.rows[0].id), amount: r.sources.rows[0].amount, share: r.sources.rows[0].share } : null,
     topClient,
     biggest: r.biggest[0] || null,
-    records: inYear.length,
+    records: new Set(inYear.map((t) => t.id)).size,
     loggedDays: new Set(inYear.map((t) => t.date)).size,
     streak: longestStreak(inYear.map((t) => t.date)),
     noSpendDays: r.noSpendDays,
@@ -63,8 +67,9 @@ export function yearReview(state, year, today) {
 // source, payer, original currency and amount, the rate used, and the
 // amount in your currency. Loans and moves between accounts are left out.
 export function taxSummary(state, year) {
-  const rows = state.tx
-    .filter((t) => t.type === 'income' && !t.loan && t.date.startsWith(String(year)))
+  state = withArchive(state);
+  const rows = linesOf(state)
+    .filter((t) => countsAsIncome(t) && t.date.startsWith(String(year)))
     .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
     .map((t) => ({
       id: t.id,

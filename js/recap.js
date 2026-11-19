@@ -5,6 +5,7 @@
 
 import { personalMonth, monthSummary, savingsJar, category, isWorkCost, B } from './model.js';
 import { isEveryday } from './safespend.js';
+import { signed, isRefund } from './catshare.js';
 import { addMonths, daysInMonth, monthLabel, dowIndex, DOW_LONG } from './dates.js';
 import { formatMoney } from './money.js';
 
@@ -17,14 +18,14 @@ export function monthRecap(state, key) {
   const prev = monthSummary(state, prevKey);
   const prevP = personalMonth(state, prevKey);
   const personal = (list) => list.filter((t) => !isWorkCost(state, t.category));
-  const sum = (list) => list.reduce((a, t) => a + B(t), 0);
+  const sum = (list) => list.reduce((a, t) => a + signed(t, B(t)), 0);
 
   // Where it went: your own spending by category (work costs apart).
-  const mine = personal(s.expenses);
+  const mine = personal([...s.expenses, ...s.refunds]);
   const byCat = new Map();
-  for (const t of mine) byCat.set(t.category, (byCat.get(t.category) || 0) + B(t));
+  for (const t of mine) byCat.set(t.category, (byCat.get(t.category) || 0) + signed(t, B(t)));
   const spent = sum(mine);
-  const cats = [...byCat.entries()].sort((a, b) => b[1] - a[1]).map(([id, amount]) => ({
+  const cats = [...byCat.entries()].filter(([, a]) => a > 0).sort((a, b) => b[1] - a[1]).map(([id, amount]) => ({
     id, name: category(state, id)?.name || 'Other', emoji: category(state, id)?.emoji || '', amount, share: spent ? amount / spent : 0,
   }));
   const top = cats.slice(0, 5);
@@ -32,7 +33,7 @@ export function monthRecap(state, key) {
 
   // Against last month, per category: the biggest rise and the biggest drop.
   const prevBy = new Map();
-  for (const t of personal(prev.expenses)) prevBy.set(t.category, (prevBy.get(t.category) || 0) + B(t));
+  for (const t of personal([...prev.expenses, ...prev.refunds])) prevBy.set(t.category, (prevBy.get(t.category) || 0) + signed(t, B(t)));
   const changes = [...new Set([...byCat.keys(), ...prevBy.keys()])]
     .map((id) => ({ id, name: category(state, id)?.name || 'Other', now: byCat.get(id) || 0, before: prevBy.get(id) || 0 }))
     .map((c) => ({ ...c, diff: c.now - c.before }))
@@ -42,10 +43,13 @@ export function monthRecap(state, key) {
   const down = hasPrev ? changes.filter((c) => c.diff < 0).sort((a, b) => a.diff - b.diff)[0] || null : null;
 
   // Highlights.
-  const biggest = [...mine].sort((a, b) => B(b) - B(a))[0] || null;
+  const biggest = [...mine].filter((t) => !isRefund(t)).sort((a, b) => B(b) - B(a))[0] || null;
   const days = daysInMonth(key);
   const spendDays = new Map();
-  for (const t of mine.filter((x) => isEveryday(state, x))) spendDays.set(t.date, (spendDays.get(t.date) || 0) + B(t));
+  const everydayRecs = mine.filter((x) => isEveryday(state, x));
+  for (const t of everydayRecs.filter((x) => !isRefund(x))) spendDays.set(t.date, (spendDays.get(t.date) || 0) + B(t));
+  // A refund lowers a day that had spending; on its own it does not make a spending day.
+  for (const t of everydayRecs.filter(isRefund)) if (spendDays.has(t.date)) spendDays.set(t.date, spendDays.get(t.date) - B(t));
   const noSpend = Array.from({ length: days }, (_, i) => `${key}-${pad(i + 1)}`).filter((d) => !spendDays.has(d)).length;
   const dowTotals = [0, 0, 0, 0, 0, 0, 0];
   for (const [d, v] of spendDays) dowTotals[dowIndex(d)] += v;
@@ -73,7 +77,7 @@ export function monthRecap(state, key) {
     key, label: monthLabel(key), name: monthLabel(key).split(' ')[0],
     income: p.personalIncome, spent, kept: p.kept, rate, goalPct,
     work: { income: p.workIncome, costs: p.workCosts, profit: p.profit },
-    prevSpent: hasPrev ? sum(personal(prev.expenses)) : null, prevKept: hasPrev ? prevP.kept : null,
+    prevSpent: hasPrev ? sum(personal([...prev.expenses, ...prev.refunds])) : null, prevKept: hasPrev ? prevP.kept : null,
     top, up, down, biggest: biggest && { note: biggest.note || category(state, biggest.category)?.name || 'Expense', amount: B(biggest), date: biggest.date, category: category(state, biggest.category)?.name || '' },
     noSpend, days, busiest: busiest == null ? null : DOW_LONG[busiest], toSavings, limit, everyday,
     count: s.count, tip,

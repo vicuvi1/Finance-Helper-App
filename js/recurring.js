@@ -12,19 +12,68 @@ export const FREQS = [
   { id: 'month', label: 'Every month', short: 'monthly' },
   { id: '3months', label: 'Every 3 months', short: 'quarterly' },
   { id: 'year', label: 'Every year', short: 'yearly' },
+  { id: 'custom', label: 'Custom: every N days, weeks, months or years', short: 'custom' },
 ];
-const MONTHS = { month: 1, '3months': 3, year: 12 };
+export const UNITS = [
+  { id: 'day', one: 'day', many: 'days' },
+  { id: 'week', one: 'week', many: 'weeks' },
+  { id: 'month', one: 'month', many: 'months' },
+  { id: 'year', one: 'year', many: 'years' },
+];
+const LEGACY = { week: ['week', 1], '2weeks': ['week', 2], month: ['month', 1], '3months': ['month', 3], year: ['year', 1] };
 const pad = (n) => String(n).padStart(2, '0');
+const clampN = (n) => Math.max(1, Math.min(999, Math.round(Number(n)) || 1));
 
-// The n-th date of a rule (0 = its start). Monthly rules keep the start's
-// day, moved to the month's last day when shorter (31st -> 30 Apr, 28 Feb).
-export function nth(rule, n) {
-  if (rule.every === 'once') return rule.start;
-  if (rule.every === 'week') return addDays(rule.start, 7 * n);
-  if (rule.every === '2weeks') return addDays(rule.start, 14 * n);
-  const key = addMonths(monthKey(rule.start), (MONTHS[rule.every] || 1) * n);
-  return `${key}-${pad(Math.min(Number(rule.start.slice(8, 10)), daysInMonth(key)))}`;
+// How a rule repeats: { unit: day|week|month|year, n, dom } (null for "once").
+// The old ids (week, 2weeks, month, 3months, year) still work; "custom" reads
+// rule.n and rule.unit, and rule.dom (a day of the month, 1-31) for months and years.
+export function spec(rule) {
+  if (rule.every === 'once') return null;
+  if (rule.every === 'custom') {
+    const unit = UNITS.some((u) => u.id === rule.unit) ? rule.unit : 'month';
+    const dom = (unit === 'month' || unit === 'year') && Number.isInteger(rule.dom) && rule.dom >= 1 && rule.dom <= 31 ? rule.dom : null;
+    return { unit, n: clampN(rule.n), dom };
+  }
+  const [unit, n] = LEGACY[rule.every] || ['month', 1];
+  return { unit, n, dom: null };
 }
+
+// "Every 2 weeks", "Every month on the 5th", for lists.
+export function describe(rule) {
+  if (rule.every === 'once') return 'Just once';
+  const s = spec(rule);
+  const u = UNITS.find((x) => x.id === s.unit);
+  const nth = (d) => `${d}${d % 100 >= 11 && d % 100 <= 13 ? 'th' : { 1: 'st', 2: 'nd', 3: 'rd' }[d % 10] || 'th'}`;
+  const base = s.n === 1 ? `Every ${u.one}` : `Every ${s.n} ${u.many}`;
+  return s.dom ? `${base} on the ${nth(s.dom)}` : base;
+}
+
+// The first date of a rule: its start (a day-of-month rule moves it to the
+// first such day on or after the start).
+function anchor(rule, s) {
+  if (!s.dom || (s.unit !== 'month' && s.unit !== 'year')) return rule.start;
+  const key = monthKey(rule.start);
+  const d = `${key}-${pad(Math.min(s.dom, daysInMonth(key)))}`;
+  return d >= rule.start ? d : `${addMonths(key, 1)}-${pad(Math.min(s.dom, daysInMonth(addMonths(key, 1))))}`;
+}
+
+// The n-th date of a rule (0 = its start). Month and year rules keep the
+// start's day (or the chosen day of the month), moved to the month's last day
+// when it is shorter (31st -> 30 Apr, 28 Feb; 29 Feb -> 28 Feb, and back to 29
+// Feb in the next leap year, because every date is worked out from the start).
+export function nth(rule, n) {
+  const s = spec(rule);
+  if (!s) return rule.start;
+  const first = anchor(rule, s);
+  if (s.unit === 'day') return addDays(first, s.n * n);
+  if (s.unit === 'week') return addDays(first, 7 * s.n * n);
+  const key = addMonths(monthKey(first), (s.unit === 'year' ? 12 : 1) * s.n * n);
+  return `${key}-${pad(Math.min(s.dom || Number(first.slice(8, 10)), daysInMonth(key)))}`;
+}
+
+// The id of the record a rule makes for one date: the same on every device, so a
+// date is never added twice (sync keeps one record per id).
+export const recId = (rule, date) => `rec-${rule.id}-${date}`;
 
 // Dates of a rule between from and to (inclusive).
 export function occurrences(rule, from, to, max = 1000) {
@@ -46,9 +95,14 @@ const sortItems = (a, b) => a.date.localeCompare(b.date) || (a.rule.note || '').
 // Dates up to today that were neither logged nor skipped.
 export function dueItems(state, today) {
   const out = [];
+  const have = new Set((state.tx || []).map((t) => t.id));
   for (const rule of active(state)) {
     const from = rule.lastDone ? addDays(rule.lastDone, 1) : rule.start;
-    for (const date of occurrences(rule, from, today, 60)) out.push({ rule, date });
+    for (const date of occurrences(rule, from, today, 60)) {
+      // Another device may have logged it already (its lastDone not here yet): never offer it again.
+      if (have.has(recId(rule, date))) continue;
+      out.push({ rule, date });
+    }
   }
   return out.sort(sortItems);
 }
@@ -96,7 +150,8 @@ export function markDone(rule, date, now = Date.now()) {
 // Monthly cost of a rule (weekly x 52/12 etc.), for totals.
 export function perMonth(rule) {
   if (rule.every === 'once') return 0; // a one-off isn't a regular cost
-  const f = { week: 52 / 12, '2weeks': 26 / 12, month: 1, '3months': 1 / 3, year: 1 / 12 }[rule.every] || 1;
+  const sp = spec(rule);
+  const f = { day: 365 / 12, week: 52 / 12, month: 1, year: 1 / 12 }[sp.unit] / sp.n;
   return Math.round(rule.amount * f);
 }
 

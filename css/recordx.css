@@ -1,0 +1,67 @@
+/* Your own fields, split records and colour tags (js/screens/recordx.js). */
+
+.rx-tag {
+  display: inline-flex; align-items: center; gap: 2px;
+  border-radius: 99px; padding: 1px 8px; font-size: 11.5px; font-weight: 550; line-height: 1.5;
+  color: var(--tc, var(--c1));
+  background: color-mix(in srgb, var(--tc, var(--c1)) 16%, transparent);
+  border: 1px solid color-mix(in srgb, var(--tc, var(--c1)) 40%, transparent);
+  white-space: nowrap;
+}
+.tag-pick[style*="--tc"] { border-color: color-mix(in srgb, var(--tc) 45%, var(--line)); color: var(--tc); }
+.tag-pick[style*="--tc"][aria-pressed="true"] { background: color-mix(in srgb, var(--tc) 20%, transparent); border-color: var(--tc); color: var(--text); }
+.rx-sug {
+  border: 1px dashed color-mix(in srgb, var(--tc, var(--c1)) 60%, var(--line)); background: transparent;
+  color: var(--tc, var(--c1)); border-radius: 99px; padding: 3px 10px; font-size: 12.5px; cursor: pointer;
+}
+
+/* Log rows */
+.tx .t .rx-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; overflow: visible; white-space: normal; }
+.tx .t .rx-chips > span { display: inline-flex; font-size: 11px; }
+.rx-chip { border-radius: 6px; padding: 0 6px; background: var(--surface-2, rgba(127, 127, 127, .12)); color: var(--muted); font-size: 11px; line-height: 1.6; }
+.rx-split-badge { color: var(--text); }
+.rx-broken { color: var(--expense); }
+.rx-lines { margin: -2px 0 6px 52px; font-size: 12.5px; }
+.rx-lines summary { cursor: pointer; color: var(--muted); font-size: 12px; padding: 2px 0; }
+.rx-lines ul { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 3px; }
+.rx-lines li { display: flex; align-items: center; gap: 8px; }
+.rx-lines .rx-l-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rx-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--c, var(--c1)); flex: none; }
+.split-cell { display: block; font-size: 12.5px; color: var(--muted); padding: 0 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+td.c-extra { font-size: 12.5px; color: var(--muted); padding: 0 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* The form */
+.rf-split-off { display: flex; align-items: center; gap: 10px; margin: -4px 0 12px; }
+.rf-split { border: 1px solid var(--line); border-radius: 12px; padding: 10px; margin: 0 0 12px; display: grid; gap: 8px; }
+.rf-split-head { display: flex; align-items: center; gap: 10px; }
+.rf-split-head b { font-size: 13.5px; }
+.rf-split-head #rf-left { flex: 1; }
+.rf-line { display: grid; grid-template-columns: 90px minmax(110px, 1fr) minmax(110px, 1fr) auto auto; gap: 6px; align-items: center; }
+.rf-line:has(.rf-src) { grid-template-columns: 90px minmax(100px, 1fr) minmax(100px, 1fr) minmax(90px, .8fr) auto auto; }
+.rf-line input, .rf-line select { min-width: 0; width: 100%; }
+.rf-rest { white-space: nowrap; font-size: 12px; padding: 4px 8px; }
+@media (max-width: 560px) {
+  .rf-line, .rf-line:has(.rf-src) { grid-template-columns: 1fr 1fr; }
+}
+.rf-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0 10px; }
+
+/* Settings */
+.rx-frow, .rx-trow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.rx-frow > div:first-child { flex: 1; min-width: 180px; }
+.rx-trow.is-archived { opacity: .6; }
+.rx-swatches { display: inline-flex; gap: 4px; margin-left: auto; }
+.rx-sw { width: 18px; height: 18px; border-radius: 50%; border: 2px solid transparent; background: var(--tc); cursor: pointer; padding: 0; }
+.rx-sw[aria-pressed="true"] { border-color: var(--text); }
+.rx-newtag { display: flex; gap: 8px; margin-top: 10px; }
+.rx-newtag input { flex: 1; }
+.rx-kinds { border: 0; padding: 0; margin: 0 0 12px; display: flex; gap: 12px; flex-wrap: wrap; }
+.rx-chiprow { display: flex; gap: 6px; flex-wrap: wrap; margin: 0 0 10px; }
+.rx-chiprow .rx-tag { cursor: pointer; }
+
+/* Reports → Tags */
+.rx-rep-row { border-bottom: 1px solid var(--line); }
+.rx-rep-head { display: flex; align-items: center; gap: 12px; width: 100%; background: none; border: 0; color: inherit; padding: 10px 2px; cursor: pointer; text-align: left; font: inherit; }
+.rx-rep-amt { margin-left: auto; white-space: nowrap; }
+.rx-bars { display: inline-flex; align-items: flex-end; gap: 2px; height: 28px; }
+.rx-bars i { width: 6px; border-radius: 2px; background: color-mix(in srgb, var(--expense) 70%, transparent); display: block; }
+.rx-rep-list { padding: 0 0 10px; }

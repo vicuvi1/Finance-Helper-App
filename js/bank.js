@@ -91,7 +91,9 @@ export function parseStatement(rows, { headerRow, map }, state, { account, flip 
     if (existing.get(key) > 0) { existing.set(key, existing.get(key) - 1); duplicates++; continue; }
     const rate = currency === baseCur ? 1 : pairRate(currency, baseCur, state.rates);
     stamp++;
-    out.push({ id: uid(), createdAt: stamp, updatedAt: stamp, ...t, currency, rate, base: rate ? Math.round(amount * rate) : amount });
+    // `source: 'bank'`: came from a statement, not logged by you that day, so it
+    // never pays "Spending logged" points in Life System.
+    out.push({ id: uid(), createdAt: stamp, updatedAt: stamp, ...t, currency, rate, base: rate ? Math.round(amount * rate) : amount, source: 'bank' });
   }
   const income = out.filter((t) => t.type === 'income').reduce((a, t) => a + t.base, 0);
   const expense = out.filter((t) => t.type === 'expense').reduce((a, t) => a + t.base, 0);

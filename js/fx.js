@@ -42,6 +42,33 @@ export function pairRate(from, to, rates) {
   return a && b ? b / a : null;
 }
 
+// The rate to the base currency for a new record in `cur`. Rates are kept as
+// units per 1 USD (state.rates.usd), so EUR→MDL goes through USD: never look
+// up state.rates[cur]. Today's rate when known (4 decimals), else the rate of
+// your latest record in that currency (one that was really converted), else
+// null. Never 1 for a foreign currency just because no rate is known.
+export function rateToBase(state, cur) {
+  const base = state?.settings?.currency || 'MDL';
+  if (!cur || cur === base) return 1;
+  const live = pairRate(cur, base, state?.rates);
+  if (live) return Math.round(live * 10000) / 10000;
+  let best = null;
+  for (const t of state?.tx || []) {
+    if (!t || t.currency !== cur || !(t.rate > 0) || (t.rate === 1 && t.base === t.amount)) continue;
+    if (!best || String(t.date) > String(best.date) || (t.date === best.date && (t.createdAt || 0) > (best.createdAt || 0))) best = t;
+  }
+  return best ? best.rate : null;
+}
+
+// The rate of a given day when the saved history has it, else today's.
+export function rateOnDay(state, cur, date) {
+  const base = state?.settings?.currency || 'MDL';
+  if (!cur || cur === base) return 1;
+  const day = state?.rates?.history?.[date];
+  const r = day ? pairRate(cur, base, { usd: day }) : null;
+  return r || pairRate(cur, base, state?.rates);
+}
+
 // USD price of one coin.
 export function coinUsd(rates, asset) {
   if (STABLE[asset]) return STABLE[asset];

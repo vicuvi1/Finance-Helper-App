@@ -8,6 +8,23 @@ import { APP_VERSION, isNewerVersion } from '../version.js';
 const desk = () => (typeof window !== 'undefined' ? window.desktop?.update : null);
 const u = { status: 'idle', version: null, latestVersion: null, percent: 0, message: '' };
 let started = false;
+const watchers = new Set();
+/** The update state (status: idle | checking | latest | available | downloading | ready | error | dev). */
+export const updateStatus = () => ({ ...u, current: u.current || APP_VERSION });
+/** Called whenever the update state changes (the sidebar badge listens). */
+export function onUpdateChange(fn) { watchers.add(fn); return () => watchers.delete(fn); }
+
+/** electron-updater's messages in plain English. */
+export function plainUpdateError(msg) {
+  const m = String(msg || '');
+  if (/ENOTFOUND|ECONNREFUSED|ECONNRESET|ETIMEDOUT|EAI_AGAIN|net::ERR_|getaddrinfo|network|socket hang up/i.test(m)) return 'No internet connection, or GitHub can\'t be reached right now. Try again in a moment.';
+  if (/rate limit|status code 403|\b403\b/i.test(m)) return 'GitHub is getting too many checks right now. Try again in an hour.';
+  if (/404|Cannot find latest|No published versions|latest(-linux)?\.yml|Unable to find latest version/i.test(m)) return 'No new release was found on GitHub. Try again later.';
+  if (/sha512|checksum|mismatch/i.test(m)) return 'The download came through damaged. Check again to download it once more.';
+  if (/EPERM|EACCES|EBUSY|permission|operation not permitted/i.test(m)) return 'Windows blocked the update. Close the app, then run the newest Setup file from the GitHub Releases page.';
+  if (/can.t update itself|portable/i.test(m)) return m;
+  return `Couldn't update: ${m.split('\n')[0]}`;
+}
 
 const when = (ts) => (ts ? new Date(ts).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : 'never');
 
@@ -47,6 +64,7 @@ export async function initUpdates() {
 }
 
 function refresh() {
+  for (const fn of watchers) { try { fn(updateStatus()); } catch { /* ignore */ } }
   const el = document.getElementById('update-card');
   if (el) el.outerHTML = settingsCard();
   else if (ctx.ui.tab === 'home' && ['available', 'ready'].includes(u.status)) ctx.render();
@@ -61,38 +79,39 @@ export function settingsCard() {
   const current = u.current || APP_VERSION;
   let body;
   if (!desk()) {
-    body = `<div class="set-status-box success">
-      <div class="set-sb-icon">⚡</div>
+    const waiting = webUpdateWaiting();
+    body = `<div class="set-status-box ${waiting ? 'accent' : 'success'}">
+      <div class="set-sb-icon">${waiting ? '🚀' : '✓'}</div>
       <div class="set-sb-content">
-        <b>PWA Cloud &amp; Offline Ready</b>
-        <p class="muted small" style="margin:2px 0 0">Web edition automatically fetches the newest service worker release online while remaining 100% offline-functional.</p>
+        <b>${waiting ? 'A new version is ready' : `Up to date (v${esc(current)})`}</b>
+        <p class="muted small" style="margin:2px 0 0">${waiting ? 'Reload to update. Your data stays as it is.' : 'The web app loads the newest version whenever you are online, and works offline too.'}</p>
       </div>
     </div>
-    <button class="btn block" style="margin-top:12px" data-act="update-reload">↻ Check &amp; Reload now</button>`;
+    <button class="btn ${waiting ? 'primary ' : ''}block" style="margin-top:12px" data-act="update-reload" data-testid="update-reload">${waiting ? 'Reload to update' : 'Check for updates'}</button>`;
   } else {
     const s = u.status;
     const line = {
       idle: 'Not checked yet this session.',
       checking: 'Checking GitHub for a new version…',
       latest: u.latestVersion && isNewerVersion(current, u.latestVersion)
-        ? `You are running v${esc(current)}, which is ahead of GitHub Releases (latest release is v${esc(u.latestVersion)}). You have all the newest features.`
-        : 'You have the latest version installed.',
-      available: `Version ${esc(u.version)} is available on GitHub Releases.`,
-      downloading: `Downloading version ${esc(u.version || '')}… ${u.percent}%`,
-      ready: `Version ${esc(u.version)} is ready to install. Restart to finish.`,
-      error: `Couldn't update: ${esc(u.message)}`,
+        ? `Up to date (v${esc(current)}). This copy is newer than the latest release on GitHub (v${esc(u.latestVersion)}).`
+        : `Up to date (v${esc(current)}).`,
+      available: `Version ${esc(u.version)} is available.`,
+      downloading: `Downloading ${u.percent}%`,
+      ready: `Version ${esc(u.version)} is downloaded. Restart to update.`,
+      error: esc(plainUpdateError(u.message)),
       dev: esc(u.message),
     }[s];
     const btn = {
       available: '<button class="btn primary block" data-act="update-download">Download update</button>',
-      ready: '<button class="btn primary block" data-act="update-install">Restart to apply update</button>',
+      ready: '<button class="btn primary block" data-act="update-install">Restart to update</button>',
       downloading: `<div class="bar gold"><i style="width:${u.percent}%"></i></div>`,
       checking: '<button class="btn block" disabled>Checking GitHub…</button>',
     }[s] || '<button class="btn block" data-act="update-check">🔍 Check for updates</button>';
     body = `<div class="set-status-box ${s === 'error' ? 'danger' : s === 'latest' ? 'success' : s === 'available' || s === 'ready' ? 'accent' : ''}">
       <div class="set-sb-icon">${s === 'error' ? '⚠️' : s === 'latest' ? '✓' : s === 'available' ? '🚀' : 'ℹ️'}</div>
       <div class="set-sb-content">
-        <b>${s === 'latest' ? 'Up to date' : s === 'available' ? 'New release available' : s === 'ready' ? 'Ready to install' : 'Release Status'}</b>
+        <b>${s === 'latest' ? `Up to date (v${esc(current)})` : s === 'available' ? 'Update available' : s === 'ready' ? 'Restart to update' : s === 'downloading' ? `Downloading ${u.percent}%` : s === 'error' ? 'Update problem' : 'Updates'}</b>
         <p class="muted small" style="margin:2px 0 0">${line}</p>
       </div>
     </div>
@@ -120,8 +139,34 @@ export function settingsCard() {
   </section>`;
 }
 
+// ---------- Web: a new version is waiting (the service worker took over) ----------
+let swWaiting = false;
+export const webUpdateWaiting = () => swWaiting;
+/** Watches the service worker: when a newer version takes over this open page, offer "Reload to update". */
+export function watchServiceWorker() {
+  if (typeof navigator === 'undefined' || !navigator.serviceWorker || desk()) return;
+  const had = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!had) return; // the first install: this page is already the newest
+    swWaiting = true;
+    refresh();
+  });
+  navigator.serviceWorker.getRegistration?.().then((reg) => {
+    if (!reg) return;
+    if (reg.waiting && had) { swWaiting = true; refresh(); }
+    setInterval(() => reg.update().catch(() => {}), 30 * 60_000);
+  }).catch(() => {});
+}
+
 export async function onClick(act) {
-  if (act === 'update-reload') { location.reload(); return true; }
+  if (act === 'update-reload') {
+    if (!swWaiting) {
+      const reg = await navigator.serviceWorker?.getRegistration?.().catch(() => null);
+      await reg?.update?.().catch(() => {});
+    }
+    location.reload();
+    return true;
+  }
   if (!desk() || !act.startsWith('update-')) return false;
   if (act === 'update-check') {
     u.status = 'checking';

@@ -70,6 +70,10 @@ contextBridge.exposeInMainWorld('desktop', {
     onEvent: (cb) => ipcRenderer.on('tg-event', (_e, ev) => cb(ev)),
   },
   onQuickAdd: (cb) => ipcRenderer.on('quick-add', () => cb()),
+  cloud: {
+    request: (base, path, body, token) => ipcRenderer.invoke('cloud-request', base, path, body, token),
+  },
+  notify: (title, body) => ipcRenderer.invoke('notify', title, body),
   update: {
     check: () => ipcRenderer.invoke('update-check'),
     download: () => ipcRenderer.invoke('update-download'),

@@ -3,13 +3,19 @@
 // record, builds the quick-button keyboard and the bot's short replies.
 // The desktop main process (electron/telegram.cjs) only moves messages.
 
-import { evalAmount, formatMoney } from './money.js';
+import { evalAmount, formatMoney as formatMoneyShown } from './money.js';
+
+// Messages to your own Telegram bot always carry the real amounts (the on-screen hiding does not apply).
+const formatMoney = (c, cur, o) => formatMoneyShown(c, cur, { ...o, reveal: true });
+import { suggestSub, subOf } from './cattree.js';
 import { suggestCategory, sortTx, monthSummary, totalBalance, accountValues, jarStatus, budgetAlert, category, account, B, goalStatus } from './model.js';
 import { monthKey, addMonths, addDays, MONTHS, DOW_SHORT, dowIndex, monthLabel } from './dates.js';
 import { blockKeyboard } from './blocks.js';
 import { dueItems, upcomingItems } from './recurring.js';
 import { workText } from './workhours.js';
 import { safeLine, safeToSpend, shortDay, limitStatus } from './safespend.js';
+import { countsAsSpending, countsAsIncome, signed } from './catshare.js';
+import { linesOf } from './splits.js';
 
 const fold = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 const INCOME_WORDS = /^(\+|got|earned|income|salary|salariu|venit|primit|зарплата|получил|доход)$/;
@@ -61,7 +67,14 @@ export function parseQuick(text, state) {
   const same = recent.find((x) => fold(x.note) === fold(note) && account(state, x.account) && !account(state, x.account).archived);
   const accountId = acc?.id || same?.account || recent[0]?.account || state.settings.accounts[0]?.id;
   const cat = suggestCategory(state, note, type) || (type === 'income' ? 'other-in' : 'other');
-  return { type, amount, note, account: accountId, category: cat, ...(daysAgo ? { daysAgo } : {}) };
+  // One level deeper for spending: "kebab" -> Food › Restaurants.
+  const sub = type === 'expense' ? subFor(state, note, cat) : null;
+  return { type, amount, note, account: accountId, category: sub ? sub.parent : cat, ...(sub ? { sub: sub.id } : {}), ...(daysAgo ? { daysAgo } : {}) };
+}
+
+// The subcategory a spending note fits in its category (or out of Other).
+export function subFor(state, note, category) {
+  return suggestSub(state, note, { category })?.sub || null;
 }
 
 // The day a record belongs to: the day the message was sent, minus "yesterday".
@@ -70,28 +83,29 @@ export const recordDay = (sentDay, f) => (f?.daysAgo ? addDays(sentDay, -f.daysA
 // A full record from a Telegram message (its own id, so the same message
 // is never logged twice) at the rate of the account's currency.
 export function recordFromMessage(fields, { updateId, date, rate = 1, currency, now = Date.now() }) {
-  return { id: `tg-${updateId}`, createdAt: now, updatedAt: now, type: fields.type, amount: fields.amount, currency, rate, base: Math.round(fields.amount * rate), date, category: fields.category, account: fields.account, note: fields.note, source: 'telegram' };
+  return { id: `tg-${updateId}`, createdAt: now, updatedAt: now, type: fields.type, amount: fields.amount, currency, rate, base: Math.round(fields.amount * rate), date, category: fields.category, ...(fields.sub ? { sub: fields.sub } : {}), account: fields.account, note: fields.note, source: 'telegram' };
 }
 
 const esc = (s) => String(s ?? '').replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
 
 const fm = (state, c) => esc(formatMoney(Math.round(c / 100) * 100, state.settings.currency));
-const spentOn = (state, from, to) => state.tx.filter((t) => t.type === 'expense' && !t.loan && t.date >= from && t.date <= to).reduce((a, t) => a + B(t), 0);
+const spentOn = (state, from, to) => state.tx.filter((t) => countsAsSpending(t) && t.date >= from && t.date <= to).reduce((a, t) => a + signed(t, B(t)), 0);
 const catName = (state, id) => { const c = category(state, id); return c ? `${c.emoji ? `${c.emoji} ` : ''}${c.name}` : 'Other'; };
 
 // The reply to a logged record: what it was, then where you stand today and
 // this month, and how its category is doing.
 export function loggedText(state, t, today = null) {
   const c = category(state, t.category)?.name || '';
+  const sc = subOf(state, t);
   const a = account(state, t.account)?.name || '';
   const sign = t.type === 'income' ? '+' : '−';
   const alert = budgetAlert(state, t);
   const work = t.type === 'expense' ? workText(state, B(t), t.date) : '';
-  const lines = [`✅ <b>${sign}${esc(formatMoney(t.amount, t.currency))}</b> · ${esc(t.note || c)}`, `${esc(c)} · ${esc(a)}${t.date ? ` · ${dayShort(t.date)}` : ''}`];
+  const lines = [`✅ <b>${sign}${esc(formatMoney(t.amount, t.currency))}</b> · ${esc(t.note || c)}`, `${esc(c)}${sc ? ` › ${esc(sc.emoji ? `${sc.emoji} ` : '')}${esc(sc.name)}` : ''} · ${esc(a)}${t.date ? ` · ${dayShort(t.date)}` : ''}`];
   if (work) lines.push(`⏱ ${esc(work)} of your work`);
   if (t.type === 'expense' && t.date) {
     const key = monthKey(t.date);
-    const catMonth = state.tx.filter((x) => x.type === 'expense' && !x.loan && x.category === t.category && monthKey(x.date) === key).reduce((s, x) => s + B(x), 0);
+    const catMonth = linesOf(state).filter((x) => countsAsSpending(x) && x.category === t.category && monthKey(x.date) === key).reduce((s, x) => s + signed(x, B(x)), 0);
     lines.push(`\n📊 Spent that day: <b>${fm(state, spentOn(state, t.date, t.date))}</b> · month: ${fm(state, monthSummary(state, key).expense)}`);
     lines.push(`${esc(c || 'This category')} this month: ${fm(state, catMonth)}`);
   }
@@ -103,9 +117,9 @@ export function loggedText(state, t, today = null) {
 const dayShort = (iso) => `${DOW_SHORT[dowIndex(iso)]} ${Number(iso.slice(8))}`;
 
 export function todayText(state, today) {
-  const list = state.tx.filter((t) => t.date === today && t.type !== 'transfer' && !t.loan);
-  const out = list.filter((t) => t.type === 'expense').reduce((a, t) => a + B(t), 0);
-  const inc = list.filter((t) => t.type === 'income').reduce((a, t) => a + B(t), 0);
+  const list = state.tx.filter((t) => t.date === today && (countsAsSpending(t) || countsAsIncome(t)));
+  const out = list.filter((t) => t.type === 'expense' && !t.notSpending).reduce((a, t) => a + B(t), 0);
+  const inc = list.filter((t) => t.type === 'income' && !t.notIncome).reduce((a, t) => a + B(t), 0);
   const s = monthSummary(state, monthKey(today));
   const cur = state.settings.currency;
   const lines = list.slice(-8).map((t) => `${t.type === 'income' ? '+' : '−'}${formatMoney(t.amount, t.currency)} · ${esc(t.note || category(state, t.category)?.name || '')}`);

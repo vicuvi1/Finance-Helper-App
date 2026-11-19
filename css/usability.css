@@ -1,0 +1,33 @@
+/* Undo everywhere, saved views and spreadsheet editing (Finance Helper). */
+
+/* Recent actions */
+.ra-list { display: grid; gap: 6px; margin: 10px 0; }
+.ra-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-2, var(--surface)); }
+.ra-row.undone { opacity: 0.65; }
+.ra-main { display: grid; gap: 2px; min-width: 0; }
+.ra-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ra-side { border: 1px solid var(--line); background: none; color: var(--muted); border-radius: 99px; padding: 5px 12px; font-size: 12.5px; margin-top: 8px; cursor: pointer; }
+.ra-side:hover { color: var(--text); border-color: var(--gold); }
+
+/* Saved views above the Log */
+.sv-bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 0 0 8px; }
+.sv-chip { border: 1px solid var(--line); background: var(--surface-2, var(--surface)); color: var(--text); border-radius: 99px; padding: 4px 12px; font-size: 12.5px; cursor: pointer; }
+.sv-chip.on { border-color: var(--gold); background: var(--gold-soft); }
+.sv-chip.sv-add, .sv-chip.sv-manage { color: var(--muted); border-style: dashed; }
+.sv-list { display: grid; gap: 8px; margin: 10px 0; }
+.sv-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto auto; gap: 6px 8px; align-items: center; }
+.sv-row .sv-q { grid-column: 1 / -1; margin-top: -4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sv-rename { min-width: 0; padding: 6px 9px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface-2, var(--surface)); color: var(--text); }
+.sv-pin { font-size: 12px; color: var(--muted); display: inline-flex; gap: 4px; align-items: center; }
+
+/* Spreadsheet cells */
+td.gx-active { outline: 2px solid var(--gold); outline-offset: -2px; border-radius: 2px; }
+td.gx-sel { background: var(--gold-soft); }
+td.gx-active:focus { outline: 2px solid var(--gold); }
+.gx-pop { position: fixed; z-index: 400; background: var(--surface); border: 1px solid var(--line-strong); border-radius: var(--radius-sm); box-shadow: var(--shadow-pop); padding: 6px; display: grid; gap: 6px; max-height: 260px; }
+.gx-pop-q { padding: 6px 9px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2, var(--surface)); color: var(--text); min-width: 0; }
+.gx-pop ul { list-style: none; margin: 0; padding: 0; overflow: auto; max-height: 190px; }
+.gx-pop li { padding: 6px 9px; border-radius: 8px; cursor: pointer; font-size: 13.5px; }
+.gx-pop li.on { background: var(--gold-soft); }
+.gx-pop li.cur { font-weight: 600; }
+.gx-pop li.none { color: var(--muted); cursor: default; }

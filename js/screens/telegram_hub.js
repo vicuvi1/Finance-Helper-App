@@ -144,8 +144,8 @@ function renderSyncTab(status) {
   const tgTx = state.tx.filter((t) => t.source === 'telegram' || (t.id && String(t.id).startsWith('tg-')));
   const recent = M.sortTx(tgTx).slice(0, 20);
 
-  const totalSpent = tgTx.filter((t) => t.type === 'expense').reduce((s, t) => s + M.B(t), 0);
-  const totalEarned = tgTx.filter((t) => t.type === 'income').reduce((s, t) => s + M.B(t), 0);
+  const totalSpent = tgTx.filter((t) => t.type === 'expense' && !t.notSpending).reduce((s, t) => s + M.B(t), 0);
+  const totalEarned = tgTx.filter((t) => t.type === 'income' && !t.notIncome).reduce((s, t) => s + M.B(t), 0);
   const cur = state.settings.currency;
   const off = offlineLine(status);
 

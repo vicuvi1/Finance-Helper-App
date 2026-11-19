@@ -5,12 +5,14 @@
 // - cards get a soft light that follows the mouse (desktop)
 // - a "+1 200" / "−35" floats up from the balance when it changes
 
+import { flowOff } from './flow.js';
+
 const reduced = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 const canHover = () => window.matchMedia?.('(hover: hover) and (pointer: fine)').matches;
 
 // Runs `update` as a cross-fade from the old screen to the new one.
 export function crossFade(update) {
-  if (reduced() || typeof document.startViewTransition !== 'function') { update(); return; }
+  if (reduced() || flowOff() || typeof document.startViewTransition !== 'function') { update(); return; }
   try { document.startViewTransition(update); } catch { update(); }
 }
 

@@ -1,5 +1,9 @@
 // Synthesized Lo-Fi & Zen Ambient Background Music via Web Audio API.
 // 100% offline, zero network requests, zero audio files, lightweight procedural audio.
+// It uses the app's one audio context (audio.js), made only when you press
+// play; inside Life System it stays silent (Life has its own sound).
+
+import { sharedAudioContext } from './audio.js';
 
 const TRACKS = [
   { id: 'sakura', name: 'Sakura Lo-Fi Chill', icon: '🌸', desc: 'Warm Rhodes & koto chords with vintage tape warmth' },
@@ -36,10 +40,9 @@ const state = loadState();
 
 function getContext() {
   if (typeof window === 'undefined') return null;
-  const AudioCtx = window.AudioContext || window.webkitAudioContext;
-  if (!AudioCtx) return null;
   if (!ac) {
-    ac = new AudioCtx();
+    ac = sharedAudioContext();
+    if (!ac) return null;
     masterGain = ac.createGain();
     masterGain.gain.setValueAtTime(state.volume, ac.currentTime);
     masterGain.connect(ac.destination);
@@ -278,6 +281,7 @@ export const AmbientMusic = {
   TRACKS,
 
   play() {
+    if (!sharedAudioContext()) { state.playing = false; notify(); return; }
     state.playing = true;
     saveState(state);
     startSoundscape();

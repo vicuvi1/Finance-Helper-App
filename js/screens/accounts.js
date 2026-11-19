@@ -8,6 +8,7 @@ import { formatMoney, evalAmount, centsToPlain } from '../money.js';
 import { monthKey, addMonths, daysInMonth, monthLabel, todayISO } from '../dates.js';
 import { lineChart } from '../charts.js';
 import { cardHTML, CARD_THEMES, themeOf, readLogo, readCardPhoto, BANK_CARDS, designGroups } from '../cards.js';
+import * as Reconcile from './reconcile.js';
 
 export const BANKS = ['Cash', 'maib', 'Victoriabank', 'Moldindconbank', 'OTP Bank', 'MICB', 'FinComBank', 'Eximbank', 'Energbank', 'ProCredit Bank', 'Paynet', 'Revolut', 'Wise', 'Paysera', 'PayPal', 'Binance'];
 
@@ -78,7 +79,36 @@ export function view() {
   const savingChange = hist.at(-1).value - hist[0].value;
   const savingsChip = (n, label) => `<button class="chip" aria-pressed="${range === n}" data-act="nw-range" data-n="${n}">${label}</button>`;
 
-  const isCashAcc = (a) => a.kind === 'cash' || a.id === 'wallet' || /^(wallet|cash|numerar)$/i.test(a.name || '');
+  // ── Pocket helpers
+  const pocketTotal = (a) => (a.pockets || []).reduce((s, p) => s + (p.amountCents || 0), 0);
+  const pocketSection = (a) => {
+    const isOpen = !!ctx.ui['pk_open_' + a.id];
+    const pockets = a.pockets || [];
+    if (!pockets.length && !isOpen) return { html: '', light: false };
+    const rows = pockets.map((p, i) =>
+      '<div class="bcard-pocket">' +
+        '<span class="pk-label">' + esc(p.label || ('Pocket ' + (i + 1))) + '</span>' +
+        '<span class="pk-amt">' + formatMoney(p.amountCents || 0, a.currency) + '</span>' +
+        '<button type="button" class="pk-del" data-act="pocket-del" data-acc="' + esc(a.id) + '" data-idx="' + i + '" aria-label="Remove pocket">✕</button>' +
+      '</div>'
+    ).join('');
+    const addForm = isOpen ? (
+      '<div class="bcard-pocket-add">' +
+        '<input type="text" class="pk-new-label" placeholder="Label (e.g. Wallet)" data-acc="' + esc(a.id) + '" maxlength="30">' +
+        '<input type="text" class="pk-new-amt" placeholder="Amount" inputmode="decimal" data-acc="' + esc(a.id) + '">' +
+        '<button type="button" class="btn" data-act="pocket-add" data-acc="' + esc(a.id) + '">Add</button>' +
+      '</div>'
+    ) : '';
+    const label = pockets.length
+      ? '▾ ' + pockets.length + ' pocket' + (pockets.length !== 1 ? 's' : '') + ' · ' + formatMoney(pocketTotal(a), a.currency)
+      : '▾ Pockets';
+    const html = (
+      '<button type="button" class="bcard-pocket-toggle" data-act="pocket-toggle" data-acc="' + esc(a.id) + '">' + label + '</button>' +
+      (isOpen ? '<div class="bcard-pockets">' + rows + '</div>' + addForm : '')
+    );
+    return { html, light: false };
+  };
+    const isCashAcc = (a) => a.kind === 'cash' || a.id === 'wallet' || /^(wallet|cash|numerar)$/i.test(a.name || '');
   const isCardAcc = (a) => (a.kind === 'card' || a.kind === 'virtual') && !isSaving(a);
   const isBizAcc = (a) => a.kind === 'business';
   const isCryptoAcc = (a) => a.kind === 'crypto';
@@ -109,11 +139,13 @@ export function view() {
 
   return `<header class="top"><div><h1>Accounts</h1><div class="sub">${active.length} account${active.length === 1 ? '' : 's'} · ${[...byCur.keys()].join(', ')}</div></div>
     <div class="btns top-btns">${active.length > 1 ? `<button class="btn${reorder ? ' primary' : ''}" data-act="acc-reorder" aria-pressed="${reorder}">${reorder ? 'Done' : '⇄ Reorder'}</button>` : ''}<button class="btn primary" data-act="acc-new">+ Add account</button></div></header>
+  ${reorder ? '' : Reconcile.dueLine()}
   <section class="hero">
     <div class="hero-main">
       <div class="label">All my money</div>
       <div class="big">${ctx.bigMoney(total)}</div>
       <div class="accounts">${[...byCur.entries()].map(([c, v]) => `<span class="acc static"><span class="n">${esc(c)}</span><b class="money">${formatMoney(v, '')}</b></span>`).join('')}</div>
+      ${ctx.ratesLine?.(total) || ''}
       ${missing.length ? `<p class="muted small" style="margin:10px 0 0">Not counted yet (no rate): ${missing.map((v) => esc(v.account.name)).join(', ')}.</p>` : ''}
     </div>
     <div class="hero-month">
@@ -139,7 +171,13 @@ export function view() {
     ? `<div class="bc-slot" draggable="true" data-drag-id="${esc(v.account.id)}">${card(v, { act: null })}<div class="bc-order">
         <button type="button" class="icon-btn" data-act="acc-move" data-id="${esc(v.account.id)}" data-dir="-1" aria-label="Move ${esc(v.account.name)} earlier" ${i ? '' : 'disabled'}>←</button>
         <button type="button" class="icon-btn" data-act="acc-move" data-id="${esc(v.account.id)}" data-dir="1" aria-label="Move ${esc(v.account.name)} later" ${i < shown.length - 1 ? '' : 'disabled'}>→</button></div></div>`
-    : card(v, { attrs: `draggable="true" data-drag-id="${esc(v.account.id)}"` }))).join('')}
+    : (() => {
+      const c = card(v, { attrs: `draggable="true" data-drag-id="${esc(v.account.id)}"` });
+      const pk = pocketSection(v.account);
+      if (!pk.html) return c;
+      const isLight = c.includes('class="bcard light') || c.includes("class='bcard light");
+      return `<div class="bcard-wrap">${c}<div class="pocket-outer${isLight ? ' light-outer' : ''}" data-acc-id="${esc(v.account.id)}">${pk.html}</div></div>`;
+    })())).join('')}
     ${reorder ? '' : `<button type="button" class="bcard-add" data-act="${filter === 'cash' ? 'acc-new-cash' : 'acc-new'}"><span>+</span>Add ${filter === 'cash' ? 'cash' : 'a card or account'}</button>`}
   </div>`}
   ${archived.length ? `<details class="card"><summary>Archived (${archived.length})</summary><div class="bcards" style="margin:14px 0 0">${archived.map((v) => card(v)).join('')}</div></details>` : ''}
@@ -181,12 +219,14 @@ function openAccount(id) {
       <button class="btn primary" id="acc-add-rec">Add record</button>
       <button class="btn" id="acc-move">Move money</button>
       <button class="btn" id="acc-count">${a.kind === 'cash' ? 'Count cash' : 'Set balance'}</button>
+      <button class="btn" id="acc-recon" data-testid="acc-recon">Reconcile</button>
       <button class="btn" id="acc-edit">Edit</button>
     </div>
     ${recent.length ? `<div class="list">${recent.map((t) => ctx.txRow(t, { showDate: true })).join('')}</div>` : '<p class="muted">No records in this account yet.</p>'}`, (sheet) => {
     sheet.querySelector('#acc-add-rec').addEventListener('click', () => { ctx.closeSheet(); ctx.openTxSheet(null, { account: id, from: id }); });
     sheet.querySelector('#acc-move').addEventListener('click', () => { ctx.closeSheet(); ctx.openTransferSheet(id); });
     sheet.querySelector('#acc-count')?.addEventListener('click', () => setBalanceSheet(id));
+    sheet.querySelector('#acc-recon')?.addEventListener('click', () => Reconcile.open(id));
     sheet.querySelector('#acc-edit').addEventListener('click', () => editAccount(id));
     sheet.addEventListener('click', (e) => {
       if (e.target.closest('[data-act="acc-setbal"]')) { e.stopPropagation(); setBalanceSheet(id); return; }
@@ -485,7 +525,38 @@ export function onClick(act, el) {
     }
     return true;
   }
-  if (act === 'nw-range') { ctx.ui.nwRange = Number(el.dataset.n); ctx.render(); return true; }
+  if (act === 'pocket-toggle') {
+    const acc = el.dataset.acc;
+    ctx.ui['pk_open_' + acc] = !ctx.ui['pk_open_' + acc];
+    ctx.render();
+    return true;
+  }
+  if (act === 'pocket-add') {
+    const acc = el.dataset.acc;
+    const outer = el.closest('[data-acc-id]') || document.querySelector('[data-acc-id="' + acc + '"]');
+    const labelEl = outer && outer.querySelector('.pk-new-label');
+    const amtEl   = outer && outer.querySelector('.pk-new-amt');
+    const label = (labelEl && labelEl.value.trim()) || 'Pocket';
+    const raw = (amtEl && amtEl.value) || '0';
+    const amountCents = Math.round((parseFloat(raw.replace(',', '.')) || 0) * 100);
+    const a = M.account(ctx.state, acc);
+    if (!a) return true;
+    if (!a.pockets) a.pockets = [];
+    a.pockets.push({ id: 'pk-' + M.uid(), label, amountCents });
+    M.touch(a);
+    ctx.commit();
+    return true;
+  }
+  if (act === 'pocket-del') {
+    const { acc, idx } = el.dataset;
+    const a = M.account(ctx.state, acc);
+    if (!a || !a.pockets) return true;
+    a.pockets.splice(Number(idx), 1);
+    M.touch(a);
+    ctx.commit();
+    return true;
+  }
+    if (act === 'nw-range') { ctx.ui.nwRange = Number(el.dataset.n); ctx.render(); return true; }
   return false;
 }
 

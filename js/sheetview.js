@@ -5,6 +5,7 @@
 import { formatMoney } from './money.js';
 import { daysInMonth, dowIndex } from './dates.js';
 import { B } from './model.js';
+import { subOf, catPath } from './cattree.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const plain = (c) => formatMoney(c, '');
@@ -41,7 +42,7 @@ export function sheetDays(state, key, extra = new Set()) {
 function dataCells(t, side, key, base) {
   const cur = t && t.currency && t.currency !== base ? `<span class="gs-cur-tag">${esc(t.currency)}</span>` : '';
   const id = esc(t?.id || '');
-  const catTag = t?.categoryName ? `<span class="gs-cat-tag" title="Category: ${esc(t.categoryName)}">${esc(t.categoryName)}</span>` : '';
+  const catTag = t?.categoryName ? `<span class="gs-cat-tag" title="${esc(t.categoryPath || t.categoryName)}">${esc(t.categoryName)}</span>` : '';
   return `<td class="gs-num ${side}"><span class="gs-flex"><input type="text" inputmode="decimal" autocomplete="off" data-sh="${key}|amount" data-id="${id}" value="${t ? plain(t.amount) : ''}" placeholder="0" aria-label="${side === 'in' ? 'Amount earned' : 'Amount invested'}">${cur}</span></td>
     <td class="gs-text"><span class="gs-flex gs-desc-flex"><input type="text" autocomplete="off" data-sh="${key}|note" data-id="${id}" value="${esc(t?.note || '')}" placeholder="Note…" aria-label="${side === 'in' ? 'Description' : 'Description2'}">${catTag}</span></td>`;
 }
@@ -49,7 +50,8 @@ function dataCells(t, side, key, base) {
 export function sheetHTML(state, key, { today, extra = new Set(), fmt, tabs }) {
   const yearBtns = tabs.years.map((y) => `<button type="button" class="gs-year${y === tabs.year ? ' on' : ''}" data-act="sh-year" data-year="${y}" aria-pressed="${y === tabs.year}">${y}</button>`).join('');
   const base = state.settings.currency;
-  const cat = (id) => state.settings.categories.find((x) => x.id === id)?.name || '';
+  // The subcategory when there is one (with its icon), else the category.
+  const cat = (t) => { const c = state.settings.categories.find((x) => x.id === t.category); const s = subOf(state, t); const x = s || c; return x ? `${x.emoji ? `${x.emoji} ` : ''}${x.name}` : ''; };
 
   const rows = [`<tr class="gs-head-row">
     <th class="gs-rn">1</th>
@@ -80,8 +82,8 @@ export function sheetHTML(state, key, { today, extra = new Set(), fmt, tabs }) {
     if (hasActivity) activeDays++;
 
     for (let k = 0; k < d.rows; k++) {
-      const inc = d.inc[k] && { ...d.inc[k], categoryName: cat(d.inc[k].category) };
-      const exp = d.exp[k] && { ...d.exp[k], categoryName: cat(d.exp[k].category) };
+      const inc = d.inc[k] && { ...d.inc[k], categoryName: cat(d.inc[k]), categoryPath: catPath(state, d.inc[k]) };
+      const exp = d.exp[k] && { ...d.exp[k], categoryName: cat(d.exp[k]), categoryPath: catPath(state, d.exp[k]) };
       const isToday = d.date === today;
       const cls = [di >= 5 ? 'weekend' : '', isToday ? 'is-today' : '', d.date > today ? 'future' : '', k === 0 ? 'day-first' : 'day-more'].filter(Boolean).join(' ');
       const todayId = isToday && k === 0 ? ' id="gs-today-row"' : '';

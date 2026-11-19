@@ -7,6 +7,7 @@ import { addDays, monthKey } from './dates.js';
 import { formatMoney } from './money.js';
 import { workText } from './workhours.js';
 import { safeToSpend } from './safespend.js';
+import { countsAsSpending, signed } from './catshare.js';
 
 const pick = (list, rand) => list[Math.floor(rand() * list.length) % list.length];
 const STREAKS = [3, 7, 14, 21, 30, 50, 75, 100, 150, 200, 365];
@@ -23,8 +24,8 @@ const HAPPY = [
 // Usual spending per day over the last 60 days (base currency).
 function usualDaily(state, today) {
   const since = addDays(today, -60);
-  const list = state.tx.filter((t) => t.type === 'expense' && !t.loan && t.date >= since && t.date < today);
-  return list.length ? list.reduce((a, t) => a + B(t), 0) / 60 : 0;
+  const list = state.tx.filter((t) => countsAsSpending(t) && t.date >= since && t.date < today);
+  return list.length ? list.reduce((a, t) => a + signed(t, B(t)), 0) / 60 : 0;
 }
 
 // What the buddy says after a new record. `rand` makes it testable.
@@ -49,7 +50,7 @@ export function reactToTx(state, t, today, rand = Math.random) {
     return { mood: 'surprised', text: `Whoa, ${formatMoney(t.amount, t.currency)}!${work ? ` That's ${work} of your work.` : ' That\'s a big one.'} Was it planned?` };
   }
   if (alert?.level === 'near') return { mood: 'thinking', text: `${category(state, t.category)?.name} is at ${alert.text.match(/(\d+)%/)?.[1] || 80}% of its budget. Easy for the rest of the month 🙏` };
-  const todaySpent = state.tx.filter((x) => x.type === 'expense' && !x.loan && x.date === today).reduce((a, x) => a + B(x), 0);
+  const todaySpent = state.tx.filter((x) => countsAsSpending(x) && x.date === today).reduce((a, x) => a + signed(x, B(x)), 0);
   if (daily > 0 && todaySpent > daily * 3 && todaySpent - B(t) <= daily * 3) return { mood: 'worried', text: `Busy spending day: ${fmt(todaySpent)} today. Maybe a no-spend day tomorrow?` };
   const streak = loggingStreak(state, today);
   if (STREAKS.includes(streak) && t.date === today && state.tx.filter((x) => x.date === today).length === 1) return { mood: 'proud', text: `${streak} days in a row! 🔥 That's how you take control.` };

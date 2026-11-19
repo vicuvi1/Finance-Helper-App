@@ -38,16 +38,16 @@ test('log a record, undo, redo, search, and it survives a reload', async () => {
   await page.fill('#tx-note', 'e2e coffee');
   await page.click('.sheet button[type=submit]');
   await page.waitForFunction(() => !document.querySelector('.sheet:not(.closing)') || !document.querySelector('#tx-amount'));
-  const count = () => page.evaluate(() => JSON.parse(localStorage.getItem('finance-helper.state')).tx.filter((t) => t.note === 'e2e coffee').length);
+  const count = () => page.evaluate(() => JSON.parse(globalThis.__fhStore.getItem('finance-helper.state')).tx.filter((t) => t.note === 'e2e coffee').length);
   assert.equal(await count(), 1);
-  const amount = await page.evaluate(() => JSON.parse(localStorage.getItem('finance-helper.state')).tx.find((t) => t.note === 'e2e coffee').amount);
+  const amount = await page.evaluate(() => JSON.parse(globalThis.__fhStore.getItem('finance-helper.state')).tx.find((t) => t.note === 'e2e coffee').amount);
   assert.equal(amount, 16500, 'the calculator adds 120+45');
 
   await page.click('body', { position: { x: 900, y: 20 } });
   await page.keyboard.press('Control+z');
-  await page.waitForFunction(() => !JSON.parse(localStorage.getItem('finance-helper.state')).tx.some((t) => t.note === 'e2e coffee'));
+  await page.waitForFunction(() => !JSON.parse(globalThis.__fhStore.getItem('finance-helper.state')).tx.some((t) => t.note === 'e2e coffee'));
   await page.keyboard.press('Control+y');
-  await page.waitForFunction(() => JSON.parse(localStorage.getItem('finance-helper.state')).tx.some((t) => t.note === 'e2e coffee'));
+  await page.waitForFunction(() => JSON.parse(globalThis.__fhStore.getItem('finance-helper.state')).tx.some((t) => t.note === 'e2e coffee'));
 
   await page.fill('#search', 'e2e >100');
   await page.waitForSelector('.search-card');
@@ -79,7 +79,7 @@ test('Home: a verdict, a spending limit that sets Safe to spend, and the month r
   assert.match(await page.textContent('#limit-preview'), /a day/);
   await page.click('#limit-form button[type=submit]');
   await page.waitForSelector('.sh-limit');
-  const lim = await page.evaluate(() => JSON.parse(localStorage.getItem('finance-helper.state')).settings.limit);
+  const lim = await page.evaluate(() => JSON.parse(globalThis.__fhStore.getItem('finance-helper.state')).settings.limit);
   assert.deepEqual(lim, { on: true, amount: 300000 });
   assert.match(await page.textContent('.sh-limit'), /200\sMDL of 3\s000/);
 
@@ -110,7 +110,7 @@ test('import the sample sheet: records in, import check flags the stray row', as
   assert.match(await page.textContent('.ic-sum'), /doesn't match/);
   assert.match(await page.textContent('.ic-why'), /Row 34 "Decembrie"/);
   const totals = await page.evaluate(() => {
-    const s = JSON.parse(localStorage.getItem('finance-helper.state'));
+    const s = JSON.parse(globalThis.__fhStore.getItem('finance-helper.state'));
     const m = s.tx.filter((t) => t.date.startsWith('2026-03'));
     return [m.filter((t) => t.type === 'income').reduce((a, t) => a + t.amount, 0), m.filter((t) => t.type === 'expense').reduce((a, t) => a + t.amount, 0)];
   });
@@ -125,22 +125,22 @@ test('sheet view: type an amount in a day row, edit it, clear it', async () => {
   await page.waitForSelector('#sheet-grid');
   const day = await page.evaluate(() => document.querySelector('#sheet-grid tbody tr[data-date]').dataset.date);
   const key = (f) => `[data-sh="${day}|out|0|${f}"]`;
-  const find = () => page.evaluate(() => JSON.parse(localStorage.getItem('finance-helper.state')).tx.find((t) => t.note === 'sheet bread'));
+  const find = () => page.evaluate(() => JSON.parse(globalThis.__fhStore.getItem('finance-helper.state')).tx.find((t) => t.note === 'sheet bread'));
   await page.fill(key('note'), 'sheet bread');
   await page.fill(key('amount'), '10+5');
   await page.keyboard.press('Tab');
-  await page.waitForFunction(() => JSON.parse(localStorage.getItem('finance-helper.state')).tx.some((t) => t.note === 'sheet bread'));
+  await page.waitForFunction(() => JSON.parse(globalThis.__fhStore.getItem('finance-helper.state')).tx.some((t) => t.note === 'sheet bread'));
   assert.equal((await find()).amount, 1500);
   assert.equal((await find()).date, day);
   // The sheet redraws right after a save: edit the redrawn cell, not the old one.
   await page.waitForSelector(`${key('amount')}[value="15"]:not([data-id=""])`);
   await page.fill(key('amount'), '20');
   await page.keyboard.press('Enter');
-  await page.waitForFunction(() => JSON.parse(localStorage.getItem('finance-helper.state')).tx.find((t) => t.note === 'sheet bread')?.amount === 2000);
+  await page.waitForFunction(() => JSON.parse(globalThis.__fhStore.getItem('finance-helper.state')).tx.find((t) => t.note === 'sheet bread')?.amount === 2000);
   await page.waitForSelector(`${key('amount')}[value="20"]`);
   await page.fill(key('amount'), '');
   await page.keyboard.press('Tab');
-  await page.waitForFunction(() => !JSON.parse(localStorage.getItem('finance-helper.state')).tx.some((t) => t.note === 'sheet bread'));
+  await page.waitForFunction(() => !JSON.parse(globalThis.__fhStore.getItem('finance-helper.state')).tx.some((t) => t.note === 'sheet bread'));
   assert.match(await page.textContent('#sheet-grid'), /Amount invested/i);
   assert.deepEqual(errors, []);
   await context.close();

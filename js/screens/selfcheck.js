@@ -4,7 +4,7 @@
 
 import { ctx, esc } from '../ctx.js';
 import { URLS, parseErApi, parseBinance } from '../rates.js';
-import { STORAGE_KEYS, isEncrypted } from '../store.js';
+import { STORAGE_KEYS, isEncrypted, deviceStorage, storageInfo } from '../store.js';
 import { deriveKey, seal, open, newSalt } from '../cipher.js';
 
 let results = null;
@@ -39,8 +39,10 @@ export async function runAll() {
     const ok = localStorage.getItem(k) === '1';
     localStorage.removeItem(k);
     if (!ok) throw new Error('Storage is blocked');
-    const kb = Math.round((localStorage.getItem(isEncrypted() ? STORAGE_KEYS.ENC : STORAGE_KEYS.KEY) || '').length / 1024);
-    return `works · your data uses ${kb} KB${isEncrypted() ? ', encrypted' : ''}`;
+    const kb = Math.round((deviceStorage()?.getItem(isEncrypted() ? STORAGE_KEYS.ENC : STORAGE_KEYS.KEY) || '').length / 1024);
+    const info = storageInfo();
+    if (info.where !== 'indexeddb') return `works · your data uses ${kb} KB${isEncrypted() ? ', encrypted' : ''} · kept in the small storage (about 5 MB at most)${info.error ? `: ${info.error}` : ''}`;
+    return `works · your data uses ${kb} KB${isEncrypted() ? ', encrypted' : ''} · kept in IndexedDB (no 5 MB limit)`;
   }));
   list.push(await check('Encryption', async () => {
     const salt = newSalt();

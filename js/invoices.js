@@ -4,6 +4,7 @@
 
 import { addDays } from './dates.js';
 import { B } from './model.js';
+import { countsAsIncome } from './catshare.js';
 
 export const lineAmount = (l) => (Number(l.hours) > 0 && Number.isInteger(l.rate) ? Math.round(Number(l.hours) * l.rate) : Number.isInteger(l.amount) ? l.amount : 0);
 export const invoiceTotal = (inv) => (inv.items || []).reduce((a, l) => a + lineAmount(l), 0);
@@ -52,7 +53,7 @@ export function clientStats(state, today) {
   const year = today.slice(0, 4);
   const clients = state.people.filter((p) => p.client);
   return clients.map((p) => {
-    const income = state.tx.filter((t) => t.type === 'income' && !t.loan && t.person === p.id);
+    const income = state.tx.filter((t) => countsAsIncome(t) && t.person === p.id);
     const invs = (state.invoices || []).filter((i) => i.client === p.id);
     const paid = income.reduce((a, t) => a + B(t), 0);
     const paidYear = income.filter((t) => t.date.startsWith(year)).reduce((a, t) => a + B(t), 0);

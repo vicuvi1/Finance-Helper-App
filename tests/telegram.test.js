@@ -14,7 +14,8 @@ function state() {
 
 test('reads the usual ways of writing a record', () => {
   const s = state();
-  assert.deepEqual(parseQuick('coffee 20', s), { type: 'expense', amount: 2000, note: 'coffee', account: 'maib', category: 'food' });
+  // Coffee is also filed under its subcategory (Cafés & coffee) since subcategories came in.
+  assert.deepEqual(parseQuick('coffee 20', s), { type: 'expense', amount: 2000, note: 'coffee', account: 'maib', category: 'food', sub: 's-cafes' });
   assert.equal(parseQuick('20 coffee', s).note, 'coffee');
   assert.equal(parseQuick('coffee 20 lei', s).amount, 2000);
   assert.equal(parseQuick('groceries 120+45', s).amount, 16500);

@@ -1,0 +1,21 @@
+/* Change history (#changes, js/screens/changes.js). */
+.ch-filters { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+.ch-filters .field { margin: 0; min-width: 150px; flex: 1 1 150px; }
+.ch-day { margin: 18px 4px 6px; font-size: 0.95rem; color: var(--muted); font-weight: 600; }
+.ch-step { padding: 10px 14px; margin-bottom: 8px; }
+.ch-step-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 28px; }
+.ch-entry { padding: 8px 0; border-top: 1px solid var(--line); }
+.ch-step-head + .ch-entry { border-top: 0; }
+.ch-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ch-act { font-size: 0.75rem; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: var(--surface-2); color: var(--text); white-space: nowrap; }
+.ch-add { color: var(--c3, #6fcf97); }
+.ch-delete { color: var(--c1, #eb5757); }
+.ch-putback, .ch-undo, .ch-redo { color: var(--gold, #e3b95f); }
+.ch-rec { background: none; border: 0; padding: 0; color: var(--text); font: inherit; text-align: left; cursor: pointer; flex: 1 1 200px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ch-rec:hover, .ch-rec:focus-visible { text-decoration: underline; }
+.ch-btn { margin-left: auto; }
+.ch-fields { margin: 6px 0 0; padding-left: 18px; font-size: 0.85rem; }
+p.ch-fields { padding-left: 0; }
+.ch-fields li { margin: 2px 0; }
+.ch-fields s { color: var(--muted); }
+.ch-f { color: var(--muted); }

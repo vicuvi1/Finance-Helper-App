@@ -3,17 +3,23 @@
 
 import { ctx, esc } from '../ctx.js';
 import * as M from '../model.js';
+import * as T from '../cattree.js';
 import * as R from '../recurring.js';
 import { todayISO, dayLabel, daysBetween, addDays, monthKey, monthLabel, daysInMonth } from '../dates.js';
 import { evalAmount, formatMoney, centsToPlain } from '../money.js';
 import { convert } from '../fx.js';
 import { forecast } from '../forecast.js';
 import { lineChart } from '../charts.js';
+import { findSubscriptions, recurringFrom } from '../subs.js';
+import * as MoneyB2 from './moneyb2.js';
+import * as Repeating from './repeating.js';
+import * as Budgets from './budgetkinds.js';
+import * as Tips from '../tips.js';
 
 const initial = (name) => esc((String(name).match(/\p{L}|\p{N}/u) || ['•'])[0].toUpperCase());
 const catOf = (id) => M.category(ctx.state, id) || { name: 'Other', emoji: '•' };
 const titleOf = (r) => r.note || catOf(r.category).name;
-const freq = (r) => R.FREQS.find((f) => f.id === r.every) || R.FREQS[2];
+const freq = (r) => (r.every === 'custom' ? { label: R.describe(r), short: R.describe(r).toLowerCase() } : R.FREQS.find((f) => f.id === r.every) || R.FREQS[3]);
 const base = () => ctx.state.settings.currency;
 const inBase = (r, cents = r.amount) => (r.currency === base() ? cents : (convert(cents, r.currency, base(), ctx.state.rates) ?? cents));
 const sum = (items) => items.reduce((a, x) => a + (inBase(x.rule) || 0), 0);
@@ -22,7 +28,7 @@ const when = (date, today) => {
   return d === 0 ? 'today' : d === 1 ? 'tomorrow' : d < 0 ? `${-d} day${d === -1 ? '' : 's'} ago` : `in ${d} days`;
 };
 const ruleMoney = (r) => (r.type === 'income' ? formatMoney(r.amount, r.currency, { sign: true }) : formatMoney(-r.amount, r.currency));
-const txId = (rule, date) => `rec-${rule.id}-${date}`;
+const txId = R.recId;
 const shortDay = (iso) => dayLabel(iso).replace(/^\w+, /, '');
 
 export const PRESET_SUBS = [
@@ -465,11 +471,7 @@ function subscriptionsTab(state, today, rules, scheduled) {
         }).join('')}
       </div>
     ` : `
-      <section class="card empty">
-        <b>No subscriptions found</b>
-        <p class="muted">Add a recurring expense, or pick one from the quick presets above.</p>
-        <button class="btn primary" data-act="rec-new">+ Add subscription</button>
-      </section>
+      <section class="card">${Tips.EMPTY.subscriptions()}</section>
     `}
 
     <!-- Scheduled One-Time Bills (if any) -->
@@ -536,10 +538,10 @@ function budgetCard() {
   const today = todayISO();
   const key = monthKey(today);
   const st = M.budgetStatus(ctx.state, key, today);
-  if (!st.rows.length) {
-    return `<section class="card"><h2>Budgets</h2>
-      <p class="muted" style="margin-top:0">Give the categories you want to keep in check (food, going out, clothes…) a monthly limit. You get a warning at 80%, when you go over, and when your pace would take you over.</p>
-      <button class="btn primary block" data-act="budget-set">Set budgets</button></section>`;
+  const subRows = T.subBudgetStatus(ctx.state, key);
+  if (!st.rows.length && !subRows.length) {
+    return `<section class="card"><h2>Budgets</h2>${Tips.EMPTY.budgets()}
+      <div style="margin-top:8px;text-align:center">${MoneyB2.suggestButton()}</div></section>`;
   }
   const evenPace = (Number(today.slice(8, 10)) / daysInMonth(key)) * 100;
   const rows = st.rows.map((r) => {
@@ -552,9 +554,19 @@ function budgetCard() {
       <span class="foot ${r.level === 'over' ? 'bad' : ''}">${foot}</span>
     </button>`;
   }).join('');
+  const subs = subRows.map((r) => {
+    const s = r.sub;
+    const w = Math.min(100, r.pct * 100).toFixed(1);
+    return `<button class="jar budget-row budget-sub" data-act="cat-open" data-cat="${esc(s.parent)}" data-period="month" data-type="expense">
+      <span class="row"><span>${s.emoji ? `${esc(s.emoji)} ` : ''}${esc(M.category(ctx.state, s.parent)?.name || '')} › ${esc(s.name)} <span class="muted">${Math.round(r.pct * 100)}%</span></span><span class="money">${ctx.money(r.spent)} <span class="muted">/ ${ctx.money(r.budget, { compact: true })}</span></span></span>
+      <span class="bar ${r.level === 'over' ? 'over' : r.level === 'ok' ? '' : 'gold'}"><i style="width:${w}%"></i><span class="mark" style="left:${evenPace.toFixed(1)}%"></span></span>
+      <span class="foot ${r.level === 'over' ? 'bad' : ''}">${r.level === 'over' ? `Over by ${ctx.money(-r.left)}` : `${ctx.money(r.left)} left`}</span>
+    </button>`;
+  }).join('');
   return `<section class="card"><h2>Budgets · ${esc(monthLabel(key))} <button class="card-link right" data-act="budget-set">Edit</button></h2>
     <p class="muted small" style="margin-top:0">${ctx.money(st.spent)} of ${ctx.money(st.budget)} · ${st.left >= 0 ? `${ctx.money(st.left)} left` : `<b class="expense">${ctx.money(-st.left)} over</b>`} · ${st.daysLeft} day${st.daysLeft === 1 ? '' : 's'} to go. The line marks an even pace.</p>
-    ${rows}</section>`;
+    ${rows}${subs ? `<p class="muted small" style="margin:14px 0 6px">Subcategories</p>${subs}` : ''}
+    <div style="margin-top:12px">${MoneyB2.suggestButton()}</div></section>`;
 }
 
 function budgetSheet() {
@@ -563,14 +575,20 @@ function budgetSheet() {
   const cats = state.settings.categories.filter((c) => c.type === 'expense');
   const avg = Object.fromEntries(cats.map((c) => [c.id, M.averageSpend(state, c.id, key, 3)]));
   const round50 = (x) => Math.ceil(x / 5000) * 5000;
+  // Subcategories you spend in (3-month average) can have their own budget too.
+  const subAvg = Object.fromEntries([...T.monthlyAverage(state, `${key}-01`, (t) => T.subOf(state, t)?.id || null, 3).avg]);
   ctx.openSheet(`<h3>Monthly budgets <button type="button" class="icon-btn" data-close aria-label="Close">✕</button></h3>
     <form id="budget-form" novalidate>
       <p class="muted small" style="margin-top:0">Leave empty for no limit. Amounts in ${esc(base())} per month; "avg" is what you spent on average in the last 3 months (tap it to use it).</p>
       <div class="budget-list">${cats.map((c) => `<label class="budget-edit">
-        <span class="n">${ctx.dot(ctx.catColor(c.id))}${esc(c.name)}</span>
+        <span class="n">${c.emoji ? `<span class="ci">${esc(c.emoji)}</span>` : ctx.dot(ctx.catColor(c.id))}${esc(c.name)}</span>
         ${avg[c.id] ? `<button type="button" class="card-link" data-fill="${esc(c.id)}" data-v="${round50(avg[c.id])}">avg ${ctx.money(avg[c.id], { compact: true })}</button>` : '<span></span>'}
         <input type="text" inputmode="decimal" id="b-${esc(c.id)}" value="${c.budget ? esc(centsToPlain(c.budget)) : ''}" placeholder="no limit" aria-label="Budget for ${esc(c.name)}">
-      </label>`).join('')}</div>
+      </label>${T.subsOf(state, c.id).filter((x) => x.budget > 0 || subAvg[x.id]).map((x) => `<label class="budget-edit budget-edit-sub">
+        <span class="n">${x.emoji ? `<span class="ci">${esc(x.emoji)}</span>` : ''}${esc(x.name)}</span>
+        ${subAvg[x.id] ? `<button type="button" class="card-link" data-fill="${esc(x.id)}" data-v="${round50(subAvg[x.id])}">avg ${ctx.money(subAvg[x.id], { compact: true })}</button>` : '<span></span>'}
+        <input type="text" inputmode="decimal" id="b-${esc(x.id)}" data-sub-budget="${esc(x.id)}" value="${x.budget ? esc(centsToPlain(x.budget)) : ''}" placeholder="no limit" aria-label="Budget for ${esc(x.name)}">
+      </label>`).join('')}`).join('')}</div>
       <div class="btns" style="margin-top:14px"><button type="button" class="btn" data-fill-all>Use my averages for empty ones</button><button type="submit" class="btn primary">Save budgets</button></div>
     </form>`, (sheet) => {
     sheet.addEventListener('click', (e) => {
@@ -592,6 +610,12 @@ function budgetSheet() {
         if ((c.budget || null) !== next) { c.budget = next; M.touch(c); }
         if (next) n++;
       }
+      for (const input of sheet.querySelectorAll('[data-sub-budget]')) {
+        const v = evalAmount(input.value) || 0;
+        const sub = T.subById(state, input.dataset.subBudget);
+        if (sub && (sub.budget || null) !== (v > 0 ? v : null)) T.renameSub(state, sub.id, { budget: v > 0 ? v : null });
+        if (v > 0) n++;
+      }
       ctx.commit();
       ctx.closeSheet();
       ctx.toast(n ? `${n} budget${n === 1 ? '' : 's'} set` : 'No budgets set');
@@ -604,12 +628,33 @@ export function homeCard() {
   const { state } = ctx;
   if (!(state.recurring || []).length) return '';
   const today = todayISO();
-  const due = R.dueItems(state, today);
-  const up = R.upcomingItems(state, today, 14).slice(0, Math.max(0, 4 - due.length));
-  if (!due.length && !up.length) return '';
-  return `<section class="card"><h2>Coming up <button class="card-link right" data-go="plan">Plan</button></h2>
-    <div class="list">${due.slice(0, 4).map((x) => itemRow(x, today, { due: true })).join('')}${up.map((x) => itemRow(x, today)).join('')}</div>
-    ${due.length > 4 ? `<p class="muted small" style="margin-bottom:0">${due.length - 4} more due on the Plan screen.</p>` : ''}</section>`;
+  const up = R.upcomingItems(state, today, 14).slice(0, 4);
+  const confirm = Repeating.toConfirmCard();
+  if (!up.length) return confirm;
+  return `${confirm}<section class="card"><h2>Coming up <button class="card-link right" data-go="plan">Plan</button></h2>
+    <div class="list">${up.map((x) => itemRow(x, today)).join('')}</div></section>`;
+}
+
+// ---------- Subscription finder ----------
+
+// Payments that come back every month at about the same amount, which you
+// never set up as recurring: what they cost a year, and two actions.
+function subsFinderCard(state, today) {
+  const found = findSubscriptions(state, today);
+  if (!found.length) return '';
+  const active = found.filter((s) => !s.cancelled);
+  const yearly = active.reduce((a, s) => a + s.yearly, 0);
+  const row = (s) => `<div class="tx rec-row sub-found${s.cancelled ? ' is-cancelled' : ''}">
+    <span class="av" style="--c:${ctx.catColor(s.category)}" aria-hidden="true">${initial(s.name)}</span>
+    <span class="t"><b>${esc(s.name)}</b><span>${formatMoney(s.amount, s.currency)} about monthly · ${s.count} times since ${esc(shortDay(s.first))}${s.cancelled ? ` · cancelled ${esc(shortDay(s.cancelledOn))}` : ` · next around ${esc(shortDay(s.next))}`}</span></span>
+    <span class="sub-year"><b class="money">${formatMoney(s.yearly, base(), { compact: true })}</b><small class="muted">a year</small></span>
+    <span class="sub-acts">${s.cancelled
+    ? `<button type="button" class="btn small" data-act="sub-uncancel" data-key="${esc(s.key)}">Undo</button>`
+    : `<button type="button" class="btn small" data-act="sub-cancel" data-key="${esc(s.key)}">Mark as cancelled</button><button type="button" class="btn small primary" data-act="sub-make-rec" data-key="${esc(s.key)}">Make recurring</button><button type="button" class="icon-btn" data-act="sub-hide" data-key="${esc(s.key)}" title="Not a subscription" aria-label="Not a subscription">✕</button>`}</span>
+  </div>`;
+  return `<section class="card sub-finder"><h2>Looks like subscriptions</h2>
+    <p class="muted small">Same payee, a similar amount, about once a month. ${active.length ? `Together about <b>${formatMoney(yearly, base(), { compact: true })}</b> a year.` : ''}</p>
+    <div class="list">${found.map(row).join('')}</div></section>`;
 }
 
 // ---------- Main View ----------
@@ -636,10 +681,16 @@ export function view() {
       tabContent = forecastCard();
       break;
     case 'budgets':
-      tabContent = budgetCard();
+      tabContent = budgetCard() + Budgets.cards();
+      break;
+    case 'repeating':
+      tabContent = Repeating.tab();
+      break;
+    case 'yearly':
+      tabContent = MoneyB2.subsTab();
       break;
     default:
-      tabContent = subscriptionsTab(state, today, rules, scheduled);
+      tabContent = subsFinderCard(state, today) + subscriptionsTab(state, today, rules, scheduled);
       break;
   }
 
@@ -658,9 +709,11 @@ export function view() {
 
     <div class="chips plan-tabs">
       <button class="chip" data-act="plan-tab" data-tab="subs" aria-pressed="${tab === 'subs'}">✨ Subscriptions &amp; Bills <span class="tab-badge">${expenseRules.length}</span></button>
+      <button class="chip" data-act="plan-tab" data-tab="repeating" aria-pressed="${tab === 'repeating'}" data-testid="plan-tab-repeating">🔁 Repeating ${due.length ? `<span class="tab-badge bad">${due.length}</span>` : ''}</button>
       <button class="chip" data-act="plan-tab" data-tab="calendar" aria-pressed="${tab === 'calendar'}">📅 Payment Timeline ${due.length ? `<span class="tab-badge bad">${due.length} due</span>` : ''}</button>
       <button class="chip" data-act="plan-tab" data-tab="forecast" aria-pressed="${tab === 'forecast'}">📈 Cash-Flow Forecast</button>
-      <button class="chip" data-act="plan-tab" data-tab="budgets" aria-pressed="${tab === 'budgets'}">🎯 Monthly Budgets</button>
+      <button class="chip" data-act="plan-tab" data-tab="budgets" aria-pressed="${tab === 'budgets'}">🎯 Budgets</button>
+      <button class="chip" data-act="plan-tab" data-tab="yearly" aria-pressed="${tab === 'yearly'}">💳 Subscriptions per year</button>
     </div>
 
     <div class="plan-tab-body">
@@ -677,7 +730,10 @@ function logNow(rule, date) {
   if (!rate) { logWithSheet(rule, date); return; }
   const id = txId(rule, date);
   if (!state.tx.some((t) => t.id === id)) {
-    state.tx.push(R.makeTx(rule, date, { id, rate }));
+    const tx = R.makeTx(rule, date, { id, rate });
+    // Logged on purpose after it was taken back: newer than that deletion on every device (js/archive.js buried).
+    if (state.deleted[id]) tx.updatedAt = Math.max(tx.updatedAt, state.deleted[id]) + 1;
+    state.tx.push(tx);
     delete state.deleted[id];
   }
   R.markDone(rule, date);
@@ -706,21 +762,25 @@ function skip(rule, date) {
 }
 
 // Rules set to "log by itself": add every due date
+const id0 = (rule, id) => id.startsWith(`rec-${rule.id}-`);
+
 export function runAuto() {
   const { state } = ctx;
   if (ctx.DEMO || state._sealed) return 0;
   let n = 0;
+  const added = [];
   for (const { rule, date } of R.dueItems(state, todayISO())) {
     if (!rule.auto) continue;
     const rate = rule.currency === base() ? 1 : ctx.suggestedRate(rule.currency);
     if (!rate) continue;
     const id = txId(rule, date);
-    if (!state.tx.some((t) => t.id === id) && !state.deleted[id]) { state.tx.push(R.makeTx(rule, date, { id, rate })); n++; }
+    if (!state.tx.some((t) => t.id === id) && !state.deleted[id]) { state.tx.push(R.makeTx(rule, date, { id, rate })); added.push(id); n++; }
     R.markDone(rule, date);
   }
   if (n) {
     ctx.commit();
-    ctx.toast(`Added ${n} recurring record${n === 1 ? '' : 's'}`);
+    const one = added.length === 1 ? state.recurring.find((r) => id0(r, added[0])) : null;
+    ctx.toast(one ? `Added ${titleOf(one)} ${ruleMoney(one)}` : `Added ${n} repeating record${n === 1 ? '' : 's'}`, 'Undo', () => { Repeating.undoAdded(added); ctx.toast('Taken back'); });
   }
   return n;
 }
@@ -768,8 +828,9 @@ export function editRule(existing = null, preset = {}) {
         <label class="field"><span>How often</span><select id="rec-every">${R.FREQS.map((f) => `<option value="${f.id}" ${f.id === r.every ? 'selected' : ''}>${f.label}</option>`).join('')}</select></label>
         <label class="field"><span>${r.every === 'once' ? 'On' : existing ? 'Counting from' : 'Next (or first) date'}</span><input id="rec-start" type="date" value="${esc(r.start)}"></label>
       </div>
+      ${Repeating.customFields(r)}
       ${r.every === 'once' ? '' : `<label class="field"><span>Ends (optional)</span><input id="rec-end" type="date" value="${esc(r.end || '')}"></label>`}
-      <label class="field check"><input type="checkbox" id="rec-auto" ${r.auto ? 'checked' : ''}><span>Log it by itself on the day (for fixed amounts)</span></label>
+      <label class="field check"><input type="checkbox" id="rec-auto" ${r.auto ? 'checked' : ''}><span>Add it by itself on the day (for fixed amounts). Off: it waits in &quot;To confirm&quot; and asks you.</span></label>
       ${existing ? `<label class="field check"><input type="checkbox" id="rec-paused" ${r.paused ? 'checked' : ''}><span>Paused</span></label>` : ''}
       <p class="lock-msg" id="rec-msg" role="alert"></p>
       <div class="btns">${existing ? '<button type="button" class="btn danger" data-act="rec-delete">Delete</button>' : ''}<button type="submit" class="btn primary">${existing ? 'Save' : 'Add'}</button></div>
@@ -783,6 +844,7 @@ export function editRule(existing = null, preset = {}) {
     r.category = v('#rec-cat').value;
     r.account = v('#rec-acc').value;
     r.every = v('#rec-every').value;
+    Repeating.readCustom(sheet, r);
     r.start = v('#rec-start').value || r.start;
     r.end = v('#rec-end')?.value || null;
     r.auto = v('#rec-auto').checked;
@@ -793,7 +855,7 @@ export function editRule(existing = null, preset = {}) {
     const paint = () => { sheet.innerHTML = html(); };
     paint();
     if (!existing) sheet.querySelector('#rec-amount').focus();
-    sheet.addEventListener('change', (e) => { if (e.target.id === 'rec-acc' || e.target.id === 'rec-every') { read(sheet); paint(); } });
+    sheet.addEventListener('change', (e) => { if (e.target.id === 'rec-acc' || e.target.id === 'rec-every' || e.target.id === 'rec-unit') { read(sheet); paint(); } });
     sheet.addEventListener('click', (e) => {
       const seg = e.target.closest('.seg button');
       if (seg && seg.dataset.type !== r.type) { read(sheet); r.type = seg.dataset.type; paint(); return; }
@@ -835,6 +897,29 @@ export function editRule(existing = null, preset = {}) {
 const findRule = (id) => (ctx.state.recurring || []).find((r) => r.id === id);
 
 export function onClick(act, el) {
+  if (Budgets.onClick(act, el)) return true;
+  if (act === 'sub-make-rec' || act === 'sub-cancel' || act === 'sub-uncancel' || act === 'sub-hide') {
+    const st = ctx.state;
+    const sub = findSubscriptions(st, todayISO()).find((s) => s.key === el.dataset.key);
+    if (!sub) return true;
+    const now = Date.now();
+    if (act === 'sub-make-rec') {
+      (st.recurring || (st.recurring = [])).push(recurringFrom(sub, now, M.uid()));
+      ctx.toast(`${sub.name}: now a monthly payment in Plan`);
+    } else if (act === 'sub-cancel') {
+      st.settings.subsCancelled = { ...(st.settings.subsCancelled || {}), [sub.key]: todayISO() };
+      ctx.toast(`Marked as cancelled. That saves about ${formatMoney(sub.yearly, base(), { compact: true })} a year.`);
+    } else if (act === 'sub-uncancel') {
+      const c = { ...(st.settings.subsCancelled || {}) };
+      delete c[sub.key];
+      st.settings.subsCancelled = c;
+    } else {
+      st.settings.subsHidden = { ...(st.settings.subsHidden || {}), [sub.key]: true };
+    }
+    st.settings.updatedAt = now;
+    ctx.commit();
+    return true;
+  }
   if (act === 'plan-tab') {
     ctx.ui.planTab = el.dataset.tab;
     ctx.render();
@@ -952,6 +1037,8 @@ export function onClick(act, el) {
   }
   if (act === 'budget-set') { budgetSheet(); return true; }
   if (act === 'fc-days') { ctx.ui.fcDays = Number(el.dataset.n); ctx.render(); return true; }
+  if (act === 'plan-open-repeating') { ctx.ui.planTab = 'repeating'; location.hash = '#plan'; ctx.render?.(); return true; }
+  if (act === 'plan-open-repeating') { ctx.ui.planTab = 'repeating'; if (location.hash === '#plan') ctx.render(); else location.hash = '#plan'; return true; }
   if (act === 'rec-new') { editRule(); return true; }
   if (act === 'rec-once') { editRule(null, { every: 'once', auto: true }); return true; }
   if (act === 'rec-edit') { const r = findRule(el.dataset.id); if (r) editRule(r); return true; }

@@ -8,6 +8,10 @@ import * as M from '../model.js';
 import { todayISO, monthLabel, dayLabel } from '../dates.js';
 import { evalAmount, centsToPlain, formatMoney } from '../money.js';
 import { CARD_THEMES } from '../cards.js';
+import { countsAsIncome } from '../catshare.js';
+import * as Money3 from './money3.js';
+import * as Tips from '../tips.js';
+import * as Flow from '../flow.js';
 
 const TEMPLATES = [
   { emoji: '🛟', name: 'Emergency fund', account: 'savings', theme: 'teal', emergency: true },
@@ -83,9 +87,10 @@ export function view() {
       </div>
     </div>
   </section>
+  ${Money3.emergencyCard()}
   ${allocationCard()}
   ${active.length ? `<div class="goal-grid">${active.map((g) => goalCard(g, today)).join('')}<button type="button" class="goal-add" data-act="goal-new"><span>+</span>New goal</button></div>`
-    : `<div class="empty"><b>No goals yet</b>An emergency fund is a great first one: six months of your usual spending, kept in your savings.<div class="btns" style="justify-content:center;margin-top:12px"><button class="btn primary" data-act="goal-new">Set a goal</button></div></div>`}
+    : Tips.EMPTY.goals()}
   ${finished.length ? `<h2 class="section-h">Reached 🎉</h2><div class="goal-grid">${finished.map((g) => goalCard(g, today)).join('')}</div>` : ''}`;
 }
 
@@ -232,8 +237,8 @@ function goalSheet(existing = null) {
       e.preventDefault();
       read(sheet);
       const msg = sheet.querySelector('#g-msg');
-      if (!g.name) { msg.textContent = 'Give the goal a name.'; return; }
-      if (!(g.target > 0)) { msg.textContent = 'Set a target bigger than 0.'; return; }
+      if (!g.name) { msg.textContent = 'Give the goal a name.'; Flow.shake(sheet.querySelector('#g-name')); return; }
+      if (!(g.target > 0)) { msg.textContent = 'Set a target bigger than 0.'; Flow.shake(sheet.querySelector('#g-target')); return; }
       if (existing && g.account !== 'allocated' && (state.goalAllocations || []).some((a) => a.goalId === existing.id)) { msg.textContent = 'Release this goal’s reservations before changing how it is tracked.'; return; }
       const now = Date.now();
       const list = state.goals || (state.goals = []);
@@ -274,7 +279,7 @@ function allocationCard() {
   const s = M.goalAllocationSummary(ctx.state);
   const rows = ctx.state.goalAllocations || [];
   return `<section class="card goal-reservations"><h2>Your reservations</h2>
-    ${s.unfunded ? `<p class="allocation-warning" role="status">${ctx.money(s.unfunded)} of requested reservations cannot be funded. Balances or income may have changed, or another device may have allocated the same funds. Review and release the affected reservations below.</p>` : ''}
+    ${s.unfunded ? shortfallHTML() : ''}
     ${s.unpriced.length ? '<p class="allocation-warning" role="status">Some reservations need an exchange rate. Update Rates or release those reservations before allocating more.</p>' : ''}
     <p class="muted small">Reserving money labels part of your cash and bank balances. It does not create an expense or transfer. Crypto and accounts without exchange rates are excluded. Reached goals keep their reservations until you release them.</p>
     ${rows.length ? `<details><summary>Manage ${rows.length} reservations</summary>${rows.map((a) => {
@@ -284,6 +289,24 @@ function allocationCard() {
     }).join('')}</details>` : '<p class="muted small">No money reserved yet. Allocate existing funds or part of an income to your goals.</p>'}</section>`;
 }
 
+// Which goals are short and by how much, why, and one fix per goal.
+function shortfallHTML() {
+  const { state } = ctx;
+  const f = M.goalShortfalls(state);
+  if (!f.rows.length) return '';
+  const why = f.cashShort
+    ? `Your cash and bank total is ${ctx.money(f.cash)}, reservations ask for ${ctx.money(f.requested)}.`
+    : 'The income some reservations came from is now smaller, or another device reserved the same money.';
+  return `<div class="allocation-warning" role="status" data-testid="goal-short">
+    <p style="margin:0 0 6px"><b>Not every reservation can be funded.</b> ${esc(why)}</p>
+    ${f.rows.map((r) => `<div class="goal-short-row" data-goal="${esc(r.goalId)}" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:space-between;padding:4px 0">
+      <span>${esc(r.emoji)} <b>${esc(r.name)}</b> is short by <b>${ctx.money(r.short)}</b></span>
+      <span class="btns" style="margin:0">${r.lowerable.length ? `<button type="button" class="btn sm" data-act="goal-lower" data-id="${esc(r.goalId)}" data-testid="goal-lower">Lower to ${ctx.money(r.lowerTo)}</button>` : ''}<button type="button" class="btn sm" data-act="goal-review" data-id="${esc(r.goalId)}">Review</button></span>
+    </div>`).join('')}
+    <p class="muted small" style="margin:6px 0 0">Nothing is released by itself. Lowering keeps the reservation and cuts it to what can be funded; Undo puts it back.</p>
+  </div>`;
+}
+
 function formatAllocation(a) { return formatMoney(a.amount, a.currency || ctx.state.settings.currency); }
 
 export function openAllocationSheet(incomeId = null, goalId = null) {
@@ -291,7 +314,7 @@ export function openAllocationSheet(incomeId = null, goalId = null) {
   const goals = (state.goals || []).filter((g) => !g.doneAt && !g.archived);
   if (!goals.length) { ctx.toast('Create a goal first.'); return; }
   const summary = M.goalAllocationSummary(state);
-  const incomes = M.sortTx(state.tx.filter((t) => t.type === 'income' && !t.loan));
+  const incomes = M.sortTx(state.tx.filter((t) => countsAsIncome(t)));
   ctx.openSheet(`<h3>Allocate money to goals <button type="button" class="icon-btn" data-close aria-label="Close">✕</button></h3>
     <form id="goal-allocation-form" novalidate><label class="field"><span>Allocate from</span><select id="allocation-source"><option value="">Existing unallocated funds</option>${incomes.map((t) => `<option value="${esc(t.id)}" ${incomeId === t.id ? 'selected' : ''}>${esc(t.date)} · ${esc(t.note || 'Income')} · ${ctx.money(Math.max(0, M.B(t) - (summary.byIncome[t.id] || 0)))} left</option>`).join('')}</select></label>
     <p class="muted small">All amounts are in ${esc(state.settings.currency)}. Foreign income uses its recorded exchange rate. Allocating to a balance-tracking goal switches its progress to reserved money; existing balances are not automatically reserved.</p>
@@ -301,7 +324,7 @@ export function openAllocationSheet(incomeId = null, goalId = null) {
       const update = () => {
         const s = M.goalAllocationSummary(ctx.state);
         const id = sheet.querySelector('#allocation-source').value;
-        const income = id && ctx.state.tx.find((t) => t.id === id && t.type === 'income' && !t.loan);
+        const income = id && ctx.state.tx.find((t) => t.id === id && countsAsIncome(t));
         const limit = Math.min(s.unallocated, id ? Math.max(0, (income ? M.B(income) : 0) - (s.byIncome[id] || 0)) : s.unallocated);
         const entries = read(), valid = entries.every((e) => Number.isSafeInteger(e.amount) && e.amount > 0);
         const total = entries.reduce((sum, e) => sum + (e.amount || 0), 0);
@@ -336,6 +359,19 @@ function releaseSheet(id) {
 export function onClick(act, el) {
   const find = () => (ctx.state.goals || []).find((g) => g.id === el.dataset.id);
   if (act === 'goal-new') { goalSheet(); return true; }
+  if (act === 'goal-lower') {
+    const row = M.goalShortfalls(ctx.state).rows.find((r) => r.goalId === el.dataset.id);
+    const n = M.lowerGoalReservations(ctx.state, el.dataset.id);
+    if (!n) return true;
+    ctx.commit();
+    ctx.toast(`${row?.name || 'Goal'} lowered to ${ctx.money(row?.lowerTo || 0)}`, 'Undo', () => ctx.undo?.());
+    return true;
+  }
+  if (act === 'goal-review') {
+    const d = document.querySelector('.goal-reservations details');
+    if (d) { d.open = true; d.scrollIntoView?.({ block: 'center' }); }
+    return true;
+  }
   if (act === 'goal-allocate') { openAllocationSheet(null, el.dataset.id); return true; }
   if (act === 'goal-release') { releaseSheet(el.dataset.id); return true; }
   if (act === 'goal-money') { const g = find(); if (g) moneySheet(g); return true; }

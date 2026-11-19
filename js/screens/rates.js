@@ -7,6 +7,7 @@ import { formatMoney } from '../money.js';
 import { rateAdvice, adviceText, heldIn } from '../fxsmart.js';
 import { accountBalances } from '../model.js';
 import { todayISO } from '../dates.js';
+import { rateDateHTML } from './moneytidy.js';
 
 const conv = { amount: '100', from: 'USD', to: 'MDL' };
 
@@ -58,7 +59,7 @@ export function view() {
     return `<tr><td><b>${c}</b>${qty ? ` <span class="muted small">you hold ${formatQty(qty)}</span>` : ''}</td><td>${usd == null ? '–' : `$${formatMoney(Math.round(usd * 100), '')}`}</td><td>${inBase == null ? '–' : formatMoney(Math.round(inBase * 100), '')}</td></tr>`;
   }).join('');
   const src = r?.sources || {};
-  return `<header class="top"><div><h1>Rates</h1><div class="sub">Updated ${esc(ago(r?.fetchedAt))}${ctx.DEMO ? ' · example rates in this preview' : ''}</div></div>
+  return `<header class="top"><div><h1>Rates</h1><div class="sub">Updated ${esc(ago(r?.fetchedAt))}${rateDateHTML({ today: todayISO() }) ? ` · ${rateDateHTML({ today: todayISO() })}` : ''}${ctx.DEMO ? ' · example rates in this preview' : ''}</div></div>
     <button class="btn" data-act="rates-refresh" ${ctx.ui.ratesBusy ? 'disabled' : ''}>${ctx.ui.ratesBusy ? 'Updating…' : 'Update now'}</button></header>
   <div class="rates-col">
   ${adviceCards()}

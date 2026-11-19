@@ -1,0 +1,43 @@
+/* Reality check (#reality, js/screens/reality.js; Home card js/screens/checkup.js). */
+.rc-tag { display: inline-block; font-size: 0.72rem; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: var(--surface-2); color: var(--text); text-transform: none; letter-spacing: 0; vertical-align: middle; }
+.rc-tag.alert { background: color-mix(in srgb, var(--expense) 18%, transparent); color: var(--expense); }
+.rc-tag.ok { background: color-mix(in srgb, var(--income) 18%, transparent); color: var(--income); }
+.rc-home.overdue { border-color: color-mix(in srgb, var(--expense) 40%, var(--line)); }
+.rc-status { font-size: 0.95rem; }
+.rc-head, .rc-row { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1.3fr) minmax(0, 1fr) 130px; gap: 10px 14px; align-items: center; }
+.rc-acts { display: flex; justify-content: flex-end; }
+.rc-head { padding: 0 4px 6px; border-bottom: 1px solid var(--line); }
+.rc-row { padding: 12px 4px; border-bottom: 1px solid var(--line); }
+.rc-row.due .rc-name b::after { content: ''; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--gold); margin-left: 6px; vertical-align: middle; }
+.rc-row.done { opacity: 0.85; }
+.rc-name { display: flex; flex-direction: column; min-width: 0; }
+.rc-app, .rc-real, .rc-diff { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.rc-lbl { display: none; }
+.rc-real input { width: 100%; max-width: 220px; font-variant-numeric: tabular-nums; }
+.rc-main { font-variant-numeric: tabular-nums; }
+.rc-diff .pos { color: var(--income); }
+.rc-diff .neg { color: var(--expense); }
+.rc-ok { color: var(--income); font-weight: 600; }
+.rc-count-btn { align-self: flex-start; margin-top: 4px; }
+.rc-causes, .rc-counter { grid-column: 1 / -1; background: var(--surface-2); border-radius: var(--radius-sm, 10px); padding: 10px 12px; }
+.rc-cause-list, .rc-flags, .rc-drift, .rc-tips, .rc-past, .rc-own { list-style: none; margin: 0; padding: 0; }
+.rc-cause, .rc-flag { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 6px 0; border-top: 1px solid var(--line); font-size: 0.9rem; }
+.rc-cause:first-child, .rc-flag:first-child { border-top: 0; }
+.rc-cause-btns { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; flex: 0 0 auto; }
+.rc-causes .btns { margin-top: 8px; align-items: center; }
+.rc-why { color: var(--muted); }
+.rc-counter { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; }
+.rc-counter label { display: flex; flex-direction: column; font-size: 0.75rem; color: var(--muted); }
+.rc-counter input { width: 64px; }
+.rc-count-total { margin-left: auto; }
+.rc-drift li, .rc-tips li, .rc-past li, .rc-own li { padding: 5px 0; font-size: 0.9rem; }
+.rc-set-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-top: 10px; }
+.rc-set-grid .field { margin: 0; }
+@media (max-width: 760px) {
+  .rc-head { display: none; }
+  .rc-row { grid-template-columns: 1fr 1fr; }
+  .rc-name { grid-column: 1 / -1; }
+  .rc-lbl { display: block; }
+  .rc-acts { grid-column: 1 / -1; }
+  .rc-cause, .rc-flag { flex-direction: column; align-items: flex-start; }
+}

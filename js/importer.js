@@ -4,7 +4,9 @@
 import { parseAmount, centsToPlain } from './money.js';
 import { parseLooseDate } from './dates.js';
 import { suggestCategory, uid, ensurePerson, B } from './model.js';
-import { pairRate } from './fx.js';
+import { rateOnDay } from './fx.js';
+import { subsOf, subOf, suggestSub, isOther } from './cattree.js';
+import { countsAsSpending, countsAsIncome } from './catshare.js';
 
 const norm = (s) => String(s || '').trim().toLowerCase()
   .normalize('NFD').replace(/[̀-ͯ]/g, '');
@@ -77,9 +79,10 @@ export function importRows(rows, state, { account } = {}) {
       return;
     }
     const currency = t.currency || accCur(t.account || t.from);
-    const rate = currency === baseCur ? 1 : pairRate(currency, baseCur, state.rates);
+    // The rate of the record's own day when it is saved, else today's.
+    const rate = currency === baseCur ? 1 : rateOnDay(state, currency, t.date);
     const stamp = base++;
-    out.push({ id: uid(), createdAt: stamp, updatedAt: stamp, ...t, currency, rate, base: rate ? Math.round(t.amount * rate) : t.amount });
+    out.push({ id: uid(), createdAt: stamp, updatedAt: stamp, ...t, currency, rate, base: rate ? Math.round(t.amount * rate) : t.amount, source: 'import' });
   };
 
   const cell = (row, i) => (i >= 0 && i < row.length ? row[i] : '');
@@ -105,11 +108,15 @@ export function importRows(rows, state, { account } = {}) {
       } else {
         const cat = findCat(cell(row, c.category ?? -1), type)
           || suggestCategory(state, note, type) || (type === 'income' ? 'other-in' : 'other');
+        // The subcategory column (this app's own export), else a guess from the note.
+        const subText = norm(cell(row, c.subcategory ?? -1));
+        let sub = subText ? subsOf(state, cat).find((x) => norm(x.name) === subText || norm(x.id) === subText)?.id : null;
+        if (!sub && type === 'expense' && !isOther(cat)) sub = suggestSub(state, note, { category: cat })?.sub.id || null;
         const acc = findAcc(cell(row, c.account ?? -1)) || defaultAccount;
         const who = String(cell(row, c.person ?? -1)).trim();
         const personId = who ? ensurePerson(state, who) : null;
         const loan = /^(yes|da|true|1|loan)$/i.test(String(cell(row, c.loan ?? -1)).trim());
-        add({ type, amount, date, category: cat, account: acc, note, ...(currency ? { currency } : {}), ...(personId ? { person: personId } : {}), ...(personId && loan ? { loan: true } : {}) });
+        add({ type, amount, date, category: cat, ...(sub ? { sub } : {}), account: acc, note, ...(currency ? { currency } : {}), ...(personId ? { person: personId } : {}), ...(personId && loan ? { loan: true } : {}) });
       }
       continue;
     }
@@ -132,10 +139,63 @@ export function importRows(rows, state, { account } = {}) {
     }
   }
 
-  const income = out.filter((t) => t.type === 'income').reduce((a, t) => a + t.amount, 0);
-  const expense = out.filter((t) => t.type === 'expense').reduce((a, t) => a + t.amount, 0);
+  const income = previewTotal(out, 'income');
+  const expense = previewTotal(out, 'expense');
   const months = [...new Set(out.map((t) => t.date.slice(0, 7)))].sort();
   return { format: cols.format, tx: out, duplicates, skipped, income, expense, months, allMonths: [...allMonths].sort(), dup, skippedRows, stated: cols.format === 'sheet' ? statedTotals(rows) : null };
+}
+
+// An import preview's total in the main currency: each row at its own rate;
+// a row still without a rate is not added in (it never counts 1:1).
+export const previewTotal = (txs, type) => (txs || []).filter((t) => t.type === type && (t.rate > 0 || !t.currency)).reduce((a, t) => a + (Number.isInteger(t.base) ? t.base : t.amount), 0);
+
+// ---------- Rows in another currency without a rate ----------
+// Imported rows keep `rate: null` when no rate to the main currency is known.
+// They must never go in silently as 1:1 (10 EUR counted as 10 MDL): the
+// import preview lists them per currency and asks to fetch rates, set one
+// rate, or skip those rows.
+
+const needsRate = (t, baseCur) => !!t && t.type !== 'transfer' && (t.currency || baseCur) !== baseCur && !(t.rate > 0);
+
+// [{ currency, count }] for rows that still have no rate.
+export function rateGaps(txs, baseCur) {
+  const by = new Map();
+  for (const t of txs || []) if (needsRate(t, baseCur)) by.set(t.currency, (by.get(t.currency) || 0) + 1);
+  return [...by].map(([currency, count]) => ({ currency, count }));
+}
+
+// One rate for every row in `currency` that has none yet. Returns how many.
+export function fillRate(txs, currency, rate, baseCur) {
+  if (!(rate > 0)) return 0;
+  let n = 0;
+  for (const t of txs || []) {
+    if (!needsRate(t, baseCur) || t.currency !== currency) continue;
+    t.rate = rate;
+    t.base = Math.round(t.amount * rate);
+    n++;
+  }
+  return n;
+}
+
+// Rates now known (after "Fetch rates"): each row gets the rate of its day
+// when saved, else today's. Returns how many rows got one.
+export function fillKnownRates(txs, state) {
+  const baseCur = state.settings.currency;
+  let n = 0;
+  for (const t of txs || []) {
+    if (!needsRate(t, baseCur)) continue;
+    const r = rateOnDay(state, t.currency, t.date);
+    if (!(r > 0)) continue;
+    t.rate = Math.round(r * 10000) / 10000;
+    t.base = Math.round(t.amount * t.rate);
+    n++;
+  }
+  return n;
+}
+
+// The rows without the ones in `currency` that have no rate ("Skip these rows").
+export function skipNoRate(txs, currency, baseCur) {
+  return (txs || []).filter((t) => !(needsRate(t, baseCur) && t.currency === currency));
 }
 
 // Totals your sheet states itself, from cells labelled e.g. "PROFIT (this
@@ -192,7 +252,7 @@ export function importWorkbook(sheets, state, opts = {}) {
   return { sheets: out };
 }
 
-export const EXPORT_HEADER = ['Date', 'Type', 'Amount', 'Currency', 'Category', 'Account', 'From', 'To', 'Note', 'Person', 'Loan'];
+export const EXPORT_HEADER = ['Date', 'Type', 'Amount', 'Currency', 'Category', 'Account', 'From', 'To', 'Note', 'Person', 'Loan', 'Subcategory'];
 
 // Rows as people read them (names, not ids), oldest first. Used for the CSV
 // export and for "Copy table", and the importer reads them back.
@@ -204,7 +264,7 @@ export function exportRows(state, list = state.tx) {
   for (const t of sorted) {
     rows.push([t.date, TYPE_LABEL[t.type], centsToPlain(t.amount), t.currency || state.settings.currency, catName(t.category),
       accName(t.account), accName(t.from), accName(t.to), t.note || '',
-      state.people.find((p) => p.id === t.person)?.name || '', t.loan ? 'yes' : '']);
+      state.people.find((p) => p.id === t.person)?.name || '', t.loan ? 'yes' : '', subOf(state, t)?.name || '']);
   }
   return rows;
 }
@@ -223,23 +283,25 @@ export function monthSheet(state, key, list = state.tx.filter((t) => t.date.star
   const baseCur = state.settings.currency;
   const sorted = [...list].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : (a.createdAt || 0) - (b.createdAt || 0)));
   // Loans get their own type so the Earned/Spent totals leave them out.
-  const typeOf = (t) => (t.loan ? (t.type === 'expense' ? 'Lent' : 'Borrowed') : TYPE_LABEL[t.type]);
-  const rows = [['Date', 'Type', 'Category', 'Note', 'Who', 'Account', 'Amount', 'Currency', `In ${baseCur}`]];
+  // So do points buys and reconciliation adjustments (not real income or spending).
+  const typeOf = (t) => (t.loan ? (t.type === 'expense' ? 'Lent' : 'Borrowed') : t.reconcile ? 'Adjustment'
+    : t.type === 'transfer' || countsAsSpending(t) || countsAsIncome(t) ? TYPE_LABEL[t.type] : 'Points buy');
+  const rows = [['Date', 'Type', 'Category', 'Subcategory', 'Note', 'Who', 'Account', 'Amount', 'Currency', `In ${baseCur}`]];
   for (const t of sorted) {
-    rows.push([{ v: t.date, t: 'date' }, typeOf(t), t.type === 'transfer' ? '' : catName(t.category), t.note || '', who(t.person),
+    rows.push([{ v: t.date, t: 'date' }, typeOf(t), t.type === 'transfer' ? '' : catName(t.category), t.type === 'transfer' ? '' : subOf(state, t)?.name || '', t.note || '', who(t.person),
       t.type === 'transfer' ? `${accName(t.from)} → ${accName(t.to)}` : accName(t.account),
       { v: t.amount / 100, t: 'money' }, t.currency || baseCur, { v: B(t) / 100, t: 'money' }]);
   }
   const n = sorted.length;
-  const sum = (type) => sorted.filter((t) => t.type === type && !t.loan).reduce((a, t) => a + B(t), 0) / 100;
+  const sum = (type) => sorted.filter((t) => t.type === type && (countsAsSpending(t) || countsAsIncome(t))).reduce((a, t) => a + B(t), 0) / 100;
   const range = (col) => `${col}2:${col}${n + 1}`;
   const earnedRow = n + 3;
-  const label = (v) => ['', '', '', '', '', '', '', { v, bold: true }];
+  const label = (v) => ['', '', '', '', '', '', '', '', { v, bold: true }];
   rows.push([]);
-  rows.push([...label('Earned'), { f: `SUMIF(${range('B')},"Earned",${range('I')})`, v: sum('income'), t: 'money', bold: true }]);
-  rows.push([...label('Spent'), { f: `SUMIF(${range('B')},"Spent",${range('I')})`, v: sum('expense'), t: 'money', bold: true }]);
-  rows.push([...label('Kept'), { f: `I${earnedRow}-I${earnedRow + 1}`, v: sum('income') - sum('expense'), t: 'money', bold: true }]);
-  return { cols: [13, 10, 20, 30, 14, 18, 13, 9, 14], rows, filterRows: n };
+  rows.push([...label('Earned'), { f: `SUMIF(${range('B')},"Earned",${range('J')})`, v: sum('income'), t: 'money', bold: true }]);
+  rows.push([...label('Spent'), { f: `SUMIF(${range('B')},"Spent",${range('J')})`, v: sum('expense'), t: 'money', bold: true }]);
+  rows.push([...label('Kept'), { f: `J${earnedRow}-J${earnedRow + 1}`, v: sum('income') - sum('expense'), t: 'money', bold: true }]);
+  return { cols: [13, 10, 20, 20, 30, 14, 18, 13, 9, 14], rows, filterRows: n };
 }
 
 // The "Overview" tab: earned / spent / kept for every month of a year.
@@ -249,8 +311,8 @@ export function overviewSheet(state, year) {
   months.forEach((m, i) => {
     const key = `${year}-${String(i + 1).padStart(2, '0')}`;
     const list = state.tx.filter((t) => t.date.startsWith(key));
-    const inc = list.filter((t) => t.type === 'income' && !t.loan).reduce((a, t) => a + B(t), 0);
-    const exp = list.filter((t) => t.type === 'expense' && !t.loan).reduce((a, t) => a + B(t), 0);
+    const inc = list.filter((t) => countsAsIncome(t)).reduce((a, t) => a + B(t), 0);
+    const exp = list.filter((t) => countsAsSpending(t)).reduce((a, t) => a + B(t), 0);
     const r = i + 2;
     rows.push([m, { v: inc / 100, t: 'money' }, { v: exp / 100, t: 'money' }, { f: `B${r}-C${r}`, v: (inc - exp) / 100, t: 'money' },
       inc ? `${Math.round(((inc - exp) / inc) * 100)}%` : '']);

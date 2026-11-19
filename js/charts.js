@@ -134,6 +134,7 @@ export function lineChart(points, fmt, { color = 'var(--gold)', label = 'Savings
 // Visualizes money entering from income sources, splitting across smart jars
 // (70/10/10/10 or custom), and branching out into expense categories and net savings.
 export function sankeyChart(data, fmt, { mode = 'jars', width = 760, height = 360 } = {}) {
+  if (mode === 'detailed') return sankeyDetailed(data, fmt, { width, height: Math.max(height, 440) });
   const { income = 0, expense = 0, sources = [], jars = [], categories = [] } = data || {};
   const totalInflow = Math.max(income, expense);
   if (!totalInflow || totalInflow <= 0) {
@@ -392,7 +393,7 @@ export function sankeyChart(data, fmt, { mode = 'jars', width = 760, height = 36
 
   const rightSvg = outNodes.map((n) => {
     const tip = `${escapeText(n.name)}: ${escapeText(fmt(n.amount))}`;
-    const act = n.type === 'category' ? `data-act="rep-cat" data-cat="${escapeText(n.id)}" data-type="expense"` : '';
+    const act = n.type === 'category' && n.id !== '_other_expenses' ? `data-act="rep-drill" data-cat="${escapeText(n.id)}"` : '';
     return `<g class="sankey-node" data-node-id="${escapeText(n.id)}" ${act} tabindex="0">
       <title>${tip}</title>
       <rect x="${n.x.toFixed(1)}" y="${n.y.toFixed(1)}" width="${nodeW}" height="${n.h.toFixed(1)}" rx="3" fill="${n.color}"/>
@@ -424,6 +425,104 @@ export function sankeyChart(data, fmt, { mode = 'jars', width = 760, height = 36
     ${headers}
     <g class="sankey-ribbons">${ribbonPaths}</g>
     <g class="sankey-nodes">${leftSvg}${centerSvg}${rightSvg}</g>
+  </svg>`;
+}
+
+// "Detailed": income sources -> categories -> subcategories, so the flow ends
+// where the money really went (Food › Cafés & coffee). Categories and
+// subcategories open the drill-down in Reports.
+function sankeyDetailed(data, fmt, { width = 760, height = 440 } = {}) {
+  const { income = 0, expense = 0, sources = [], categories = [], subs = [] } = data || {};
+  const total = Math.max(income, expense);
+  if (!total) return `<div class="chart-empty muted" style="padding:48px 16px;text-align:center;">No cash flow recorded for this period yet.</div>`;
+  const W = width;
+  const H = height;
+  const padTop = 30;
+  const plotH = H - padTop - 18;
+  const nodeW = 12;
+  const minH = 6;
+  const gap = 7;
+  const colX = [118, Math.round(W * 0.47), W - 178];
+
+  const left = sources.filter((x) => x.amount > 0).map((x) => ({ ...x, kind: 'source' }));
+  if (expense > income) left.push({ id: '_reserves', name: 'Reserves / Deficit', amount: expense - income, color: 'var(--warn)', kind: 'source' });
+  if (!left.length) left.push({ id: '_reserves', name: 'Reserves / Cash', amount: total, color: 'var(--chart-bar)', kind: 'source' });
+
+  // Middle: the biggest categories (the rest folded together), and what was kept.
+  const cats = [...categories].filter((c) => c.amount > 0).sort((a, b) => b.amount - a.amount);
+  const shown = cats.slice(0, 7);
+  const rest = cats.slice(7);
+  const mid = shown.map((c) => ({ ...c, kind: 'category' }));
+  if (rest.length) mid.push({ id: '_rest', name: `Other (${rest.length})`, amount: rest.reduce((a, c) => a + c.amount, 0), color: 'var(--chart-bar)', kind: 'rest' });
+  if (income > expense) mid.push({ id: '_kept', name: 'Kept', amount: income - expense, color: 'var(--gold)', kind: 'kept' });
+
+  // Right: the biggest subcategories of the shown categories; the rest of each
+  // category flows into one "Everything else" node.
+  const shownIds = new Set(shown.map((c) => c.id));
+  const candidates = subs.filter((x) => x.amount > 0 && shownIds.has(x.parent)).sort((a, b) => b.amount - a.amount);
+  const right = candidates.slice(0, 13).map((x) => ({ ...x, kind: 'sub' }));
+  const leftover = new Map();
+  for (const x of candidates.slice(13)) leftover.set(x.parent, (leftover.get(x.parent) || 0) + x.amount);
+  const restAmt = [...leftover.values()].reduce((a, b) => a + b, 0) + (rest.length ? mid.find((m) => m.id === '_rest').amount : 0);
+  if (restAmt > 0) right.push({ id: '_more', name: 'Everything else', amount: restAmt, color: 'var(--chart-bar)', kind: 'more' });
+  // Order the right column by category, so ribbons cross less.
+  const catOrder = new Map(mid.map((m, i) => [m.id, i]));
+  right.sort((a, b) => (catOrder.get(a.parent) ?? 99) - (catOrder.get(b.parent) ?? 99) || b.amount - a.amount);
+
+  const layout = (nodes, x) => {
+    const sum = nodes.reduce((a, n) => a + n.amount, 0) || 1;
+    const avail = Math.max(nodes.length * minH, plotH - (nodes.length - 1) * gap);
+    let y = padTop;
+    for (const n of nodes) { n.h = Math.max(minH, (n.amount / sum) * avail); n.x = x; n.y = y; n.inY = y; n.outY = y; y += n.h + gap; }
+  };
+  layout(left, colX[0]);
+  layout(mid, colX[1]);
+  layout(right, colX[2]);
+
+  const links = [];
+  const link = (a, b, amount) => { if (a && b && amount > 0) links.push({ a, b, amount }); };
+  for (const sNode of left) for (const m of mid) link(sNode, m, Math.round(sNode.amount * (m.amount / total)));
+  const moreNode = right.find((n) => n.id === '_more');
+  for (const m of mid) {
+    if (m.kind === 'kept') continue;
+    if (m.kind === 'rest') { link(m, moreNode, m.amount); continue; }
+    for (const r of right) if (r.parent === m.id) link(m, r, r.amount);
+    link(m, moreNode, leftover.get(m.id) || 0);
+  }
+  const grads = [];
+  const ribbons = links.map(({ a, b, amount }, i) => {
+    const t0 = Math.max(1, (amount / a.amount) * a.h);
+    const t1 = Math.max(1, (amount / b.amount) * b.h);
+    const y0 = a.outY; const y1 = Math.min(a.y + a.h, y0 + t0); a.outY = y1;
+    const y2 = b.inY; const y3 = Math.min(b.y + b.h, y2 + t1); b.inY = y3;
+    const x0 = a.x + nodeW; const x1 = b.x; const cx = (x0 + x1) / 2;
+    const id = `sk-d-${i}`;
+    grads.push(`<linearGradient id="${id}" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="${a.color}" stop-opacity="0.45"/><stop offset="100%" stop-color="${b.color}" stop-opacity="0.45"/></linearGradient>`);
+    const d = `M ${x0.toFixed(1)} ${y0.toFixed(1)} C ${cx.toFixed(1)} ${y0.toFixed(1)}, ${cx.toFixed(1)} ${y2.toFixed(1)}, ${x1.toFixed(1)} ${y2.toFixed(1)} L ${x1.toFixed(1)} ${y3.toFixed(1)} C ${cx.toFixed(1)} ${y3.toFixed(1)}, ${cx.toFixed(1)} ${y1.toFixed(1)}, ${x0.toFixed(1)} ${y1.toFixed(1)} Z`;
+    return `<path class="sankey-ribbon" data-source-id="${escapeText(a.id)}" data-target-id="${escapeText(b.id)}" d="${d}" fill="url(#${id})"><title>${escapeText(a.name)} → ${escapeText(b.name)}: ${escapeText(fmt(amount))}</title></path>`;
+  }).join('');
+
+  const node = (n, side) => {
+    const act = n.kind === 'source' && n.id !== '_reserves' ? `data-act="rep-cat" data-cat="${escapeText(n.id)}" data-type="income"`
+      : n.kind === 'category' ? `data-act="rep-drill" data-cat="${escapeText(n.id)}"`
+        : n.kind === 'sub' && !String(n.id).startsWith('__none') ? `data-act="rep-drill" data-cat="${escapeText(n.parent)}" data-sub="${escapeText(n.id)}"`
+          : n.kind === 'sub' ? `data-act="rep-drill" data-cat="${escapeText(n.parent)}"` : '';
+    const name = `${n.emoji ? `${n.emoji} ` : ''}${n.name}`;
+    const small = n.h < 15;
+    const lx = side === 'left' ? n.x - 7 : n.x + nodeW + 7;
+    const anchor = side === 'left' ? 'end' : 'start';
+    const label = side === 'mid'
+      ? `<text x="${(n.x + nodeW + 6).toFixed(1)}" y="${(n.y + n.h / 2 + 4).toFixed(1)}" class="sankey-mid-label"><tspan class="sankey-name">${escapeText(name)}</tspan><tspan class="sankey-val" dx="5">${escapeText(fmt(n.amount))}</tspan></text>`
+      : `<text x="${lx.toFixed(1)}" y="${(n.y + n.h / 2 + (small ? 4 : 0)).toFixed(1)}" text-anchor="${anchor}" class="sankey-label"><tspan class="sankey-name" x="${lx.toFixed(1)}" ${small ? '' : 'dy="-2"'}>${escapeText(name)}</tspan>${small ? `<tspan class="sankey-val" dx="5">${escapeText(fmt(n.amount))}</tspan>` : `<tspan class="sankey-val" x="${lx.toFixed(1)}" dy="12">${escapeText(fmt(n.amount))}</tspan>`}</text>`;
+    return `<g class="sankey-node" data-node-id="${escapeText(n.id)}" ${act} tabindex="0"><title>${escapeText(name)}: ${escapeText(fmt(n.amount))}</title>
+      <rect x="${n.x.toFixed(1)}" y="${n.y.toFixed(1)}" width="${nodeW}" height="${n.h.toFixed(1)}" rx="3" fill="${n.color}"/>${label}</g>`;
+  };
+  const hdr = (x, t) => `<text x="${(x + nodeW / 2).toFixed(1)}" y="15" text-anchor="middle" class="sankey-col-hdr">${t}</text>`;
+  return `<svg class="chart sankey-chart sankey-detailed" viewBox="0 0 ${W} ${H}" role="img" aria-label="Detailed cash flow: income, categories and subcategories">
+    <defs>${grads.join('')}</defs>
+    ${hdr(colX[0], 'INCOME')}${hdr(colX[1], 'CATEGORIES')}${hdr(colX[2], 'SUBCATEGORIES')}
+    <g class="sankey-ribbons">${ribbons}</g>
+    <g class="sankey-nodes">${left.map((n) => node(n, 'left')).join('')}${mid.map((n) => node(n, 'mid')).join('')}${right.map((n) => node(n, 'right')).join('')}</g>
   </svg>`;
 }
 

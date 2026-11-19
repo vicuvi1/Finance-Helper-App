@@ -79,6 +79,7 @@ export async function syncNow({ announce = false } = {}) {
 
 // Called after every save: sync a little later, once things settle.
 export function changed() {
+  try { globalThis.__fhCloudChanged?.(); } catch { /* standalone cloud sync */ }
   if (!s.connected) return;
   clearTimeout(timer);
   timer = setTimeout(() => syncNow(), 8000);

@@ -1,7 +1,10 @@
 // Pro Command Palette (Ctrl+K / Cmd+K): keyboard-first spotlight for fast
 // math, currency conversion, navigation and app actions.
 
-import { evalAmount, formatMoney } from './money.js';
+import { evalAmount, formatMoney as formatMoneyShown } from './money.js';
+
+// What you type in the box (a sum, a conversion) is shown as is.
+const formatMoney = (c, cur, o) => formatMoneyShown(c, cur, { ...o, reveal: true });
 import { convert } from './fx.js';
 import { sound } from './audio.js';
 

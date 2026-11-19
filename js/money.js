@@ -85,7 +85,17 @@ export function evalAmount(text) {
 }
 
 // "2 300 MDL", "−150 MDL", "12,50 MDL". Uses non-breaking spaces so it never wraps.
-export function formatMoney(cents, currency = 'MDL', { sign = false, compact = false } = {}) {
+// Privacy: while hidden, every amount shows as dots (the currency stays, so the
+// layout does not jump). This is the one choke point; js/privacy.js flips it.
+// Off by default so servers, bots and tests are unaffected; the apps switch it on.
+export const MASK = '••••';
+let hidden = false;
+export const setMoneyHidden = (on) => { hidden = !!on; };
+export const isMoneyHidden = () => hidden;
+
+// `reveal: true` is for text you typed yourself or that leaves the app (Telegram, files).
+export function formatMoney(cents, currency = 'MDL', { sign = false, compact = false, reveal = false } = {}) {
+  if (hidden && !reveal) return MASK + (currency ? ' ' + currency : '');
   const neg = cents < 0;
   const abs = Math.abs(Math.round(cents));
   let whole = Math.floor(abs / 100);

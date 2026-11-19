@@ -5,9 +5,11 @@
 // and the reverse becomes the redo. Device-only things (meta, rates, theme,
 // the Log view) are never undone. Kept in memory only, for this session.
 
-const LISTS = ['tx', 'people', 'recurring', 'invoices', 'netWorth', 'goals', 'goalAllocations'];
-const SETTING_LISTS = ['accounts', 'categories', 'jars'];
-const NOT_UNDONE = new Set(['theme', 'themeMotion', 'logView', 'updatedAt', ...SETTING_LISTS]);
+import { inArchive, replaceArchived } from './archive.js';
+
+const LISTS = ['tx', 'people', 'recurring', 'invoices', 'netWorth', 'goals', 'goalAllocations', 'reconciliations'];
+const SETTING_LISTS = ['accounts', 'categories', 'jars', 'incomeSources'];
+const NOT_UNDONE = new Set(['theme', 'themeMotion', 'logView', 'updatedAt', 'changedAt', ...SETTING_LISTS]);
 
 const WORDS = {
   tx: ['record', 'records'],
@@ -17,9 +19,11 @@ const WORDS = {
   netWorth: ['net worth entry', 'net worth entries'],
   goals: ['goal', 'goals'],
   goalAllocations: ['goal reservation', 'goal reservations'],
+  reconciliations: ['reconciliation', 'reconciliations'],
   'settings.accounts': ['account', 'accounts'],
   'settings.categories': ['category', 'categories'],
   'settings.jars': ['jar', 'jars'],
+  'settings.incomeSources': ['income source', 'income sources'],
 };
 
 const listOf = (state, key) => (key.startsWith('settings.') ? state.settings[key.slice(9)] : state[key]);
@@ -70,6 +74,14 @@ export function apply(state, changes, now = Date.now()) {
       Object.assign(state.settings, old, { updatedAt: now });
       continue;
     }
+    // A record moved to the archived years since (js/archive.js): changed or
+    // removed there, with the opening balance worked out again. Adding its old
+    // version to the everyday list as well would count it twice.
+    if (c.list === 'tx' && inArchive(state, c.id)) {
+      if (c.before == null) { replaceArchived(state, c.id, null); state.deleted[c.id] = now; }
+      else { replaceArchived(state, c.id, { ...JSON.parse(c.before), updatedAt: now }); delete state.deleted[c.id]; }
+      continue;
+    }
     const arr = listOf(state, c.list);
     if (!arr) continue;
     const i = arr.findIndex((x) => x.id === c.id);
@@ -116,7 +128,7 @@ export function createHistory({ limit = 60 } = {}) {
     if (!e) return null;
     apply(state, e.changes, now);
     const next = snapshot(state);
-    to.push({ changes: diff(base, next), label: e.label });
+    to.push({ changes: diff(base, next), label: e.label, grp: e.grp });
     base = next;
     return e;
   };
@@ -143,6 +155,9 @@ export function createHistory({ limit = 60 } = {}) {
     canRedo: () => redos.length > 0,
     nextUndo: () => undos.at(-1)?.label || null,
     nextRedo: () => redos.at(-1)?.label || null,
+    // The change-history group of the next undo / redo step (js/undolog.js asks before it touches another device's work).
+    topGrp: (dir) => (dir < 0 ? undos : redos).at(-1)?.grp || null,
+    tag(step, grp) { if (step && grp) step.grp = grp; },
     clear() { undos.length = 0; redos.length = 0; },
   };
 }

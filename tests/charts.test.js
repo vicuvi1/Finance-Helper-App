@@ -105,6 +105,7 @@ test('reports screen embeds interactive cash flow sankey flowchart', async () =>
   const { defaultState } = await import('../js/model.js');
   const ReportsScreen = await import('../js/screens/reports.js');
   ctx.state = defaultState();
+  ctx.ui = ctx.ui || {};
   ctx.money = (v) => `${v}`;
   ctx.countUp = (v) => `${v}`;
   ctx.catColor = () => 'var(--c1)';
@@ -131,6 +132,7 @@ test('reports screen handles deficit cleanly without negative savings percentage
     { id: 't2', date: d, amount: 80000, type: 'expense', category: 'food', account: 'wallet' },
   ];
   ctx.state = st;
+  ctx.ui = ctx.ui || {};
   ctx.money = (v) => `${Math.round(v / 100)} MDL`;
   ctx.countUp = (v) => `${Math.round(v / 100)} MDL`;
   ctx.catColor = () => 'var(--c1)';

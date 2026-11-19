@@ -36,6 +36,8 @@ export function launch() {
 export async function openPage(browser, url, { width = 1366, height = 860 } = {}) {
   const context = await browser.newContext({ viewport: { width, height }, reducedMotion: 'reduce', serviceWorkers: 'block' });
   await context.route((u) => !u.href.startsWith(url), (r) => r.abort());
+  // Amounts are hidden when the app opens (privacy); the tests read them, so show them.
+  await context.addInitScript(() => { try { if (localStorage.getItem('finance-helper.privacy.hide-on-open') == null) localStorage.setItem('finance-helper.privacy.hide-on-open', '0'); } catch { /* ignore */ } });
   const page = await context.newPage();
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));

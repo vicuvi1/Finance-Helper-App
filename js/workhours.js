@@ -6,6 +6,7 @@
 import { B } from './model.js';
 import { invoiceHours } from './invoices.js';
 import { addMonths, monthKey } from './dates.js';
+import { countsAsIncome } from './catshare.js';
 
 export const DEFAULT_HOURS = 160; // 8 h × 20 working days
 
@@ -30,8 +31,8 @@ export function hourlyRate(state, today) {
   // Otherwise: income of the last 3 full months over your working hours.
   const cur = monthKey(today);
   const months = [1, 2, 3].map((i) => addMonths(cur, -i));
-  const income = state.tx.filter((t) => t.type === 'income' && !t.loan && months.includes(t.date.slice(0, 7))).reduce((a, t) => a + B(t), 0);
-  const active = new Set(state.tx.filter((t) => t.type === 'income' && !t.loan && months.includes(t.date.slice(0, 7))).map((t) => t.date.slice(0, 7))).size;
+  const income = state.tx.filter((t) => countsAsIncome(t) && months.includes(t.date.slice(0, 7))).reduce((a, t) => a + B(t), 0);
+  const active = new Set(state.tx.filter((t) => countsAsIncome(t) && months.includes(t.date.slice(0, 7))).map((t) => t.date.slice(0, 7))).size;
   if (!income || !active) return null;
   return { rate: Math.round(income / active / (p.hoursPerMonth || DEFAULT_HOURS)), source: 'income' };
 }

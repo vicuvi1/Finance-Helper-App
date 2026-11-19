@@ -1,7 +1,24 @@
 // Tactile audio micro-feedback synthesized via native Web Audio API.
 // Zero external files, zero dependencies, completely offline, zero latency.
 
+// SO4: inside Life System, its one sound kit plays the sound (one volume,
+// quiet hours, meetings); this app's own engine is only for when it runs on its own.
+function lifeSound(name) {
+  try {
+    if (window.parent && window.parent !== window) { window.parent.postMessage({ type: 'LIFE_SYSTEM_BRIDGE', action: 'SOUND', payload: { name: name } }, location.origin); return true; }
+    if (/Electron/.test(navigator.userAgent)) { console.log('LIFE_SYSTEM_BRIDGE:SOUND:' + JSON.stringify({ name: name })); return true; }
+  } catch (e) {}
+  return false;
+}
+const embedded = (() => { try { return window.parent !== window || /Electron/.test(navigator.userAgent); } catch { return true; } })();
+
 let ctx = null;
+
+// The app's one audio context, made on first use (ambient.js shares it).
+// Inside Life System there is none: Life's sound kit plays everything.
+export function sharedAudioContext() {
+  return embedded ? null : getAudioContext();
+}
 
 function getAudioContext() {
   if (typeof window === 'undefined') return null;
@@ -15,6 +32,7 @@ function getAudioContext() {
 // User-gesture unlocker: unlocks AudioContext on first pointer/key touch
 if (typeof window !== 'undefined') {
   const unlock = () => {
+    if (embedded) return;
     const ac = getAudioContext();
     if (ac && ac.state === 'suspended') ac.resume().catch(() => {});
   };
@@ -156,3 +174,14 @@ export const sound = {
     setTimeout(() => this.income(state), 140);
   },
 };
+
+// Inside Life System these play through its sound kit (by name).
+const LIFE_NAMES = { click: 'tick', expense: 'spend', income: 'coin', chime: 'levelUp' };
+for (const [key, name] of Object.entries(LIFE_NAMES)) {
+  const local = sound[key];
+  sound[key] = function (state) {
+    if (!canPlay(state)) return;
+    if (embedded && lifeSound(name)) return;
+    return local.call(this, state);
+  };
+}

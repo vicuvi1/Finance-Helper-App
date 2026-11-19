@@ -5,6 +5,11 @@ import { splitByPercent, formatMoney } from './money.js';
 import { monthKey, addMonths, daysInMonth, monthLabel, addDays, isValidISO } from './dates.js';
 import { convert, coinValue } from './fx.js';
 import { perMonth } from './recurring.js';
+import { ensureTree, memorySub, suggestSub, subOf } from './cattree.js';
+import { isPointsReward, isCorrection, countsAsSpending, countsAsIncome, isRefund, isNotCounted, signed } from './catshare.js';
+import { addRule2, removeRule2, merchantChoice } from './learn.js';
+import { archivedBalanceUpTo, withArchive, forRange, archivedTx, openingOf } from './archive.js';
+import { expandSplits } from './splits.js';
 
 // v1: first release. v2: custom multi-currency accounts, people, loans,
 // per-record timestamps and deletion markers for sync.
@@ -25,6 +30,12 @@ export const ACCOUNT_KINDS = [
 const ACCOUNT_DEFAULTS = { bank: '', kind: 'cash', currency: 'MDL', start: 0, last4: '', color: 1, savings: false, archived: false, holdings: [] };
 
 export function defaultState() {
+  const st = baseState();
+  ensureTree(st.settings);
+  return st;
+}
+
+function baseState() {
   return {
     version: SCHEMA_VERSION,
     settings: {
@@ -80,6 +91,9 @@ export function defaultState() {
     // Money goals (see goalStatus). The old single settings.goal becomes the first one.
     goals: [{ id: 'g-main', name: 'Safe goal', emoji: '🏦', target: 10000000, account: 'savings', saved: 0, history: [], deadline: null, doneAt: null, theme: 'gold', updatedAt: 0 }],
     goalAllocations: [],
+    // Monthly reconciliation points (js/reconcile.js): per account the date,
+    // the real balance from the bank and the app's balance that day.
+    reconciliations: [],
     // One net-worth snapshot per day (id nw-YYYY-MM-DD), so crypto and
     // exchange rates of the day are kept; older history is rebuilt from records.
     netWorth: [],
@@ -118,6 +132,11 @@ export function normalizeState(raw) {
     accounts,
     categories: Array.isArray(s.categories) && s.categories.length ? s.categories : base.settings.categories,
   };
+  // Subcategories (js/cattree.js): kept as saved, or built once from your categories.
+  if (Array.isArray(s.subcats)) settings.subcats = s.subcats.filter((x) => x && typeof x.id === 'string' && typeof x.parent === 'string' && x.name);
+  else if (Array.isArray(s.categories) && s.categories.length) delete settings.subcats;
+  if (s.subMemory && typeof s.subMemory === 'object') settings.subMemory = { ...s.subMemory };
+  ensureTree(settings);
   const baseCur = settings.currency || 'MDL';
   const accCur = Object.fromEntries(accounts.map((a) => [a.id, a.currency || baseCur]));
   const tx = (Array.isArray(raw.tx) ? raw.tx : []).filter(validTx).map((t) => {
@@ -146,23 +165,10 @@ export function normalizeState(raw) {
       .map((g) => (g.id === 'g-main' && !g.updatedAt && g.account === 'all' && g.name === 'Safe goal' ? { ...g, account: 'savings' } : g))
     : [{ id: 'g-main', name: settings.goal.name || 'Safe goal', emoji: '🏦', target: settings.goal.target || 0, account: settings.goal.account || 'all', saved: 0, history: [], deadline: null, doneAt: null, theme: 'gold', updatedAt: 0 }];
   const goalAllocations = (Array.isArray(raw.goalAllocations) ? raw.goalAllocations : []).filter((a) => a && typeof a.id === 'string' && typeof a.goalId === 'string' && Number.isSafeInteger(a.amount) && a.amount > 0 && isValidISO(a.date || '')).map((a) => ({ ...a, currency: a.currency || baseCur, updatedAt: a.updatedAt || 0 }));
-  // Automatic migration: merge Oliviu into Brother if both exist (the user confirmed they are the same person)
-  const oliviu = people.find((p) => p.name?.trim().toLowerCase() === 'oliviu');
-  const brother = people.find((p) => p.name?.trim().toLowerCase() === 'brother');
-  if (oliviu && brother && oliviu.id !== brother.id) {
-    const now = Date.now();
-    for (const t of tx) {
-      if (t.person === oliviu.id) {
-        t.person = brother.id;
-        t.updatedAt = now;
-      }
-    }
-    const oIdx = people.findIndex((p) => p.id === oliviu.id);
-    if (oIdx !== -1) people.splice(oIdx, 1);
-    deleted[oliviu.id] = now;
-    brother.updatedAt = now;
-  }
-  return { version: SCHEMA_VERSION, settings, tx, people, recurring, invoices, netWorth, goals, goalAllocations, deleted, rates: raw.rates || null, meta: { ...base.meta, ...(raw.meta || {}) } };
+  const reconciliations = (Array.isArray(raw.reconciliations) ? raw.reconciliations : [])
+    .filter((r) => r && typeof r.id === 'string' && typeof r.account === 'string' && isValidISO(r.date || '') && Number.isSafeInteger(r.real))
+    .map((r) => ({ adjustment: null, ...r, updatedAt: r.updatedAt || 0 }));
+  return { version: SCHEMA_VERSION, settings, tx, people, recurring, invoices, netWorth, goals, goalAllocations, reconciliations, deleted, rates: raw.rates || (raw.lastRates?.usd?.MDL ? { usd: { ...raw.lastRates.usd }, crypto: {}, history: {}, fetchedAt: Date.parse(`${raw.lastRates.date}T12:00:00`) || null, synced: true } : null), meta: { ...base.meta, ...(raw.meta || {}) } };
 }
 
 function validTx(t) {
@@ -175,8 +181,9 @@ function validTx(t) {
 export const B = (t) => (Number.isInteger(t.base) ? t.base : t.amount);
 
 // Loans are money that comes back: they move balances but are not income or
-// spending.
-const counts = (t) => !t.loan;
+// spending. Neither are a reward bought with points (life-reward-…, the same
+// rule as catshare.js countsAsSpending) or a reconciliation adjustment.
+const counts = (t) => !t.loan && !isPointsReward(t) && !isCorrection(t) && !isNotCounted(t);
 
 export function uid() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
@@ -224,6 +231,97 @@ export function moveAccountBy(state, id, dir, now = Date.now()) {
 }
 
 export const activeAccounts = (state) => orderedAccounts(state).filter((a) => !a.archived);
+
+// Where a new record goes when you haven't picked an account: the lei
+// account you last used for that category, else your main lei wallet.
+// Never a business or a foreign-currency account by default.
+export function defaultAccount(state, type = 'expense', category = null) {
+  const baseCur = state.settings.currency || 'MDL';
+  const ok = (a) => a && !a.archived && a.kind !== 'business' && a.kind !== 'crypto' && (a.currency || baseCur) === baseCur;
+  if (category) {
+    const last = sortTx(state.tx).find((t) => t.type === type && t.category === category && ok(account(state, t.account)));
+    if (last) return last.account;
+  }
+  const list = activeAccounts(state).filter(ok);
+  const wallet = list.find((a) => a.id === 'wallet') || list.find((a) => a.kind === 'cash' && !a.savings) || list.find((a) => !a.savings && (a.kind === 'card' || a.kind === 'virtual'));
+  return (wallet || list.find((a) => !a.savings) || list[0] || activeAccounts(state)[0] || state.settings.accounts[0])?.id;
+}
+
+// The rates to price foreign money with. Today's live rates when this
+// device has them; otherwise the newest known ones (synced from your other
+// devices, the saved history, or the rate on your last record in that
+// currency), so a USD or EUR account never silently drops out of totals.
+export function knownRates(state) {
+  const r = state.rates || null;
+  const baseCur = state.settings.currency || 'MDL';
+  const need = new Set([baseCur, ...state.settings.accounts.map((a) => a.currency)].filter((c) => c && c !== 'USD'));
+  const usd = { ...(r?.usd || {}) };
+  const missing = () => [...need].filter((c) => !(usd[c] > 0));
+  if (!missing().length) return r;
+  const hist = r?.history || {};
+  for (const d of Object.keys(hist).sort().reverse()) {
+    for (const c of missing()) if (hist[d][c] > 0) usd[c] = hist[d][c];
+    if (!missing().length) break;
+  }
+  if (missing().length) {
+    // A record's rate is "base currency per 1 unit".
+    const perBase = {};
+    for (const t of sortTx(state.tx)) if (t.currency && t.currency !== baseCur && t.rate > 0 && !perBase[t.currency]) perBase[t.currency] = t.rate;
+    const basePerUsd = usd[baseCur] > 0 ? usd[baseCur] : perBase.USD;
+    if (basePerUsd > 0) {
+      usd[baseCur] = basePerUsd;
+      for (const c of missing()) if (perBase[c] > 0) usd[c] = basePerUsd / perBase[c];
+    }
+  }
+  return { ...(r || {}), usd, crypto: r?.crypto || {} };
+}
+
+// How old the rates in use are: "rates from 3 Nov" when older than a day
+// and a half (or when there are no live ones on this device at all).
+export function ratesAge(state, now = Date.now()) {
+  const at = state.rates?.fetchedAt || 0;
+  const d = at ? new Date(at) : null;
+  const date = d ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` : null;
+  return { at, date, stale: !at || now - at > 36 * 3600e3 };
+}
+
+// Free tags in a note: "dinner #trip #friends" -> ['trip', 'friends'].
+export function tagsOf(note) {
+  const out = [];
+  for (const m of String(note || '').matchAll(/(^|\s)#([\p{L}\p{N}_-]{1,30})/gu)) {
+    const t = m[2].toLowerCase();
+    if (!out.includes(t)) out.push(t);
+  }
+  return out;
+}
+
+// Every tag you used, most used first.
+export function allTags(state) {
+  const n = new Map();
+  for (const t of state.tx) for (const g of tagsOf(t.note)) n.set(g, (n.get(g) || 0) + 1);
+  return [...n].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1)).map(([tag, count]) => ({ tag, count }));
+}
+
+// Splits one receipt into parts ({ amount, category, person, note }). The
+// parts must add up to the original; each becomes its own record with the
+// same date and account. The first part keeps the original's id.
+export function splitRecord(tx, parts, now = Date.now()) {
+  const total = parts.reduce((a, p) => a + (Number.isInteger(p.amount) ? p.amount : 0), 0);
+  if (tx.type === 'transfer' || parts.length < 2 || total !== tx.amount || parts.some((p) => !(p.amount > 0))) return null;
+  const fullBase = Number.isInteger(tx.base) ? tx.base : tx.amount;
+  let baseLeft = fullBase;
+  return parts.map((p, i) => {
+    const base = i === parts.length - 1 ? baseLeft : Math.round((p.amount * fullBase) / tx.amount);
+    baseLeft -= base;
+    const out = { ...tx, id: i === 0 ? tx.id : uid() + i, createdAt: i === 0 ? tx.createdAt : (tx.createdAt || now) + i, updatedAt: now, amount: p.amount, base, category: p.category || tx.category, splitOf: tx.id };
+    delete out.orig;
+    delete out.debt;
+    if (p.person) out.person = p.person;
+    else if (p.person === null) delete out.person;
+    if (p.note) out.note = p.note;
+    return out;
+  });
+}
 export const jar = (state, id) => state.settings.jars.find((j) => j.id === id);
 export const savingsJar = (state) => state.settings.jars.find((j) => j.savings) || state.settings.jars[0];
 
@@ -231,7 +329,7 @@ export const savingsJar = (state) => state.settings.jars.find((j) => j.savings) 
 // balance quietly (history and reports stay as they are); "record" logs the
 // difference today as income or spending (e.g. cash that went untracked).
 // Switch an account to another currency (an MDL "Binance" that is really
-// USD). Its records, starting balance and recurring items are converted at
+// USD). Its records (archived years included), starting balance and recurring items are converted at
 // `rate` (1 new = rate old). Each record keeps its value in the main currency
 // (`base`), so reports don't move, and remembers what it was before (`orig`).
 export function changeAccountCurrency(state, accountId, newCur, rate, now = Date.now()) {
@@ -241,7 +339,9 @@ export function changeAccountCurrency(state, accountId, newCur, rate, now = Date
   const baseCur = state.settings.currency;
   const conv = (c) => Math.round(c / rate);
   let n = 0;
-  for (const t of state.tx) {
+  // Archived years too (js/archive.js): their records and the opening balance made from them.
+  const archived = archivedTx(state);
+  for (const t of [...state.tx, ...archived]) {
     if (t.type === 'transfer') {
       if (t.from === accountId) {
         const old = t.amount;
@@ -275,6 +375,7 @@ export function changeAccountCurrency(state, accountId, newCur, rate, now = Date
     if (newCur === baseCur) { t.rate = 1; t.base = t.amount; } else if (t.amount) t.rate = t.base / t.amount;
     t.updatedAt = now; n++;
   }
+  if (archived.length) state.settings.archive.opening = openingOf(archived);
   for (const r of state.recurring || []) {
     if (r.account !== accountId) continue;
     r.amount = conv(r.amount);
@@ -309,6 +410,8 @@ export function setBalance(state, accountId, target, { mode = 'start', date, id 
 
 export function accountBalances(state, upTo = null) {
   const bal = Object.fromEntries(state.settings.accounts.map((a) => [a.id, a.start || 0]));
+  // Archived years (js/archive.js): their records' total is the opening balance.
+  archivedBalanceUpTo(state, upTo, bal);
   for (const t of state.tx) {
     if (upTo && t.date > upTo) continue;
     if (t.type === 'income' && t.account in bal) bal[t.account] += t.amount;
@@ -327,13 +430,14 @@ export function accountBalances(state, upTo = null) {
 export function accountValues(state, upTo = null) {
   const baseCur = state.settings.currency;
   const bal = accountBalances(state, upTo);
+  const rates = knownRates(state);
   return state.settings.accounts.map((a) => {
     const own = bal[a.id] || 0;
-    let inBase = convert(own, a.currency, baseCur, state.rates);
+    let inBase = convert(own, a.currency, baseCur, rates);
     let coins = 0;
     let coinsKnown = true;
     for (const h of a.holdings || []) {
-      const v = coinValue(Number(h.qty), h.asset, baseCur, state.rates);
+      const v = coinValue(Number(h.qty), h.asset, baseCur, rates);
       if (v == null) coinsKnown = false; else coins += v;
     }
     if (inBase != null) inBase += coins;
@@ -374,9 +478,11 @@ export function takeSnapshot(state, today, now = Date.now()) {
 export function rebuiltTotal(state, date) {
   const baseCur = state.settings.currency;
   const bal = accountBalances(state, date);
+  // The same rates as today's total (totalBalance): live, else the newest known.
+  const rates = knownRates(state);
   let total = 0;
   for (const a of state.settings.accounts) {
-    const v = convert(bal[a.id] || 0, a.currency, baseCur, state.rates);
+    const v = convert(bal[a.id] || 0, a.currency, baseCur, rates);
     if (v != null) total += v;
   }
   return total;
@@ -385,6 +491,7 @@ export function rebuiltTotal(state, date) {
 // One point per month end: the last snapshot of that month when there is
 // one, otherwise rebuilt from records; this month is today's real total.
 export function netWorthSeries(state, today, months = 12) {
+  state = withArchive(state); // archived years count for the chart's length
   const now = monthKey(today);
   const first = state.tx.reduce((m, t) => (t.date < m ? t.date : m), today).slice(0, 7);
   const span = Math.min(months, monthsBetweenKeys(first, now) + 1);
@@ -411,16 +518,21 @@ export const txInMonth = (state, key) => state.tx.filter((t) => monthKey(t.date)
 
 function sumBy(list, keyFn) {
   const out = new Map();
-  for (const t of list) out.set(keyFn(t), (out.get(keyFn(t)) || 0) + B(t));
+  for (const t of list) out.set(keyFn(t), (out.get(keyFn(t)) || 0) + signed(t, B(t)));
   return [...out.entries()].map(([id, amount]) => ({ id, amount })).sort((a, b) => b.amount - a.amount);
 }
 
 export function monthSummary(state, key) {
-  const list = txInMonth(state, key);
-  const incomes = list.filter((t) => t.type === 'income' && counts(t));
+  state = forRange(state, `${key}-01`);
+  const records = txInMonth(state, key);
+  // A split record counts as its lines (js/splits.js): same totals, each part in its own category.
+  const list = expandSplits(records);
+  // A refund (income with `refund: true`) is not income: it lowers its category's spending.
+  const incomes = list.filter((t) => t.type === 'income' && counts(t) && !isRefund(t));
   const expenses = list.filter((t) => t.type === 'expense' && counts(t));
+  const refunds = list.filter((t) => isRefund(t));
   const income = incomes.reduce((a, t) => a + B(t), 0);
-  const expense = expenses.reduce((a, t) => a + B(t), 0);
+  const expense = expenses.reduce((a, t) => a + B(t), 0) - refunds.reduce((a, t) => a + B(t), 0);
   const net = income - expense;
   return {
     key,
@@ -429,11 +541,12 @@ export function monthSummary(state, key) {
     net,
     // Share of this month's income you did not spend.
     savingsRate: income > 0 ? net / income : null,
-    byCategory: sumBy(expenses, (t) => t.category),
+    byCategory: sumBy([...expenses, ...refunds], (t) => t.category),
     bySource: sumBy(incomes, (t) => t.category),
-    count: list.length,
+    count: records.length,
     expenses,
     incomes,
+    refunds,
   };
 }
 
@@ -484,7 +597,7 @@ export const payOn = (state) => {
 export function personalMonth(state, key) {
   const s = monthSummary(state, key);
   const workIncome = s.incomes.filter((t) => isWorkIncome(state, t.category)).reduce((a, t) => a + B(t), 0);
-  const workCosts = s.expenses.filter((t) => isWorkCost(state, t.category)).reduce((a, t) => a + B(t), 0);
+  const workCosts = [...s.expenses, ...s.refunds].filter((t) => isWorkCost(state, t.category)).reduce((a, t) => a + signed(t, B(t)), 0);
   const otherIncome = s.income - workIncome;
   const pay = payOn(state);
   const salary = pay ? txInMonth(state, key).filter((t) => t.type === 'transfer' && t.salary).reduce((a, t) => a + B(t), 0) : 0;
@@ -508,10 +621,10 @@ export function jarStatus(state, key, today = null) {
   const usual = today && monthKey(today) === key ? expectedIncome(state, key) : 0;
   const basis = Math.max(mine.personalIncome, usual);
   const spentByJar = {};
-  for (const t of sum.expenses) {
+  for (const t of [...sum.expenses, ...sum.refunds]) {
     const j = jarOf(state, t.category);
     if (j === NO_JAR) continue;
-    spentByJar[j] = (spentByJar[j] || 0) + B(t);
+    spentByJar[j] = (spentByJar[j] || 0) + signed(t, B(t));
   }
   return state.settings.jars.map((j) => {
     // Whole lei: nobody budgets 2 446,30.
@@ -580,7 +693,7 @@ export function goalAllocationSummary(state, asOf = null) {
     if (amount == null) unpriced.push(a.id);
     const validAmount = Number.isSafeInteger(amount) && amount > 0 ? amount : 0;
     const goal = (state.goals || []).find((g) => g.id === a.goalId);
-    const income = a.incomeId ? state.tx.find((t) => t.id === a.incomeId && t.type === 'income' && !t.loan && (!asOf || t.date <= asOf)) : null;
+    const income = a.incomeId ? state.tx.find((t) => t.id === a.incomeId && countsAsIncome(t) && (!asOf || t.date <= asOf)) : null;
     const incomeLeft = a.incomeId ? Math.max(0, (income ? B(income) : 0) - (byIncome[a.incomeId] || 0)) : Infinity;
     const funded = goal?.account === 'allocated' ? Math.min(validAmount, Math.max(0, cash - reserved), incomeLeft) : 0;
     requested += validAmount;
@@ -590,6 +703,53 @@ export function goalAllocationSummary(state, asOf = null) {
     reserved += funded;
   }
   return { cash, reserved, requested, unallocated: Math.max(0, cash - reserved), unfunded: requested - reserved, byGoal, byIncome, effectiveById, unpriced };
+}
+
+// Which goals ask for more than can be funded, and by how much (base currency).
+// Pure: it only reads. `rows` has one entry per short goal:
+//   { goalId, name, emoji, requested, funded, short, lowerTo, lowerable }
+// `lowerTo` is what the goal's reservations can really hold (its funded money);
+// `lowerable` lists the reservations that are partly funded (these can be lowered
+// without releasing anything).
+export function goalShortfalls(state) {
+  const s = goalAllocationSummary(state);
+  const base = state.settings.currency;
+  const per = new Map();
+  for (const a of state.goalAllocations || []) {
+    const amount = a.currency && a.currency !== base ? convert(a.amount, a.currency, base, state.rates) : a.amount;
+    if (!Number.isSafeInteger(amount) || amount <= 0) continue;
+    const funded = s.effectiveById[a.id] || 0;
+    const r = per.get(a.goalId) || { goalId: a.goalId, requested: 0, funded: 0, lowerable: [] };
+    r.requested += amount;
+    r.funded += funded;
+    if (funded < amount && funded > 0) r.lowerable.push({ id: a.id, funded, amount });
+    per.set(a.goalId, r);
+  }
+  const rows = [...per.values()].filter((r) => r.requested > r.funded).map((r) => {
+    const g = (state.goals || []).find((x) => x.id === r.goalId);
+    return { ...r, name: g?.name || 'Deleted goal', emoji: g?.emoji || '🎯', short: r.requested - r.funded, lowerTo: r.funded };
+  });
+  return { rows, cash: s.cash, requested: s.requested, cashShort: s.requested > s.cash, summary: s };
+}
+
+// Lower one goal's partly funded reservations to what can be funded. It never
+// releases a reservation: one with nothing funded stays as it is (review it by
+// hand). Returns the number of reservations lowered.
+export function lowerGoalReservations(state, goalId, now = Date.now()) {
+  const row = goalShortfalls(state).rows.find((r) => r.goalId === goalId);
+  if (!row) return 0;
+  const base = state.settings.currency;
+  let n = 0;
+  for (const part of row.lowerable) {
+    const a = (state.goalAllocations || []).find((x) => x.id === part.id);
+    if (!a) continue;
+    const own = a.currency && a.currency !== base ? convert(part.funded, base, a.currency, state.rates) : part.funded;
+    if (!Number.isSafeInteger(own) || own <= 0 || own >= a.amount) continue;
+    a.amount = own;
+    touch(a, now);
+    n++;
+  }
+  return n;
 }
 
 export function allocateToGoals(state, entries, { incomeId = null, date, now = Date.now() } = {}) {
@@ -606,7 +766,7 @@ export function allocateToGoals(state, entries, { incomeId = null, date, now = D
   }
   if (!Number.isSafeInteger(total) || total > summary.unallocated) throw new Error('The total exceeds your unallocated cash and bank balances.');
   if (incomeId) {
-    const income = state.tx.find((t) => t.id === incomeId && t.type === 'income' && !t.loan);
+    const income = state.tx.find((t) => t.id === incomeId && countsAsIncome(t));
     if (!income || total > Math.max(0, B(income) - (summary.byIncome[incomeId] || 0))) throw new Error('The total exceeds the unallocated amount of this income.');
   }
   // Validate the whole batch before changing anything.
@@ -715,6 +875,7 @@ export function goalMessage(st) {
 }
 
 export function yearOverview(state, year) {
+  state = forRange(state, `${year}-01-01`);
   const rows = [];
   for (let m = 1; m <= 12; m++) {
     const key = `${year}-${String(m).padStart(2, '0')}`;
@@ -803,9 +964,9 @@ export function toggleFavorite(state, t, now = Date.now()) {
 // A category can have a monthly budget (category.budget, in the main
 // currency's cents). Loans don't count, same as everywhere else.
 
-const spentIn = (state, key, catId) => txInMonth(state, key)
-  .filter((t) => t.type === 'expense' && counts(t) && t.category === catId)
-  .reduce((a, t) => a + B(t), 0);
+const spentIn = (state, key, catId) => expandSplits(txInMonth(state, key))
+  .filter((t) => (t.type === 'expense' && counts(t) || isRefund(t)) && t.category === catId)
+  .reduce((a, t) => a + signed(t, B(t)), 0);
 
 // Average spent per month in a category over the `months` full months before `key`.
 export function averageSpend(state, catId, key, months = 3) {
@@ -835,8 +996,24 @@ export function budgetStatus(state, key, today) {
 
 // After a new expense: did it cross 80% or 100% of its category's budget?
 export function budgetAlert(state, t) {
+  return subBudgetAlert(state, t) || categoryBudgetAlert(state, t);
+}
+
+// The same for a subcategory with its own budget (Food › Cafés & coffee).
+function subBudgetAlert(state, t) {
+  const s = t.type === 'expense' && counts(t) && !t.splits ? subOf(state, t) : null;
+  if (!(s?.budget > 0)) return null;
+  const after = txInMonth(state, monthKey(t.date)).filter((x) => x.type === 'expense' && counts(x) && x.sub === s.id && x.category === s.parent).reduce((a, x) => a + B(x), 0);
+  const before = after - B(t);
+  const fmt = (x) => formatMoney(x, state.settings.currency);
+  if (before <= s.budget && after > s.budget) return { level: 'over', text: `${s.name} is over budget: ${fmt(after)} of ${fmt(s.budget)} (${fmt(after - s.budget)} over).` };
+  if (before < s.budget * 0.8 && after >= s.budget * 0.8) return { level: 'near', text: `${s.name}: ${Math.round((after / s.budget) * 100)}% of the budget used. ${fmt(s.budget - after)} left this month.` };
+  return null;
+}
+
+function categoryBudgetAlert(state, t) {
   const c = category(state, t.category);
-  if (t.type !== 'expense' || !counts(t) || !(c?.budget > 0)) return null;
+  if (t.type !== 'expense' || !counts(t) || t.splits || !(c?.budget > 0)) return null;
   const after = spentIn(state, monthKey(t.date), c.id);
   const before = after - B(t);
   const fmt = (x) => formatMoney(x, state.settings.currency);
@@ -1049,15 +1226,14 @@ export function ruleWord(note) {
 export function addRule(state, { match, type, category }, now = Date.now()) {
   const m = fold(match).trim();
   if (!m || !category) return null;
-  const rules = (state.settings.rules || []).filter((r) => !(fold(r.match) === m && r.type === type));
-  const rule = { id: uid(), match: m, type, category, createdAt: now };
-  state.settings.rules = [...rules, rule];
+  // Rules merge as a list by id (js/learn.js): same text and type keeps its id.
+  const rule = addRule2(state, { match: m, type, category }, now);
   state.settings.updatedAt = now;
   return rule;
 }
 
 export function removeRule(state, id, now = Date.now()) {
-  state.settings.rules = (state.settings.rules || []).filter((r) => r.id !== id);
+  removeRule2(state, id, now); // leaves a tombstone, so it stays deleted everywhere
   state.settings.updatedAt = now;
 }
 
@@ -1074,19 +1250,40 @@ export function applyRule(state, rule, list = ruleTargets(state, rule), now = Da
   return list.length;
 }
 
+// Fields the add/edit sheet sets (or clears) itself. Every other field on a
+// record (source, confirmedAt, catBy, book, reconcile, moved, a newer app's
+// own…) is kept as it was when the record is edited.
+const FORM_FIELDS = new Set(['id', 'createdAt', 'updatedAt', 'type', 'amount', 'currency', 'date', 'note', 'from', 'to', 'toAmount', 'rate', 'base', 'account', 'category', 'sub', 'orig', 'debt', 'person', 'loan', 'recurring', 'tax', 'receipts', 'refund', 'notIncome', 'notSpending', 'incomeSource']);
+export function keptOnEdit(existing, tx) {
+  const out = {};
+  for (const [k, v] of Object.entries(existing || {})) if (!FORM_FIELDS.has(k) && !(k in tx)) out[k] = v;
+  // You picked the category yourself now: learned from from now on (js/learn.js).
+  if (existing && tx.type !== 'transfer' && (existing.catBy === 'auto' || existing.category !== tx.category)) out.catBy = 'you';
+  return { ...tx, ...out };
+}
+
 export function suggestCategory(state, note, type) {
   const n = (note || '').trim().toLowerCase();
   if (!n || type === 'transfer') return null;
   const valid = (id) => state.settings.categories.some((c) => c.id === id && c.type === type);
   const rule = matchRule(state, note, type);
   if (rule && valid(rule.category)) return rule.category;
+  // A merchant you filed the same way at least 3 times (90%+): "LINELLA 23" too.
+  const sure = merchantChoice(state, note, type);
+  if (sure?.level === 'sure' && valid(sure.category)) return sure.category;
   const past = sortTx(state.tx).find((t) => t.type === type && (t.note || '').trim().toLowerCase() === n);
   if (past && valid(past.category)) return past.category;
+  // A merchant you filed under a subcategory before.
+  const mem = type === 'expense' ? memorySub(state, note) : null;
+  if (mem && valid(mem.parent)) return mem.parent;
   const learned = learnedCategory(state, note, type);
   if (learned && valid(learned)) return learned;
   for (const [id, re] of KEYWORDS[type] || []) {
     if (re.test(n) && valid(id)) return id;
   }
+  // The detailed word list ("kebab" -> Food › Restaurants).
+  const sub = type === 'expense' ? suggestSub(state, note) : null;
+  if (sub && valid(sub.sub.parent)) return sub.sub.parent;
   return null;
 }
 
@@ -1247,11 +1444,14 @@ export function periodRange(id, today) {
 // Spending (or income) per category between two dates, in the base currency,
 // biggest first, each with its share and number of records.
 export function totalsByCategory(state, from, to, type = 'expense') {
-  const list = state.tx.filter((t) => t.type === type && !t.loan && t.date >= from && t.date <= to);
-  const total = list.reduce((a, t) => a + B(t), 0);
+  const list = expandSplits(state.tx).filter((t) => (t.type === type && counts(t) && !(type === 'income' && isRefund(t)) || (type === 'expense' && isRefund(t))) && t.date >= from && t.date <= to);
+  const total = list.reduce((a, t) => a + signed(t, B(t)), 0);
   const count = {};
   for (const t of list) count[t.category] = (count[t.category] || 0) + 1;
-  const rows = sumBy(list, (t) => t.category).map((r) => ({ ...r, share: total ? r.amount / total : 0, count: count[r.id] }));
+  // A category a refund took below 0 shows as nothing; the shares are of what is shown.
+  const pos = sumBy(list, (t) => t.category).filter((r) => r.amount > 0);
+  const shown = pos.reduce((a, r) => a + r.amount, 0);
+  const rows = pos.map((r) => ({ ...r, share: shown ? r.amount / shown : 0, count: count[r.id] }));
   return { total, rows, list };
 }
 
@@ -1283,10 +1483,12 @@ function group(list, key) {
 // Everything a report shows for [from, to], in the base currency unless
 // noted. `prev` holds the same numbers for the period just before.
 export function report(state, from, to, { withPrev = true, today = null } = {}) {
-  const inRange = state.tx.filter((t) => t.date >= from && t.date <= to);
-  const real = inRange.filter((t) => t.type !== 'transfer' && !t.loan);
-  const income = real.filter((t) => t.type === 'income').reduce((a, t) => a + B(t), 0);
-  const expense = real.filter((t) => t.type === 'expense').reduce((a, t) => a + B(t), 0);
+  state = forRange(state, withPrev ? `${Number(from.slice(0, 4)) - 1}-01-01` : from);
+  const records = state.tx.filter((t) => t.date >= from && t.date <= to);
+  const inRange = expandSplits(records);
+  const real = inRange.filter((t) => t.type !== 'transfer' && counts(t));
+  const income = real.filter((t) => t.type === 'income' && !isRefund(t)).reduce((a, t) => a + B(t), 0);
+  const expense = real.filter((t) => t.type === 'expense' || isRefund(t)).reduce((a, t) => a + signed(t, B(t)), 0);
   const days = isoDays(from, to);
   // A period still running counts only the days that have passed so far.
   const end = today && today >= from && today < to ? today : to;
@@ -1311,7 +1513,7 @@ export function report(state, from, to, { withPrev = true, today = null } = {}) 
     savingsRate: income > 0 ? (income - expense) / income : null,
     perDay: counted ? Math.round(expense / counted) : 0,
     noSpendDays: Math.max(0, counted - spendDays),
-    count: inRange.length,
+    count: records.length,
     spending, sources, byAccount, byPerson,
     byCurrency: [...cur.values()],
     loansOut: loans.filter((t) => t.type === 'expense').reduce((a, t) => a + B(t), 0),
@@ -1328,8 +1530,9 @@ export function report(state, from, to, { withPrev = true, today = null } = {}) 
 
 // Income and spending per day (short periods) or per month (long ones).
 export function reportSeries(state, from, to) {
+  state = forRange(state, from);
   const days = isoDays(from, to);
-  const real = state.tx.filter((t) => t.date >= from && t.date <= to && t.type !== 'transfer' && !t.loan);
+  const real = state.tx.filter((t) => t.date >= from && t.date <= to && (countsAsSpending(t) || countsAsIncome(t)));
   const buckets = new Map();
   const keyOf = days <= 62 ? (iso) => iso : (iso) => iso.slice(0, 7);
   if (days <= 62) for (let i = 0; i < days; i++) buckets.set(shiftIso(from, i), { key: shiftIso(from, i), income: 0, expense: 0 });
@@ -1339,4 +1542,15 @@ export function reportSeries(state, from, to) {
     if (b) b[t.type === 'income' ? 'income' : 'expense'] += B(t);
   }
   return { unit: days <= 62 ? 'day' : 'month', rows: [...buckets.values()] };
+}
+
+// "$12", "12$", "€ 5", "5 eur", "20 usd", "50 lei": the amount text and the
+// currency it names (null when none: then it is the account's, usually lei).
+export function currencyInText(text) {
+  const raw = String(text ?? '');
+  const map = [[/\$|\busd\b|\bdollars?\b/i, 'USD'], [/€|\beur\b|\beuros?\b/i, 'EUR'], [/\blei\b|\bmdl\b|\bleu\b/i, 'MDL'], [/£|\bgbp\b/i, 'GBP'], [/\bron\b/i, 'RON']];
+  for (const [re, currency] of map) {
+    if (re.test(raw)) return { text: raw.replace(new RegExp(re.source, 'gi'), '').replace(/\s+/g, ' ').trim(), currency };
+  }
+  return { text: raw, currency: null };
 }

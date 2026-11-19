@@ -6,21 +6,25 @@
 // month: today's share is the smaller of the two.
 // Pure and tested; Home and the Telegram bot show it.
 
-import { accountBalances, personalMonth, savingsJar, isBillCategory, isWorkCost, payOn, B } from './model.js';
+import { accountBalances, personalMonth, savingsJar, isBillCategory, isWorkCost, payOn, knownRates, B } from './model.js';
 import { payStatus } from './payyourself.js';
 import { dueItems, upcomingItems } from './recurring.js';
 import { spendingIds } from './forecast.js';
 import { daysBetween, monthKey, addMonths, addDays, daysInMonth } from './dates.js';
 import { convert } from './fx.js';
+import { countsAsSpending, signed } from './catshare.js';
+import { linesOf } from './splits.js';
 
 const lei = (c) => Math.floor(c / 100) * 100; // whole lei, rounded down: never promise more
 
 // Everyday spending: what a daily share and a spending limit are about. Not
-// bills (rent, internet), repeating payments, loans or work costs.
-export const isEveryday = (state, t) => t.type === 'expense' && !t.loan && !t.recurring
+// bills (rent, internet), repeating payments, loans or work costs, and not
+// what is no spending at all (a reward bought with points, a reconciliation
+// adjustment: catshare.js countsAsSpending, the same rule as the Money hub).
+export const isEveryday = (state, t) => countsAsSpending(t) && !t.recurring
   && !isBillCategory(state, t.category) && !isWorkCost(state, t.category);
-export const everydaySpent = (state, from, to) => state.tx
-  .filter((t) => t.date >= from && t.date <= to && isEveryday(state, t)).reduce((a, t) => a + B(t), 0);
+export const everydaySpent = (state, from, to) => linesOf(state) // a split record counts per line (bills / work costs apart)
+  .filter((t) => t.date >= from && t.date <= to && isEveryday(state, t)).reduce((a, t) => a + signed(t, B(t)), 0);
 
 export const limitOn = (state) => !!(state.settings.limit?.on && state.settings.limit.amount > 0);
 
@@ -53,7 +57,10 @@ export function suggestLimit(state, today) {
 
 export function safeToSpend(state, today) {
   const base = state.settings.currency;
-  const toBase = (c, cur) => (!cur || cur === base ? c : convert(c, cur, base, state.rates));
+  // The same rates as the account totals (live, else the newest known ones),
+  // so a dollar card never counts as 0 here while it counts in "All my money".
+  const rates = knownRates(state);
+  const toBase = (c, cur) => (!cur || cur === base ? c : convert(c, cur, base, rates));
   // Paying yourself a salary: the buffer isn't spending money, and payday is
   // your salary day.
   const pay = payOn(state) ? payStatus(state, today) : null;
@@ -61,7 +68,8 @@ export function safeToSpend(state, today) {
   const spendable = (a) => spendIds.has(a.id);
   const accs = state.settings.accounts;
   const liquidIds = new Set(accs.filter(spendable).map((a) => a.id));
-  const bal = accountBalances(state);
+  // Money on hand today: records dated later (logged ahead) are not here yet.
+  const bal = accountBalances(state, today);
   const liquid = accs.filter(spendable).reduce((a, acc) => a + (toBase(bal[acc.id] || 0, acc.currency) || 0), 0);
 
   // Next income: your next salary, or the next recurring income after today,

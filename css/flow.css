@@ -1,0 +1,65 @@
+/* How Finance Helper feels (js/flow.js, js/tips.js). Transform and opacity only,
+   150-220 ms, nothing that moves the layout. All of it is off with the system's
+   "reduce motion", Life System's Calm mode and finance-helper.motion = off
+   (html[data-flow-off]). */
+
+/* ---------- A sub-screen replaces another (Settings section, Log view) ---------- */
+.app.flow-in { animation: flow-in 0.2s var(--ease-out) both; }
+@keyframes flow-in { from { opacity: 0; transform: translateX(8px); } }
+
+/* The tab cross-fade is 150-220 ms. */
+::view-transition-old(root) { animation-duration: 0.15s; }
+::view-transition-new(root) { animation-duration: 0.22s; }
+
+/* ---------- Rows ease in, fade out, and light up when saved ---------- */
+.tx.row-saved, tr.row-saved { position: relative; } /* only while it lights up: a positioned row would paint over buttons next to it */
+.tx.row-in, tr.row-in { animation: row-in 0.2s var(--ease-out) both; }
+@keyframes row-in { from { opacity: 0; transform: translateY(6px); } }
+.tx.row-saved::after, tr.row-saved::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: var(--gold-soft); border-radius: inherit; animation: row-saved 0.9s ease-out both; }
+@keyframes row-saved { 0% { opacity: 0; } 20% { opacity: 1; } 100% { opacity: 0; } }
+.row-ghost { animation: row-out 0.2s ease-in both; background: var(--surface); }
+@keyframes row-out { to { opacity: 0; transform: translateX(-10px); } }
+
+/* ---------- Pressed (buttons already press in app.css) ---------- */
+.tx { transition: background 0.12s, transform 0.12s var(--ease-out); }
+.tx:active, .lq-chip:active { transform: scale(0.99); }
+
+/* ---------- A wrong field: a gentle shake and a clear message ---------- */
+.fld-bad { border-color: var(--expense) !important; }
+.fld-shake { animation: fld-shake 0.32s ease-in-out; }
+@keyframes fld-shake { 0%, 100% { transform: translateX(0); } 20% { transform: translateX(-5px); } 45% { transform: translateX(4px); } 70% { transform: translateX(-2px); } }
+.fld-msg { display: block; margin: 4px 2px 0; color: var(--expense); font-size: 12px; font-weight: 500; }
+
+/* ---------- Empty states and tips (js/tips.js) ---------- */
+.empty-state { text-align: center; padding: 32px 16px 28px; color: var(--muted); }
+.empty-state .es-icon { font-size: 30px; line-height: 1; display: block; margin-bottom: 8px; }
+.empty-state b { display: block; color: var(--text); font-size: 16px; margin-bottom: 4px; }
+.empty-state p { margin: 0 auto; max-width: 46ch; font-size: 13px; }
+.empty-state .es-ex { margin: 10px auto 0; padding: 6px 12px; max-width: 46ch; border-radius: 10px; background: var(--surface-2); border: 1px dashed var(--line-strong); font-size: 12.5px; color: var(--muted); }
+.empty-state .es-ex i { font-style: normal; color: var(--text); font-weight: 600; }
+.empty-state .btns { justify-content: center; margin-top: 14px; }
+
+.tip-card { display: flex; gap: 10px; align-items: flex-start; margin: 0 0 14px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--gold-soft); font-size: 13px; }
+.tip-card .tip-ic { flex: none; font-size: 16px; line-height: 1.3; }
+.tip-card .tip-body { flex: 1; min-width: 0; }
+.tip-card .tip-body b { display: block; font-size: 13px; margin-bottom: 1px; }
+.tip-card .tip-body span { color: var(--muted); }
+.tip-card .tip-x { flex: none; border: 0; background: none; color: var(--muted); font-size: 12px; padding: 2px 6px; border-radius: 6px; cursor: pointer; }
+.tip-card .tip-x:hover { color: var(--text); background: var(--surface-2); }
+.tip-card.tip-in { animation: flow-in 0.2s var(--ease-out) both; }
+
+/* ---------- Archive (Settings -> Data) ---------- */
+.arch-years { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0; }
+.arch-years select { min-width: 96px; }
+.arch-note { margin: 6px 0 0; }
+
+/* ---------- Off switch ---------- */
+html[data-flow-off] .app.flow-in, html[data-flow-off] .tx.row-in, html[data-flow-off] tr.row-in, html[data-flow-off] .tx.row-saved::after, html[data-flow-off] tr.row-saved::after, html[data-flow-off] .row-ghost,
+html[data-flow-off] .fld-shake, html[data-flow-off] .tip-card.tip-in { animation: none !important; }
+html[data-flow-off] .tx { transition: none; }
+html[data-flow-off]::view-transition-old(root), html[data-flow-off]::view-transition-new(root) { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+  .app.flow-in, .tx.row-in, tr.row-in, .tx.row-saved::after, tr.row-saved::after, .row-ghost, .fld-shake, .tip-card.tip-in { animation: none !important; }
+  .tx { transition: none; }
+  .lq-chip:active, .tx:active { transform: none; }
+}

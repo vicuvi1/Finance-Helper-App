@@ -82,12 +82,21 @@ test('a transfer between currencies moves the right amount on each side', () => 
   assert.equal(bal.usd, 10000);
 });
 
-test('without a rate an account is listed as missing, not counted as zero', () => {
+test('without any rate an account is listed as missing, not counted as zero', () => {
+  const s = multi();
+  s.rates = null;
+  s.tx = s.tx.filter((t) => !t.currency || t.currency === 'MDL');
+  s.tx.push({ id: 'i', type: 'income', amount: 5000, currency: 'USD', date: '2026-10-02', account: 'usd', category: 'work' });
+  const { missing } = totalBalance(s);
+  assert.ok(missing.some((v) => v.account.id === 'usd'));
+});
+
+test('with no live rates, the rate on the last record prices the account (never silently zero)', () => {
   const s = multi();
   s.rates = null;
   s.tx.push({ id: 'i', type: 'income', amount: 5000, currency: 'USD', rate: 17, base: 85000, date: '2026-10-02', account: 'usd', category: 'work' });
   const { missing } = totalBalance(s);
-  assert.ok(missing.some((v) => v.account.id === 'usd'));
+  assert.ok(!missing.some((v) => v.account.id === 'usd'));
 });
 
 test('people: who gave, who received, and open loans', () => {
