@@ -98,7 +98,7 @@ test('Home: a verdict, a spending limit that sets Safe to spend, and the month r
   await page.fill('#tx-note', 'e2e lunch');
   await page.click('.sheet button[type=submit]');
   await page.waitForSelector('.safe-hero');
-  assert.match(await page.textContent('.home-top h1'), /month|today|limit|Tight/i, 'the title is a verdict');
+  assert.match(await page.textContent('.home-top h1'), /month|today|limit|first until/i, 'the title is a verdict');
 
   // Set a limit from the hero: 3 000 a month.
   await page.click('.sh-setlimit');
