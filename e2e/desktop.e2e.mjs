@@ -36,19 +36,28 @@ test('desktop app opens a visible window and keeps data across restarts', { skip
     assert.equal(visible, true, 'the window is shown');
     assert.match(await win.evaluate(() => location.href), /^app:\/\/finance\//);
 
+    // Settings → About & updates: the desktop's "Check for updates" button and the Cloud sync card.
+    await win.evaluate(() => { location.hash = 'settings'; });
+    await win.click('[data-act="set-tab"][data-sec="about"]');
+    await win.waitForSelector('#update-card [data-act="update-check"]');
+    await win.click('#update-card [data-act="update-check"]');
+    await win.waitForFunction(() => !/Checking GitHub/.test(document.getElementById('update-card')?.textContent || ''));
+    await win.click('[data-act="set-tab"][data-sec="data"]');
+    await win.waitForSelector('[data-testid="cloud-card"] [data-testid="cloud-url"]');
+
     await win.evaluate(() => { location.hash = 'log'; });
     await win.keyboard.press('n');
     await win.waitForSelector('#tx-amount');
     await win.fill('#tx-amount', '42');
     await win.fill('#tx-note', 'desktop e2e');
     await win.click('.sheet button[type=submit]');
-    await win.waitForFunction(() => JSON.parse(localStorage.getItem('finance-helper.state') || '{}').tx?.some((t) => t.note === 'desktop e2e'));
+    await win.waitForFunction(() => JSON.parse(globalThis.__fhStore.getItem('finance-helper.state') || '{}').tx?.some((t) => t.note === 'desktop e2e'));
     assert.deepEqual(errors, []);
     await app.evaluate(({ app: a }) => { a.quit(); });
     await app.close().catch(() => {});
 
     ({ app, win, errors } = await start(userData));
-    const kept = await win.evaluate(() => JSON.parse(localStorage.getItem('finance-helper.state')).tx.some((t) => t.note === 'desktop e2e'));
+    const kept = await win.evaluate(() => JSON.parse(globalThis.__fhStore.getItem('finance-helper.state')).tx.some((t) => t.note === 'desktop e2e'));
     assert.equal(kept, true, 'the record is still there after a restart');
     assert.deepEqual(errors, []);
     await app.evaluate(({ app: a }) => { a.quit(); });
@@ -118,22 +127,22 @@ test('desktop: the Telegram bot logs what you send, custom amounts too, and says
     const { code } = await win.evaluate(async (t) => { await window.desktop.telegram.connect(t); return window.desktop.telegram.pair(); }, TOKEN);
     tg.say(`/start ${code}`);
     await win.waitForFunction(async () => (await window.desktop.telegram.status()).linked, null, { timeout: 15000 });
-    const tx = () => win.evaluate(() => JSON.parse(localStorage.getItem('finance-helper.state')).tx.filter((t) => t.source === 'telegram'));
+    const tx = () => win.evaluate(() => JSON.parse(globalThis.__fhStore.getItem('finance-helper.state')).tx.filter((t) => t.source === 'telegram'));
     const until = (fn) => win.waitForFunction(fn, null, { timeout: 15000 });
 
     // Just a number: logged, with category buttons to file it.
     tg.say('70 mdl');
-    await until(() => JSON.parse(localStorage.getItem('finance-helper.state')).tx.some((t) => t.source === 'telegram' && t.amount === 7000));
+    await until(() => JSON.parse(globalThis.__fhStore.getItem('finance-helper.state')).tx.some((t) => t.source === 'telegram' && t.amount === 7000));
     const seventy = (await tx()).find((t) => t.amount === 7000);
     const asked = tg.sent.at(-1);
     assert.match(asked.text, /What was it\?/);
     const food = asked.reply_markup.inline_keyboard.flat().find((b) => /Food/.test(b.text));
     tg.tap(food.callback_data);
-    await until(() => JSON.parse(localStorage.getItem('finance-helper.state')).tx.some((t) => t.source === 'telegram' && t.amount === 7000 && t.category === 'food'));
+    await until(() => JSON.parse(globalThis.__fhStore.getItem('finance-helper.state')).tx.some((t) => t.source === 'telegram' && t.amount === 7000 && t.category === 'food'));
 
     // "coffee 45": the Coffee block's category with this amount.
     tg.say('coffee 45');
-    await until(() => JSON.parse(localStorage.getItem('finance-helper.state')).tx.some((t) => t.source === 'telegram' && t.amount === 4500));
+    await until(() => JSON.parse(globalThis.__fhStore.getItem('finance-helper.state')).tx.some((t) => t.source === 'telegram' && t.amount === 4500));
     assert.equal((await tx()).find((t) => t.amount === 4500).category, 'food');
 
     // A block without an amount asks how much.
@@ -143,7 +152,7 @@ test('desktop: the Telegram bot logs what you send, custom amounts too, and says
     await new Promise((r) => setTimeout(r, 800));
     assert.match(tg.sent.at(-1).text, /How much for/);
     tg.say('55');
-    await until(() => JSON.parse(localStorage.getItem('finance-helper.state')).tx.some((t) => t.source === 'telegram' && t.amount === 5500 && t.note === 'Drinks'));
+    await until(() => JSON.parse(globalThis.__fhStore.getItem('finance-helper.state')).tx.some((t) => t.source === 'telegram' && t.amount === 5500 && t.note === 'Drinks'));
     assert.ok(seventy);
 
     // Always on: set up from Settings → Telegram, then a message the Google
@@ -160,7 +169,7 @@ test('desktop: the Telegram bot logs what you send, custom amounts too, and says
     const kept = { update_id: 900, message: { message_id: 900, date: Math.floor(Date.now() / 1000) - 3600, text: 'tea 15', chat: { id: 4242, type: 'private' }, from: { first_name: 'Owner' } } };
     google.relay().store.set('u_900', JSON.stringify(kept));
     await win.evaluate(() => window.desktop.telegram.loadNow());
-    await until(() => JSON.parse(localStorage.getItem('finance-helper.state')).tx.some((t) => t.source === 'telegram' && t.amount === 1500));
+    await until(() => JSON.parse(globalThis.__fhStore.getItem('finance-helper.state')).tx.some((t) => t.source === 'telegram' && t.amount === 1500));
     await new Promise((r) => setTimeout(r, 1500));
     assert.equal(google.relay().store.has('u_900'), false); // confirmed to Google
     await win.click('[data-act="tg-relay-off"]');
@@ -175,7 +184,7 @@ test('desktop: the Telegram bot logs what you send, custom amounts too, and says
     const r = await win.evaluate(() => window.desktop.telegram.connect('123456789:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB'));
     assert.equal(r.kept, true);
     tg.say('taxi 50');
-    await until(() => JSON.parse(localStorage.getItem('finance-helper.state')).tx.some((t) => t.source === 'telegram' && t.amount === 5000));
+    await until(() => JSON.parse(globalThis.__fhStore.getItem('finance-helper.state')).tx.some((t) => t.source === 'telegram' && t.amount === 5000));
     assert.deepEqual(errors, []);
   } finally {
     await app.evaluate(({ app: a }) => { a.quit(); }).catch(() => {});
