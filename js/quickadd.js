@@ -9,6 +9,7 @@ import { suggest } from './learn.js';
 import { evalAmount } from './money.js';
 import { pairRate, rateToBase } from './fx.js';
 import { findSourceByName, rememberedSource, sourceName, hasSources } from './incomesources.js';
+import { addDays, isValidISO, dowIndex } from './dates.js';
 
 const fold = (s) => String(s ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 const CUR_WORDS = { usd: 'USD', eur: 'EUR', mdl: 'MDL', lei: 'MDL', leu: 'MDL', ron: 'RON', gbp: 'GBP', uah: 'UAH', rub: 'RUB', dollar: 'USD', dollars: 'USD', euro: 'EUR', euros: 'EUR' };
@@ -32,6 +33,57 @@ function nameMatch(state, words, type) {
   return null;
 }
 
+// ---- Another day: "yesterday 120 lunch", "120 taxi 12 nov", "2 days ago 50 bread", "mon 80 gym" ----
+const MON = [
+  ['jan', 'january', 'ian', 'ianuarie'], ['feb', 'february', 'febr', 'februarie'], ['march', 'martie'],
+  ['apr', 'april', 'aprilie'], ['may'], ['jun', 'june', 'iun', 'iunie'], ['jul', 'july', 'iul', 'iulie'],
+  ['aug', 'august'], ['sep', 'sept', 'september', 'septembrie'], ['oct', 'october', 'octombrie'],
+  ['nov', 'november', 'noiembrie'], ['dec', 'december', 'decembrie'],
+];
+const DOW = [['mon', 'monday', 'luni'], ['tue', 'tues', 'tuesday', 'marti'], ['wed', 'wednesday', 'miercuri'], ['thu', 'thur', 'thurs', 'thursday', 'joi'], ['fri', 'friday', 'vineri'], ['sat', 'saturday', 'sambata'], ['sun', 'sunday', 'duminica']];
+const monthOf = (w) => { const f = fold(w).replace(/\.$/, ''); const i = MON.findIndex((n) => n.includes(f)); return i < 0 ? 0 : i + 1; };
+const pad2 = (n) => String(n).padStart(2, '0');
+
+/**
+ * Takes a day out of quick-add text. Returns {text, date} where date is
+ * 'YYYY-MM-DD' (or null when no day was typed). A day/month with no year that
+ * would be in the future means last year (you remembered something you spent).
+ * Weekdays mean the latest one, today included. Numbers like "12.5" stay amounts.
+ */
+export function takeDate(text, today) {
+  let t = ` ${String(text ?? '')} `;
+  let date = null;
+  // The first match that reads as a day is taken out; anything else stays as typed.
+  const cut = (re, fn) => {
+    if (date) return;
+    const g = new RegExp(re.source, re.flags.includes('g') ? re.flags : `${re.flags}g`);
+    t = t.replace(g, (...m) => { if (date) return m[0]; const d = fn(...m); if (!d) return m[0]; date = d; return ' '; });
+  };
+  cut(/\s(yesterday|ieri|вчера)(?=\s)/i, () => addDays(today, -1));
+  cut(/\s(today|azi|astazi|сегодня)(?=\s)/i, () => today);
+  cut(/\s(\d{1,2})\s+(days?|zile)\s+(ago|in urma)(?=\s)/i, (_, n) => (Number(n) <= 366 ? addDays(today, -Number(n)) : null));
+  const dayMonth = (d, mw, y) => {
+    const m = monthOf(mw);
+    if (!m) return null;
+    let year = y ? Number(y.length === 2 ? `20${y}` : y) : Number(today.slice(0, 4));
+    let iso = `${year}-${pad2(m)}-${pad2(Number(d))}`;
+    if (!isValidISO(iso)) return null;
+    if (!y && iso > today) { year -= 1; iso = `${year}-${pad2(m)}-${pad2(Number(d))}`; if (!isValidISO(iso)) return null; }
+    return iso;
+  };
+  cut(/\s(\d{1,2})\s+([a-zăâîșț]{3,10}\.?)\s+(\d{4})(?=\s)/i, (_, d, mw, y) => dayMonth(d, mw, y));
+  cut(/\s(\d{1,2})\s+([a-zăâîșț]{3,10}\.?)(?=\s)/i, (_, d, mw) => dayMonth(d, mw));
+  cut(/\s([a-zăâîșț]{3,10}\.?)\s+(\d{1,2}),?\s+(\d{4})(?=\s)/i, (_, mw, d, y) => dayMonth(d, mw, y));
+  cut(/\s([a-zăâîșț]{3,10}\.?)\s+(\d{1,2})(?=\s)/i, (_, mw, d) => dayMonth(d, mw));
+  cut(/\s(\d{4}-\d{2}-\d{2})(?=\s)/, (_, iso) => (isValidISO(iso) ? iso : null));
+  cut(/\s(?:on\s+|last\s+)?([a-zăâîșț]{3,9})(?=\s)/i, (_, w) => {
+    const i = DOW.findIndex((n) => n.includes(fold(w)));
+    if (i < 0) return null;
+    return addDays(today, -((dowIndex(today) - i + 7) % 7));
+  });
+  return { text: t.replace(/\s+/g, ' ').trim(), date };
+}
+
 /**
  * @returns {{ ok: boolean, missing: string|null, kind: 'expense'|'income'|'refund'|null,
  *   amount?: number, currency?: string, category?: string, level?: string, account?: string,
@@ -39,8 +91,12 @@ function nameMatch(state, words, type) {
  * `tx` is the record to save (without id and times) when ok.
  */
 export function parseQuick(state, text, { catOverride = null, today } = {}) {
-  const raw = String(text ?? '').trim();
-  if (!raw) return { ok: false, missing: null, kind: null };
+  const typed = String(text ?? '').trim();
+  if (!typed) return { ok: false, missing: null, kind: null };
+  // "yesterday", "12 nov", "2 days ago", "mon": the record goes on that day.
+  const day = today ? takeDate(typed, today) : { text: typed, date: null };
+  const raw = day.text;
+  if (!raw) return { ok: false, missing: 'No amount yet. Start with a number, like "120 lunch".', kind: null };
   const base = state.settings.currency || 'MDL';
   const toks = raw.split(/\s+/);
   let income = false;
@@ -139,7 +195,7 @@ export function parseQuick(state, text, { catOverride = null, today } = {}) {
     type: kind === 'expense' ? 'expense' : 'income',
     amount: entry.amount,
     currency: accCur,
-    date: today,
+    date: day.date || today,
     note,
     account: acc.id,
     category: finalCat,
@@ -151,5 +207,5 @@ export function parseQuick(state, text, { catOverride = null, today } = {}) {
     // A guess you did not pick is not your choice: the app must not learn from itself.
     ...(level === 'guess' || level === 'none' || level === 'name' ? { catBy: 'auto' } : {}),
   };
-  return { ok: true, missing: null, kind, amount, currency: want, category: finalCat, level, account: acc.id, note, source: sourceId, sourceName: sourceId ? sourceName(state, sourceId) : '', tx };
+  return { ok: true, missing: null, kind, amount, currency: want, category: finalCat, level, account: acc.id, note, date: day.date || today, otherDay: !!day.date && day.date !== today, source: sourceId, sourceName: sourceId ? sourceName(state, sourceId) : '', tx };
 }

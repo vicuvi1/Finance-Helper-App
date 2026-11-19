@@ -2,6 +2,9 @@
 
 Read this, then `AGENTS.md`. The owner now works only on this standalone app (no Life System).
 
+**Since 1.85.0: Life System is frozen.** The files copied from it are this repo's own and are
+edited directly; `npm run sync-from-mega` is no longer used (it would undo those edits).
+
 ## What the app is now (v1.84.0)
 Finance Helper ("Money") is a personal finance app for one person (MDL, Moldova): plain
 HTML/CSS/JS, no build step, offline first. It runs as:

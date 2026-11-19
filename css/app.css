@@ -6329,3 +6329,9 @@ html[data-in-life] .lt-eye svg { width: 18px; height: 18px; fill: none; stroke: 
 .ys .tx { animation: rise 0.45s var(--ease-out) both; animation-delay: calc(var(--i, 0) * 50ms + 200ms); }
 @media (max-width: 700px) { .ys-top { grid-template-columns: repeat(2, minmax(0, 1fr)); } .ys-cols { grid-template-columns: 1fr; } .ys-bb { height: 110px; } }
 @media (prefers-reduced-motion: reduce) { .ys-bb i, .ys .tx { animation: none; } }
+
+/* Record sheet: one tap for an earlier day (Today · Yesterday · 2 days ago). */
+.day-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: -2px 0 12px; }
+.day-chips .chip { font-size: 12.5px; padding: 5px 11px; }
+.day-chips .chip.on { background: var(--gold-soft); color: var(--gold); border-color: transparent; font-weight: 600; }
+.qa-day { font-weight: 600; color: var(--gold); }

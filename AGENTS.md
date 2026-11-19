@@ -70,6 +70,9 @@ Rules that keep three agents from tripping over each other:
   whenever a change should reach the owner's installed app.
 
 ## Where the code comes from (since 1.84.0)
+- **Life System (MEGA) is frozen since 2026-11-19 (owner's decision): this repo is the only Money
+  app.** The files once copied from MEGA are now this repo's own: edit them directly. Don't run
+  `npm run sync-from-mega` any more (it would undo those edits). The notes below are history.
 - The web app (index.html, css/, js/, sw.js, icons/, fonts/) is the Money app of the Life System
   monorepo (vicuvi1/mega-system, `src/renderer/public/apps/finance/`), copied with
   `npm run sync-from-mega` (`scripts/sync-from-mega.mjs` + `scripts/port-mega-tests.mjs`). The

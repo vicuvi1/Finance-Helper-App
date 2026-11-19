@@ -7,7 +7,7 @@
 import { ctx, esc } from '../ctx.js';
 import * as M from '../model.js';
 import { formatMoney, evalAmount, centsToPlain } from '../money.js';
-import { todayISO, monthKey } from '../dates.js';
+import { todayISO, monthKey, dayLabel, addDays } from '../dates.js';
 import { parseQuick, quickCategories } from '../quickadd.js';
 import { salaryStatus, salaryConfig, sourceAlerts } from '../salary.js';
 import { colorVar, sourceById } from '../incomesources.js';
@@ -29,7 +29,7 @@ const parse = () => parseQuick(ctx.state, qaText, { catOverride: qaCat, today: t
 
 function previewHTML() {
   const { state } = ctx;
-  if (!qaText.trim()) return '<span class="muted">Type an amount and a note. Add + for income, a minus for a refund, a currency (usd, eur) if it is not lei.</span>';
+  if (!qaText.trim()) return '<span class="muted">Type an amount and a note. Add + for income, a minus for a refund, a currency (usd, eur) if it is not lei. Another day: add "yesterday", "12 nov" or "mon".</span>';
   const r = parse();
   if (!r.ok) return `<span class="qa-miss" data-testid="qa-missing" role="status">${esc(r.missing || 'Type an amount first.')}</span>`;
   const accName = M.account(state, r.account)?.name || '';
@@ -39,6 +39,7 @@ function previewHTML() {
   const shown = r.currency !== r.tx.currency ? `${formatMoney(r.amount, r.currency)} → ${formatMoney(r.tx.amount, r.tx.currency)}` : formatMoney(r.amount, r.currency);
   return `<div class="qa-line" data-testid="qa-preview"><b data-testid="qa-kind">${esc(KIND[r.kind])}</b>
     <span class="qa-amt" data-testid="qa-amount">${esc(shown)}</span>
+    ${r.otherDay ? `<span class="qa-day" data-testid="qa-day">${esc(r.date === addDays(todayISO(), -1) ? 'Yesterday' : dayLabel(r.date))}</span>` : ''}
     <label class="qa-cat"><span>Category <i>(${esc(LEVEL[r.level] || '')})</i></span><select id="qa-cat" data-testid="qa-cat" aria-label="Category">${catOpts}</select></label>
     <span data-testid="qa-account">${esc(accName)}</span>
     ${r.sourceName ? `<span class="src-tag" data-testid="qa-source" style="--c:${colorVar(sourceById(ctx.state, r.source))}"><i aria-hidden="true"></i>${esc(r.sourceName)}</span>` : ''}
@@ -76,7 +77,7 @@ function saveQuick() {
   qaText = '';
   qaCat = null;
   ctx.commit();
-  ctx.toast(`Added ${formatMoney(tx.amount, tx.currency)}${tx.note ? ` · ${tx.note}` : ''}`, 'Undo', () => ctx.undo());
+  ctx.toast(`Added ${formatMoney(tx.amount, tx.currency)}${tx.note ? ` · ${tx.note}` : ''}${tx.date !== todayISO() ? ` · ${dayLabel(tx.date)}` : ''}`, 'Undo', () => ctx.undo());
   setTimeout(() => document.getElementById('qa-input')?.focus(), 0);
 }
 

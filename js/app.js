@@ -1902,6 +1902,32 @@ function render({ enter = false } = {}) {
 
 // ---------- Bottom sheet ----------
 
+// "Today · Yesterday · 2 days ago" under a record's Date: one tap for something you remembered later.
+function dayChips(date) {
+  const today = todayISO();
+  const days = [[0, 'Today'], [1, 'Yesterday'], [2, '2 days ago'], [3, '3 days ago']];
+  return `<div class="day-chips" role="group" aria-label="Pick the day" data-testid="day-chips">${days.map(([n, label]) => {
+    const d = addDays(today, -n);
+    return `<button type="button" class="chip${d === date ? ' on' : ''}" data-day-back="${n}" aria-pressed="${d === date}">${label}</button>`;
+  }).join('')}</div>`;
+}
+document.addEventListener('click', (e) => {
+  const b = e.target.closest?.('[data-day-back]');
+  if (!b) return;
+  const input = b.closest('form')?.querySelector('#tx-date');
+  if (!input) return;
+  input.value = addDays(todayISO(), -Number(b.dataset.dayBack));
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  input.dispatchEvent(new Event('change', { bubbles: true }));
+  for (const c of b.parentElement.querySelectorAll('[data-day-back]')) { c.classList.toggle('on', c === b); c.setAttribute('aria-pressed', String(c === b)); }
+});
+document.addEventListener('change', (e) => {
+  if (e.target?.id !== 'tx-date') return;
+  const box = e.target.closest('form')?.querySelector('.day-chips');
+  if (!box) return;
+  for (const c of box.querySelectorAll('[data-day-back]')) { const on = addDays(todayISO(), -Number(c.dataset.dayBack)) === e.target.value; c.classList.toggle('on', on); c.setAttribute('aria-pressed', String(on)); }
+});
+
 function openSheet(html, onMount) {
   sheetRoot.innerHTML = '';
   sheetRoot.innerHTML = `<div class="sheet-backdrop" data-close><div class="sheet" role="dialog" aria-modal="true"><div class="grab"></div>${html}</div></div>`;
@@ -2109,6 +2135,7 @@ function openTxSheet(existing = null, preset = {}) {
       ${!existing && !isT && !draft.fromRule ? `<div class="row2"><label class="field"><span>Date</span><input id="tx-date" type="date" value="${esc(draft.date)}"></label>
         <label class="field"><span>Repeat</span><select id="tx-repeat"><option value="">No</option>${FREQS.filter((f) => f.id !== 'once' && f.id !== 'custom').map((f) => `<option value="${f.id}" ${draft.repeat === f.id ? 'selected' : ''}>${f.label}</option>`).join('')}</select></label></div>`
     : `<label class="field"><span>Date</span><input id="tx-date" type="date" value="${esc(draft.date)}"></label>`}
+      ${dayChips(draft.date)}
       ${RecordX.fieldsHTML(draft)}
       ${existing ? Taxes.sheetRow(existing.id) : ''}
       <div class="btns">

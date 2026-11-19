@@ -60,6 +60,34 @@ test('log a record, undo, redo, search, and it survives a reload', async () => {
   await context.close();
 });
 
+test('a record for an earlier day: Yesterday under the Date, and "yesterday" in Quick add', async () => {
+  const { page, errors, context } = await openPage(browser, server.url);
+  await page.goto(`${server.url}#log`);
+  await page.waitForSelector('#app header.top');
+  const dayOf = (note) => page.evaluate((n) => JSON.parse(globalThis.__fhStore.getItem('finance-helper.state')).tx.find((t) => t.note === n)?.date, note);
+  const yesterday = await page.evaluate(() => { const d = new Date(); d.setDate(d.getDate() - 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; });
+  await page.keyboard.press('n');
+  await page.waitForSelector('[data-testid="day-chips"]');
+  await page.fill('#tx-amount', '35');
+  await page.fill('#tx-note', 'e2e remembered bread');
+  await page.click('[data-day-back="1"]');
+  assert.equal(await page.inputValue('#tx-date'), yesterday);
+  await page.click('.sheet button[type=submit]');
+  await page.waitForFunction(() => JSON.parse(globalThis.__fhStore.getItem('finance-helper.state')).tx.some((t) => t.note === 'e2e remembered bread'));
+  assert.equal(await dayOf('e2e remembered bread'), yesterday);
+
+  await page.evaluate(() => { location.hash = '#home'; });
+  await page.waitForSelector('[data-testid="qa-input"]');
+  await page.fill('[data-testid="qa-input"]', 'yesterday 60 e2e late taxi');
+  await page.waitForSelector('[data-testid="qa-day"]');
+  assert.equal(await page.textContent('[data-testid="qa-day"]'), 'Yesterday');
+  await page.press('[data-testid="qa-input"]', 'Enter');
+  await page.waitForFunction(() => JSON.parse(globalThis.__fhStore.getItem('finance-helper.state')).tx.some((t) => t.note === 'e2e late taxi'));
+  assert.equal(await dayOf('e2e late taxi'), yesterday);
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
 test('Home: a verdict, a spending limit that sets Safe to spend, and the month recap story', async () => {
   const { page, errors, context } = await openPage(browser, server.url);
   await page.goto(`${server.url}#home`);
