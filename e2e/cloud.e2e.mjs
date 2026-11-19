@@ -76,6 +76,16 @@ test('first visit: sign in with the PIN and Money comes from the server; a web r
   }
   assert.ok(found, 'the web record reached the desktop-like client');
 
+  // The line under the app's name says it is in step (no more "Private & Offline").
+  await page.waitForFunction(() => /^Synced /.test(document.querySelector('[data-testid="sync-status"]')?.textContent || ''), null, { timeout: 15000 });
+
+  // A record logged on the desktop shows on the open web page without a reload (it checks when the window comes back).
+  desk.state.tx.push(tx('desk-3', 2500, 'made-up desk taxi'));
+  desk.cloud.changed();
+  assert.equal((await desk.cloud.sync()).ok, true);
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await page.waitForFunction(() => document.getElementById('app').innerHTML.includes('made-up desk taxi'), null, { timeout: 15000 });
+
   // Settings → Data & backups shows the cloud card as synced.
   await page.evaluate(() => { location.hash = '#settings'; });
   await page.waitForSelector('#app header.top');
@@ -113,6 +123,17 @@ test('Import from Life System: preview, back up and merge (nothing deleted)', as
   await page.evaluate(() => { location.hash = '#log'; });
   await page.waitForFunction(() => JSON.parse(globalThis.__fhStore.getItem('finance-helper.state') || '{}').tx?.some((t) => t.note === 'made-up from Life'), null, { timeout: 10000 });
   await page.waitForFunction(() => document.getElementById('app').innerHTML.includes('made-up from Life'), null, { timeout: 10000 });
+  // Not syncing: the line under the name says so and a click opens the sign-in.
+  assert.equal(await page.textContent('[data-testid="sync-status"]'), 'Not synced · Sign in');
+  await page.click('[data-testid="sync-status"]');
+  await page.waitForSelector('[data-testid="cloud-pin"]');
+  await page.click('.sheet [data-close].btn');
+  // Money is here but not syncing: the next visit asks once to keep this device in step.
+  await page.waitForTimeout(600); // the save waits a moment to group changes
+  const page2 = await context.newPage();
+  await page2.goto(url);
+  await page2.waitForSelector('[data-testid="cloud-pin"]', { timeout: 15000 });
+  assert.match(await page2.textContent('.sheet h3'), /Keep this device in step/);
   assert.deepEqual(errors, []);
   await context.close();
 });

@@ -9,7 +9,7 @@
 //  - on the web, a sign-in sheet the first time (to load Money from the server).
 
 import { ctx, esc } from './ctx.js';
-import { createCloud, DEFAULT_URL } from './cloud.js';
+import { createCloud, DEFAULT_URL, syncSummary } from './cloud.js';
 import { readLifeFile, incomingState, previewImport, mergeImport } from './lifeimport.js';
 import { runNotices } from './notifier.js';
 import { openImported, deviceStorage, flushSave } from './store.js';
@@ -107,20 +107,81 @@ export const dataCards = () => cloudCard() + importCard();
 function refreshCard() {
   const el = document.getElementById('cloud-card');
   if (el) el.outerHTML = cloudCard();
+  paintStatus();
+}
+
+/** Records that came from the other device show at once, but never while you are typing or in a sheet. */
+let renderWaiting = false;
+function renderWhenFree() {
+  const a = document.activeElement;
+  const typing = a && (a.tagName === 'TEXTAREA' || (a.tagName === 'INPUT' && !['checkbox', 'radio', 'button'].includes(a.type)) || a.isContentEditable);
+  if (!typing && !document.querySelector('.sheet')) { renderWaiting = false; ctx.render(); return; }
+  if (renderWaiting) return;
+  renderWaiting = true;
+  const again = () => setTimeout(() => { renderWaiting = false; renderWhenFree(); }, 300);
+  document.addEventListener('focusout', again, { once: true });
+}
+
+// ---------- Sync status under the app's name (instead of "Private & Offline") ----------
+
+const STYLE = `
+.brand-sub.fh-sync{cursor:default;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;background:none;border:0;padding:0;font:inherit;font-size:10.5px;font-weight:600;color:var(--faint);text-align:left}
+.brand-sub.fh-sync[data-act]{cursor:pointer}
+.brand-sub.fh-sync[data-act]:hover{color:var(--text)}
+.brand-sub.fh-sync.warn{color:var(--gold)}
+.brand-sub.fh-sync.bad{color:var(--expense)}
+.brand-sub.fh-sync .brand-dot{transition:background .3s}
+.brand-sub.fh-sync.busy .brand-dot{background:var(--gold);box-shadow:0 0 6px var(--gold);animation:fhPulse 1s ease-in-out infinite}
+.brand-sub.fh-sync.warn .brand-dot{background:var(--gold);box-shadow:none}
+.brand-sub.fh-sync.bad .brand-dot{background:var(--expense);box-shadow:none}
+.brand-sub.fh-sync.off .brand-dot{background:var(--faint);box-shadow:none}
+@keyframes fhPulse{50%{opacity:.35}}
+#update-badge.fh-update{display:none}
+@media (min-width:720px){#update-badge.fh-update{display:block;width:100%;margin:0 0 12px;padding:7px 10px;font-size:12.5px;white-space:nowrap;text-align:center}}
+`;
+function injectStyle() {
+  if (document.getElementById('fh-standalone-style')) return;
+  const st = document.createElement('style');
+  st.id = 'fh-standalone-style';
+  st.textContent = STYLE;
+  document.head.appendChild(st);
+}
+
+function paintStatus() {
+  if (!cloud || ctx.DEMO || typeof document === 'undefined') return;
+  const el = document.querySelector('.tabbar .brand-sub');
+  if (!el) return;
+  const st = cloud.status;
+  const cfg = cloud.config;
+  const s = syncSummary({
+    server: isDesktop() || serverHere !== false || cfg.signedIn,
+    signedIn: cfg.signedIn,
+    busy: st.busy,
+    state: st.state,
+    dirty: cfg.dirty,
+    okAt: cfg.okAt,
+    online: typeof navigator === 'undefined' || navigator.onLine !== false,
+  });
+  el.className = `brand-sub fh-sync ${s.tone}`;
+  el.innerHTML = `<i class="brand-dot"></i>${esc(s.text)}`;
+  el.title = s.act === 'cloud-signin' ? 'Sign in so this device and your other one share the same Money' : s.act === 'cloud-sync' ? 'Sync now' : s.text;
+  el.dataset.testid = 'sync-status';
+  if (s.act) { el.dataset.act = s.act; el.setAttribute('role', 'button'); el.tabIndex = 0; }
+  else { delete el.dataset.act; el.removeAttribute('role'); el.removeAttribute('tabindex'); }
 }
 export const _probe = probeServer;
 
 // ---------- Sign in ----------
 
-export function openSignIn({ first = false } = {}) {
-  ctx.openSheet(`<h3>${first ? 'Sign in to load your Money' : 'Sign in to Cloud sync'} <button type="button" class="icon-btn" data-close aria-label="Close">✕</button></h3>
-    <p class="muted" style="margin-top:0">Your server PIN (the one Life System used). It is checked by the server and never stored here.</p>
+export function openSignIn({ first = false, keep = false } = {}) {
+  ctx.openSheet(`<h3>${first ? 'Sign in to load your Money' : keep ? 'Keep this device in step' : 'Sign in to Cloud sync'} <button type="button" class="icon-btn" data-close aria-label="Close">✕</button></h3>
+    <p class="muted" style="margin-top:0">${keep ? 'This device is not syncing, so the web and desktop apps can show different numbers. Sign in with your server PIN: the records here and on the server are merged (the newest edit of each wins, nothing is deleted).' : 'Your server PIN (the one Life System used). It is checked by the server and never stored here.'}</p>
     <form id="cloud-form">
       <label class="field"><span>PIN</span><input id="cloud-pin" type="password" inputmode="numeric" autocomplete="current-password" required minlength="4" maxlength="12" data-testid="cloud-pin"></label>
       <details style="margin:8px 0"><summary class="muted small">First time on a new server?</summary>
         <label class="field"><span>Server setup key (only to set the very first PIN)</span><input id="cloud-setup" type="password" autocomplete="off"></label></details>
       <p class="muted small" id="cloud-err" role="alert" style="color:var(--danger, #e66)"></p>
-      <div class="btns">${first ? '<button type="button" class="btn" data-close>Use without syncing</button>' : '<button type="button" class="btn" data-close>Cancel</button>'}<button class="btn primary" data-testid="cloud-pin-go">Sign in</button></div>
+      <div class="btns">${first || keep ? '<button type="button" class="btn" data-close>Not now</button>' : '<button type="button" class="btn" data-close>Cancel</button>'}<button class="btn primary" data-testid="cloud-pin-go">Sign in</button></div>
     </form>`, (sheet) => {
     const form = sheet.querySelector('#cloud-form');
     sheet.querySelector('#cloud-pin').focus();
@@ -216,10 +277,10 @@ function paintBadge() {
     b = document.createElement('button');
     b.type = 'button';
     b.id = 'update-badge';
-    b.className = 'btn small primary';
+    b.className = 'btn small primary fh-update';
     b.dataset.testid = 'update-badge';
-    b.style.cssText = 'margin-left:auto;padding:4px 10px;font-size:12px;white-space:nowrap';
-    brand.appendChild(b);
+    // Its own row under the name, so the name and the sync line keep their room.
+    brand.insertAdjacentElement('afterend', b);
   }
   const label = web ? 'Reload to update' : u.status === 'ready' ? 'Restart to update' : u.status === 'downloading' ? `Downloading ${u.percent}%` : 'Update available';
   b.textContent = label;
@@ -263,7 +324,7 @@ export function init() {
     store: globalThis.localStorage,
     app: {
       getState: () => ctx.state,
-      setState: (next) => { ctx.replaceState(next); if (!document.querySelector('.sheet')) ctx.render(); },
+      setState: (next) => { ctx.replaceState(next); renderWhenFree(); },
       backup: (label) => backupFirst(label),
       locked: () => !!ctx.state._sealed,
     },
@@ -288,13 +349,38 @@ export function init() {
       if (f) f.text().then(onImportFile);
     }
   });
+  injectStyle();
+  paintStatus();
   if (!ctx.DEMO) {
-    window.addEventListener('online', () => soon(500));
+    window.addEventListener('online', () => { paintStatus(); soon(500); });
+    window.addEventListener('offline', paintStatus);
     window.addEventListener('focus', () => soon(1000));
-    setInterval(() => cloud.config.signedIn && cloud.sync().then(after), 5 * 60_000);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) soon(800); });
+    // Always in step: while the app is on screen it checks the server every minute
+    // (every 5 minutes in the background), so what you log on the other device shows here.
+    let lastPull = Date.now();
+    setInterval(() => {
+      if (!cloud.config.signedIn || cloud.status.busy) return;
+      const gap = document.hidden ? 5 * 60_000 : 60_000;
+      if (Date.now() - lastPull < gap) return;
+      lastPull = Date.now();
+      cloud.sync().then(after);
+    }, 15_000);
+    cloud.subscribe(() => { if (!cloud.status.busy) lastPull = Date.now(); });
+    setInterval(paintStatus, 30_000);
     if (cloud.config.signedIn) soon(1500);
-    // Web, first visit with nothing here: sign in to load Money from the server.
-    else if (isWeb()) probeServer().then((here) => { if (here && !(ctx.state.tx || []).length && !ctx.state._sealed && !document.querySelector('.sheet')) openSignIn({ first: true }); });
+    else if (isWeb()) {
+      probeServer().then((here) => {
+        if (!here || ctx.state._sealed || document.querySelector('.sheet')) return;
+        // First visit with nothing here: sign in to load Money from the server.
+        if (!(ctx.state.tx || []).length) { openSignIn({ first: true }); return; }
+        // Money is here but not syncing: ask once per visit, so web and desktop never drift apart unnoticed.
+        let asked = false;
+        try { asked = sessionStorage.getItem('fh-keep-asked') === '1'; sessionStorage.setItem('fh-keep-asked', '1'); } catch { /* private window */ }
+        if (!asked) openSignIn({ keep: true });
+      });
+    }
+    // Desktop, signed out: the line under the name says so; nothing pops up by itself.
     notifyNow();
     setInterval(notifyNow, 30 * 60_000);
     document.addEventListener('visibilitychange', () => { if (!document.hidden) notifyNow(); });

@@ -255,7 +255,8 @@ function getUpdater() {
   if (updater || !app.isPackaged) return updater;
   try {
     ({ autoUpdater: updater } = require('electron-updater'));
-    updater.autoDownload = false;
+    // Download a new version by itself: the button then says "Restart to update" (and quitting installs it).
+    updater.autoDownload = true;
     updater.autoInstallOnAppQuit = true;
     updater.on('update-available', (i) => {
       if (isNewerVersion(i?.version, app.getVersion())) {
@@ -330,10 +331,11 @@ app.whenReady().then(() => {
 
   if (process.platform !== 'darwin') Menu.setApplicationMenu(null);
   createWindow();
-  // Quiet check shortly after start and every 4 hours; the page shows it.
+  // Quiet check shortly after start and every hour; a new version downloads by
+  // itself and the page shows "Restart to update" next to the app's name.
   const quietCheck = () => getUpdater()?.checkForUpdates().catch(() => {});
   setTimeout(quietCheck, 8000);
-  setInterval(quietCheck, 4 * 3600 * 1000);
+  setInterval(quietCheck, 3600 * 1000);
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

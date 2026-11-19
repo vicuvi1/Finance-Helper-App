@@ -54,6 +54,26 @@ export function cloudError(status, body) {
 }
 
 /**
+ * The short line under the app's name: is this device in step with the server?
+ * {text, tone: 'ok'|'busy'|'warn'|'bad'|'off', act} where act is what a click does
+ * ('cloud-signin' | 'cloud-sync' | '').
+ */
+export function syncSummary({ server = true, signedIn = false, busy = false, state = '', dirty = false, okAt = 0, online = true, now = Date.now() } = {}) {
+  if (!server) return { text: 'On this device only', tone: 'off', act: '' };
+  if (!signedIn) return { text: 'Not synced · Sign in', tone: 'warn', act: 'cloud-signin' };
+  if (busy) return { text: 'Syncing…', tone: 'busy', act: '' };
+  if (!online) return { text: dirty ? 'Offline · changes wait' : 'Offline', tone: 'warn', act: 'cloud-sync' };
+  if (state === 'signedout') return { text: 'Signed out · Sign in', tone: 'bad', act: 'cloud-signin' };
+  if (state === 'error') return { text: 'Sync problem · Retry', tone: 'bad', act: 'cloud-sync' };
+  if (state === 'skipped') return { text: 'Locked · not syncing', tone: 'warn', act: '' };
+  if (dirty) return { text: 'Sending changes…', tone: 'busy', act: 'cloud-sync' };
+  if (!okAt) return { text: 'Not synced yet · Sync', tone: 'warn', act: 'cloud-sync' };
+  const s = Math.max(0, Math.round((now - okAt) / 1000));
+  const when = s < 60 ? 'just now' : s < 3600 ? `${Math.round(s / 60)} min ago` : s < 86400 ? `${Math.round(s / 3600)} h ago` : `${Math.round(s / 86400)} d ago`;
+  return { text: `Synced ${when}`, tone: s < 3600 ? 'ok' : 'warn', act: 'cloud-sync' };
+}
+
+/**
  * The sync engine. `transport(path, body, token)` → {status, json};
  * `store`: getItem/setItem (device-only settings); `app`: {getState(), setState(next),
  * backup(label)?, locked()?}.
