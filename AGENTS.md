@@ -69,6 +69,26 @@ Rules that keep three agents from tripping over each other:
   desktop apps offer it under Settings → About & updates. Bump the version
   whenever a change should reach the owner's installed app.
 
+## Where the code comes from (since 1.84.0)
+- The web app (index.html, css/, js/, sw.js, icons/, fonts/) is the Money app of the Life System
+  monorepo (vicuvi1/mega-system, `src/renderer/public/apps/finance/`), copied with
+  `npm run sync-from-mega` (`scripts/sync-from-mega.mjs` + `scripts/port-mega-tests.mjs`). The
+  copied commit is in `docs/MEGA_SYNC.json`. Read `docs/HANDOFF.md` first.
+- Standalone-only code lives in files MEGA doesn't have: `js/standalone.js`, `js/cloud.js`,
+  `js/parts.js`, `js/lifeimport.js`, `js/notifier.js`, `api/money.mjs`, `api/_money.mjs`, plus the
+  standalone-owned `js/screens/updates.js` and `js/version.js`. Hooks into copied files are the
+  patches in `scripts/standalone-patches.mjs` (re-applied after every copy). Fix a copied file
+  either in MEGA or with a patch, never by hand only (the next copy would undo it).
+- Server (Vercel, `vercel.json`): `api/login.mjs`, `api/db.mjs` and their `_*.mjs` helpers are
+  MEGA's, copied as they are (PIN only on the server in `sys_auth`, no default PIN, wrong-PIN
+  limits, `/api/db` refuses `sys_*` tables, PRAGMA/ATTACH, a database hiccup is a 503, never a
+  sign-out). `api/money.mjs` is Money's sync. At most 12 functions (Hobby plan); now 3.
+- Money's server copy keeps Life System's exact format (`settings.app_sync_finance` =
+  `{savedAt, editedAt, data}`, big copies as a manifest + `setting_parts`, js/parts.js): never
+  change how pieces are named (tests/parts.test.js pins Life's values).
+- Tests from MEGA are in `tests/mega/*.test.ts` (run by `npm test` with Node's type stripping and
+  `tests/mega/_vitest.js`); don't edit them by hand, re-port them.
+
 ## Conventions
 - Money is integer bani (1 MDL = 100). Format with `formatMoney`, parse user
   input with `evalAmount` (supports `120+45`).

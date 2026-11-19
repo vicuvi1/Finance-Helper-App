@@ -70,11 +70,23 @@ A personal finance app that replaces the "finance 2026" Google Sheet: the same d
 ### On your computer (desktop app)
 1. Open the repo's **Releases** (right side of the GitHub page) and download **Finance-Helper-Setup-x.y.z.exe** from the newest release.
 2. Run it once. Windows may warn about an unknown publisher (the app isn't code-signed): **More info → Run anyway**.
-3. From then on, updates are one click: **Settings → About & updates → Check for updates → Update now → Restart to update**. The app also checks by itself at start and every few hours, and shows a banner on Home when a new version is ready.
+3. From then on, updates are one click: **Settings → About & updates → Check for updates**. It says **Up to date (v1.84.0)**, or offers the new version: **Download update** shows **Downloading 42%**, then **Restart to update**. The app also checks by itself at start and every few hours; when a version is available a small button appears next to the app's name in the sidebar (**Update available → Downloading → Restart to update**). Problems are said in plain words (no internet, GitHub busy, Windows blocked the update).
+4. The web app updates itself; when a new version arrives while it is open, the same button says **Reload to update**.
 
 The portable `.exe` runs without installing, but can't update itself.
 
 Shortcuts: **N** new record · **/** search · **1–7** sections · **L** lock · **Esc** close.
+
+### Web and desktop, in step (your own server)
+The desktop app and the web app share one copy of your Money on your own server (the Vercel project, with your Turso database). **Settings → Data & backups → Cloud sync → Sign in** with your server PIN (the PIN Life System used; it is checked by the server and never stored on the device). Then every change is sent a few seconds later, many changes as one send, and changes from your other device come in at start, every 5 minutes, when you come back to the window and when the internet returns. For each record the newest edit wins; deletions stick; nothing else is ever removed. Offline, everything keeps working and waits to be sent. The desktop app's server address is in that card (default `https://mega-system-ten.vercel.app`). On the web the app asks you to sign in the first time.
+
+If the server is unreachable you stay signed in and your changes wait; only a wrong or ended session asks for the PIN again.
+
+### Import your Money from Life System (one step)
+1. In **Life System**: open **Data center** → **Money** → **Download**. You get `life-system-money-<date>.json` (or `life-system-money-locked-<date>.json` if Money was locked with its PIN). A Life full backup file works too.
+2. In **Finance Helper**: **Settings → Data & backups → Import from Life System…** and pick that file. (Locked file: enter the Money PIN; the file is opened on this device only.)
+3. Check the preview (new records, newer edits, records kept), then **Back up and import**. A backup of this device's data is made first (desktop: Documents → Finance Helper → Backups; web: a downloaded file). For each record the newer edit wins and nothing is deleted. **Ctrl+Z** undoes the whole import.
+4. Signed in to Cloud sync? The imported data goes to your server and your other device by itself. (If the server is the same database Life System used, your data is already there: signing in loads it, no file needed.)
 
 ### Sync between devices (Google Drive)
 Everything is stored on each device (fast, works offline). Your own Google Drive keeps them in step: **Settings → Data & backups → Google Drive sync**.
@@ -89,6 +101,8 @@ Everything is stored on each device (fast, works offline). Your own Google Drive
 ```bash
 npm test           # runs the tests (no install needed)
 npm start          # serves the web app at http://localhost:5173
+npm run web        # the web app with its server functions and a throwaway local database (made-up data)
+npm run sync-from-mega   # copy the newest Money app from the Life System repo (../MEGA-SYSTEM) and its tests
 npm install        # once, for the desktop tools
 npm run desktop    # opens the desktop app
 npm run dist       # builds the installer for your OS into dist/
@@ -115,7 +129,10 @@ js/importer.js        Google Sheet / CSV import, CSV export
 js/csv.js, charts.js  CSV reader, small SVG charts
 sw.js                 offline cache
 electron/main.cjs     desktop app window (Electron)
-scripts/              live preview build
+api/                  server functions on Vercel: login (PIN), db (guarded database), money (sync)
+js/cloud.js           cloud sync with your server; js/parts.js big copies in pieces
+js/standalone.js      the standalone app's own pieces (cloud card, Life import, update badge, notifications)
+scripts/              live preview build, web build, copy from Life System
 tests/                node:test, including a made-up month in your old sheet format
 ```
 Money is stored as whole bani, so totals never drift. All the math lives in `model.js` as pure functions, which is what the tests cover.
