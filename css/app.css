@@ -6342,3 +6342,10 @@ html[data-in-life] .lt-eye svg { width: 18px; height: 18px; fill: none; stroke: 
   .safe-hero .sh-meter, .safe-hero .sh-limit { max-width: none; }
 }
 @media (min-width: 1280px) { .safe-hero:has(.sh-wallet) { grid-template-columns: minmax(0, 1fr) minmax(260px, 1fr) 236px; } }
+
+/* Settings on wide screens: cards flow in two columns (short ones stack), so there are no
+   holes under a short card next to a tall one. */
+@media (min-width: 1100px) {
+  .set-grid { display: block; columns: 2 380px; column-gap: 20px; }
+  .set-grid > .card { break-inside: avoid; margin: 0 0 20px; width: 100%; }
+}

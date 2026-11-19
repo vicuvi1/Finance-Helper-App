@@ -354,7 +354,7 @@ window.addEventListener('life-theme', () => { if (!state._sealed && !document.ge
 
 AmbientMusic.subscribe(() => {
   renderSidebar();
-  if (ui.tab === 'settings' && ui.settingsTab === 'general') render();
+  if (ui.tab === 'settings' && ['general', 'extras'].includes(ui.settingsTab)) render();
 });
 
 // ---------- Shared pieces ----------
@@ -1741,8 +1741,10 @@ function viewSettings() {
   };
   // One section at a time, picked on the left (like any settings screen).
   const sections = [
-    { id: 'general', icon: '⚙️', label: 'General', sub: 'Look, spending limit, pay yourself', desc: 'How the app looks, your monthly spending limit, paying yourself a salary, the jar split and what an hour of your work is worth.', html: () => cards.look + limitSettingsCard() + spendSettingsCard() + paySettingsCard() + MoneyB.settingsCard() + cards.split + WorkHour.settingsCard() + cards.accounts + cards.goals + CashCount.settingsCard() + Checkup.settingsCard() + Money3.settingsCard() + Shortcuts.settingsCard() },
-    { id: 'extras', icon: '✨', label: 'Extras', sub: 'Music, sounds, wallpapers', desc: 'Moving backgrounds, wallpapers, button sounds and focus music. All optional, all off to start.', html: () => cards.extras },
+    { id: 'general', icon: '⚙️', label: 'General', sub: 'Look, keys', desc: 'How the app looks and the keyboard shortcuts.', html: () => cards.look + Shortcuts.settingsCard() },
+    { id: 'spending', icon: '💸', label: 'Spending', sub: 'Spending money, limit, salary', desc: 'Which accounts Safe to spend counts, your monthly spending limit, when your salary comes, and the checks that keep the numbers real.', html: () => spendSettingsCard() + limitSettingsCard() + MoneyB.settingsCard() + cards.accounts + Checkup.settingsCard() + CashCount.settingsCard() },
+    { id: 'saving', icon: '🐷', label: 'Saving', sub: 'Smart split, pay yourself, goals', desc: 'How each income is split into jars, paying yourself a fixed salary, your goals and your emergency fund.', html: () => cards.split + paySettingsCard() + cards.goals + Money3.settingsCard() },
+    { id: 'extras', icon: '✨', label: 'Extras', sub: 'Your hour, music, wallpapers', desc: 'What an hour of your work is worth, moving backgrounds, wallpapers, button sounds and focus music. All optional.', html: () => WorkHour.settingsCard() + cards.extras },
     { id: 'categories', icon: '🏷️', label: 'Categories & rules', sub: 'Categories, jars, auto-rules', desc: 'Your categories, which jar each one fills, and rules that sort records for you.', html: () => cards.categories + Cats.editorCard() + RecordX.fieldsCard() + RecordX.tagsCard() + Rules.settingsCard() + BudgetWarn.settingsCard() },
     { id: 'sources', icon: '💼', label: 'Income sources', sub: 'Job 1, Job 2, clients', desc: 'Your own tags for where money comes from. Pick one when you log income, and see each one in Reports.', html: () => IncomeSources.settingsCard() },
     { id: 'data', icon: '💾', label: 'Data & backups', sub: 'Import, export, backups, sync', desc: 'Where your data lives, automatic backups, sync between devices and Excel import.', html: () => cards.data + Standalone.dataCards() + ArchiveCard.settingsCard() + ChangesScreen.settingsCard() + Backups.settingsCard() + Sync.settingsCard() },
@@ -1768,8 +1770,8 @@ function viewSettings() {
       </div>
       <div class="set-nav-foot">
         ${inLifeNow() ? `<span class="set-privacy-badge">🔒 Yours only</span>
-        <span>Syncs to your own Life System database · no tracking</span>` : `<span class="set-privacy-badge">🔒 100% Private &amp; Offline</span>
-        <span>Zero tracking · Your device, your data</span>`}
+        <span>Syncs to your own Life System database · no tracking</span>` : `<span class="set-privacy-badge">🔒 Yours only</span>
+        <span>No tracking · your devices and your own server</span>`}
       </div>
     </nav>
     <div class="set-body">
@@ -3454,20 +3456,20 @@ document.addEventListener('click', (e) => {
   if (act === 'amb-toggle') {
     AmbientMusic.toggle();
     renderSidebar();
-    if (ui.tab === 'settings' && ui.settingsTab === 'general') render();
+    if (ui.tab === 'settings' && ['general', 'extras'].includes(ui.settingsTab)) render();
     return;
   }
   if (act === 'amb-next') {
     AmbientMusic.nextTrack();
     renderSidebar();
-    if (ui.tab === 'settings' && ui.settingsTab === 'general') render();
+    if (ui.tab === 'settings' && ['general', 'extras'].includes(ui.settingsTab)) render();
     return;
   }
   if (act === 'amb-track') {
     AmbientMusic.setTrack(el.dataset.track);
     if (!AmbientMusic.getState().playing) AmbientMusic.play();
     renderSidebar();
-    if (ui.tab === 'settings' && ui.settingsTab === 'general') render();
+    if (ui.tab === 'settings' && ['general', 'extras'].includes(ui.settingsTab)) render();
     return;
   }
   if (RecordX.onClick(act, el)) return; // fields, tags, bulk "Set field" / "Add tag"
@@ -3499,7 +3501,7 @@ document.addEventListener('click', (e) => {
     openTxSheet(null, { type: 'transfer', amountText: centsToPlain(Number(el.dataset.amount) || 0), from: liquid?.id, to, note: 'Savings' });
   }
   else if (act === 'pay-now') payNow();
-  else if (act === 'pay-hide') { state.meta.payHide = 1; persist(); toast('Hidden. Set it up any time from Settings → General → Pay yourself.'); }
+  else if (act === 'pay-hide') { state.meta.payHide = 1; persist(); toast('Hidden. Set it up any time from Settings → Saving → Pay yourself.'); }
   else if (act === 'quick-pick') {
     const p = M.quickPicks(state, todayISO(), 8)[Number(el.dataset.i)];
     if (p) openTxSheet(null, { type: p.type, note: p.note, category: p.category, account: p.account, amountText: centsToPlain(p.amount) });
