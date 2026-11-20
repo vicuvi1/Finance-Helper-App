@@ -92,6 +92,12 @@ test('first visit: sign in with the PIN and Money comes from the server; a web r
   await page.click('[data-act="set-tab"][data-sec="data"]');
   await page.waitForSelector('[data-testid="cloud-card"]');
   assert.match(await page.textContent('[data-testid="cloud-status"]'), /Synced|waiting/);
+  // Data & health: the server's space and how long it lasts, and the checks.
+  await page.click('[data-act="set-tab"][data-sec="health"]');
+  await page.waitForSelector('[data-testid="data-health"]');
+  await page.waitForFunction(() => /of 5\.0 GB/.test(document.querySelector('[data-testid="dh-space"]')?.textContent || ''), null, { timeout: 15000 });
+  assert.match(await page.textContent('[data-testid="dh-space"]'), /Lasts (more than 100 years|about)/);
+  assert.match(await page.textContent('[data-testid="dh-check-sync"]'), /In sync|waiting/);
   // About & updates: the web build's update card.
   await page.click('[data-act="set-tab"][data-sec="about"]');
   assert.match(await page.textContent('#update-card'), /Up to date \(v\d+\.\d+\.\d+\)/);

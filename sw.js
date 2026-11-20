@@ -43,6 +43,8 @@ const SHELL = [
   './js/monthreview.js',
   './js/subslist.js',
   './js/subtable.js',
+  './js/datahealth.js',
+  './js/screens/datahealth.js',
   './js/screens/subtable.js',
   './js/screens/moneyb2.js',
   './js/screens/recap.js',

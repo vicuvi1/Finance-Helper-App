@@ -6381,3 +6381,19 @@ html[data-in-life] .lt-eye svg { width: 18px; height: 18px; fill: none; stroke: 
 .st-chip.warn { color: var(--gold); background: var(--gold-soft); }
 .st-chip.bad { color: var(--expense); background: color-mix(in srgb, var(--expense) 13%, transparent); }
 .st-row.st-paused td { opacity: 0.55; }
+
+/* Settings → Data & health (js/screens/datahealth.js). */
+.dh-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 14px; }
+.dh-checks { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+.dh-check { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border-radius: 12px; background: var(--surface-2); }
+.dh-check b { font-size: 14px; }
+.dh-check p { margin: 2px 0 0; color: var(--muted); font-size: 13px; line-height: 1.4; }
+.dh-check.bad { background: color-mix(in srgb, var(--expense) 10%, var(--surface-2)); }
+.dh-check.warn { background: color-mix(in srgb, var(--gold) 9%, var(--surface-2)); }
+.dh-room { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px; margin-top: 8px; }
+.dh-room-top { display: flex; justify-content: space-between; gap: 10px; font-size: 14px; margin-bottom: 8px; }
+.dh-room-top span { color: var(--muted); }
+.dh-bar { display: block; height: 8px; border-radius: 99px; background: color-mix(in srgb, var(--text) 9%, transparent); overflow: hidden; }
+.dh-bar i { display: block; height: 100%; border-radius: inherit; background: var(--income); }
+.dh-bar.warn i { background: var(--gold); }
+.dh-bar.bad i { background: var(--expense); }

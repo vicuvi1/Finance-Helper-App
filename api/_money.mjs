@@ -246,4 +246,24 @@ export async function readSlice(cfg, from, fetchImpl = fetch) {
   return { slice: rows[0]?.[0] ?? '', len: Number(rows[0]?.[1]) || 0 }
 }
 
+/**
+ * How much room Money takes on the server (Data & health): the stored value, its pieces,
+ * all settings, and the whole database when Turso tells its size.
+ */
+export async function moneyStats(cfg, fetchImpl = fetch) {
+  const [own, all] = await run(cfg, [['SELECT length(value) FROM settings WHERE key = ?', [KEY]], ['SELECT COALESCE(SUM(length(value)), 0), COUNT(*) FROM settings']], fetchImpl)
+  let parts = [0, 0]
+  try {
+    const [p] = await run(cfg, [[`SELECT COUNT(*), COALESCE(SUM(length(data)), 0) FROM ${PARTS_TABLE} WHERE key = ?`, [KEY]]], fetchImpl)
+    parts = p[0] || parts
+  } catch { /* no pieces table yet */ }
+  let dbBytes = null
+  try {
+    const [pc, ps] = await run(cfg, [['PRAGMA page_count'], ['PRAGMA page_size']], fetchImpl)
+    dbBytes = Number(pc[0]?.[0]) * Number(ps[0]?.[0]) || null
+  } catch { /* Turso may not answer PRAGMA here */ }
+  const value = Number(own[0]?.[0]) || 0
+  return { moneyChars: value + (Number(parts[1]) || 0), pieces: Number(parts[0]) || 0, settingsChars: Number(all[0]?.[0]) || 0, settingsRows: Number(all[0]?.[1]) || 0, dbBytes }
+}
+
 export { looksLikeManifest }

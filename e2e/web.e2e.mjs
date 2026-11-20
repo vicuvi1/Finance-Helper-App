@@ -231,9 +231,11 @@ test('theme gallery persists choices and respects motion preferences', async () 
     for (const theme of ['forest', 'ocean', 'paper', 'dark', 'light', 'system']) {
       await page.locator(`.style-choice:has(input[value="${theme}"])`).click();
       await page.reload();
-      await page.waitForSelector('.style-picker');
+      await general();
       assert.equal(await page.locator('[data-set="theme"]:checked').inputValue(), theme);
       assert.equal(await page.locator('#theme-atmosphere .atmosphere-particle').count(), 12);
+      // Measured once the section's slide-in animation has settled.
+      await page.waitForFunction(() => document.documentElement.scrollWidth <= innerWidth, null, { timeout: 3000 }).catch(() => {});
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
     }
     await page.locator('.style-choice:has(input[value="forest"])').click();
@@ -243,7 +245,7 @@ test('theme gallery persists choices and respects motion preferences', async () 
     await extras();
     await page.locator('[data-set="themeMotion"]').uncheck();
     await page.reload();
-    await page.waitForSelector('.style-picker');
+    await general();
     assert.equal(await page.locator('#theme-atmosphere').count(), 0);
     await extras();
     assert.equal(await page.locator('[data-set="themeMotion"]').isChecked(), false);

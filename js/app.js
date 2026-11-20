@@ -22,6 +22,7 @@ import * as PeopleScreen from './screens/people.js';
 import * as ReportsScreen from './screens/reports.js';
 import * as Security from './screens/security.js';
 import * as Updates from './screens/updates.js';
+import * as DataHealth from './screens/datahealth.js'; // Settings → Data & health
 import * as Standalone from './standalone.js'; // standalone app: cloud sync, Life import, update badge, notifications
 import * as Binance from './screens/binance.js';
 import * as Sync from './screens/sync.js';
@@ -1741,6 +1742,7 @@ function viewSettings() {
   };
   // One section at a time, picked on the left (like any settings screen).
   const sections = [
+    { id: 'health', icon: '🩺', label: 'Data & health', sub: 'Space left, sync, devices', desc: 'Is everything working, how much room your data takes on the server and this device, and how long it lasts at your pace.', html: () => { DataHealth.init(); return DataHealth.card(); } },
     { id: 'general', icon: '⚙️', label: 'General', sub: 'Look, keys', desc: 'How the app looks and the keyboard shortcuts.', html: () => cards.look + Shortcuts.settingsCard() },
     { id: 'spending', icon: '💸', label: 'Spending', sub: 'Spending money, limit, salary', desc: 'Which accounts Safe to spend counts, your monthly spending limit, when your salary comes, and the checks that keep the numbers real.', html: () => spendSettingsCard() + limitSettingsCard() + MoneyB.settingsCard() + cards.accounts + Checkup.settingsCard() + CashCount.settingsCard() },
     { id: 'saving', icon: '🐷', label: 'Saving', sub: 'Smart split, pay yourself, goals', desc: 'How each income is split into jars, paying yourself a fixed salary, your goals and your emergency fund.', html: () => cards.split + paySettingsCard() + cards.goals + Money3.settingsCard() },

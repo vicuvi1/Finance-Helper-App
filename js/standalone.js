@@ -201,7 +201,7 @@ function paintVersion() {
   v.className = 'fh-ver';
   v.dataset.testid = 'app-version';
   v.textContent = `Version ${APP_VERSION}`;
-  v.title = 'About & updates';
+  v.title = 'Data & health';
   meta.appendChild(v);
 }
 
@@ -422,7 +422,7 @@ export function init() {
   document.addEventListener('click', (e) => {
     if (!e.target.closest?.('.fh-ver')) return;
     e.stopPropagation();
-    ctx.ui.settingsTab = 'about';
+    ctx.ui.settingsTab = 'health';
     if (location.hash === '#settings') ctx.render(); else location.hash = '#settings';
   }, true);
   document.addEventListener('change', (e) => {
