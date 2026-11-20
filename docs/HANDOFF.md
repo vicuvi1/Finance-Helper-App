@@ -2,6 +2,10 @@
 
 Read this, then `AGENTS.md`. The owner now works only on this standalone app (no Life System).
 
+**1.89.0: always-on Telegram bot on the server** (`api/telegram.mjs`, `api/_tgbot.mjs`,
+`tests/tgbot.test.js`): turn it on in Settings → Telegram & Binance (needs Cloud sync).
+**1.88.0: Forgot your PIN?** resets the server PIN with the setup key (CRON_SECRET).
+
 **Since 1.85.0: Life System is frozen.** The files copied from it are this repo's own and are
 edited directly; `npm run sync-from-mega` is no longer used (it would undo those edits).
 

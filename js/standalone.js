@@ -104,6 +104,49 @@ export function importCard() {
 
 export const dataCards = () => cloudCard() + importCard();
 
+// ---------- Always-on Telegram bot on your server (api/telegram.mjs) ----------
+
+let botSt = null; // last status from the server
+let botBusy = false;
+async function loadBotStatus(op = 'status') {
+  if (!cloud?.config.signedIn) return;
+  botBusy = true; paintBotCard();
+  try { botSt = await cloud.api('/api/telegram', { op }); botSt.error = ''; }
+  catch (e) { botSt = { ...(botSt || {}), error: e.message }; }
+  botBusy = false; paintBotCard();
+  return botSt;
+}
+function paintBotCard() {
+  const el = document.getElementById('srv-bot-card');
+  if (el) el.outerHTML = botCard();
+}
+/** Settings → Telegram & Binance: the always-on bot that runs on your own server. */
+export function botCard() {
+  if (!cloud || ctx.DEMO) return '';
+  const st = botSt;
+  const signed = cloud.config.signedIn;
+  let line;
+  let btn = '';
+  if (!signed) line = 'Sign in to Cloud sync first (the line under the app\'s name), then turn it on here.';
+  else if (botBusy && !st) line = 'Checking…';
+  else if (st?.error) { line = esc(st.error); btn = '<button class="btn" data-act="srv-bot-check">Check again</button>'; }
+  else if (st && st.configured === false) line = esc(st.why);
+  else if (st?.on) {
+    line = `On: <b>@${esc(st.bot)}</b> answers day and night, even with your computer off. What you send goes straight into your Money and shows here within a minute.${st.lastError ? ` <br><span style="color:var(--expense)">Last problem: ${esc(st.lastError)}</span>` : ''}`;
+    btn = '<button class="btn" data-act="srv-bot-off">Turn off</button>';
+  } else if (st) {
+    line = `Off. <b>@${esc(st.bot)}</b> is ready on your server.${st.elsewhere ? ' Telegram now sends its messages somewhere else (an old address): turning it on here takes them back.' : ''}`;
+    btn = '<button class="btn primary" data-act="srv-bot-on" data-testid="srv-bot-on">Turn on</button>';
+  } else line = 'Checking…';
+  if (signed && !st && !botBusy) setTimeout(() => loadBotStatus(), 0);
+  return `<section class="card" id="srv-bot-card" data-testid="srv-bot-card"><h2>Always-on bot (your server)</h2>
+    <p class="muted small" style="margin-top:0">${line}</p>
+    <p class="muted small">Type <code>coffee 35</code>, <code>+500 salary</code>, <code>yesterday 120 lunch</code>. Each reply has an Undo button. /today /month /balance /last /undo</p>
+    ${btn ? `<div class="btns">${btn}</div>` : ''}
+  </section>`;
+}
+
+
 function refreshCard() {
   const el = document.getElementById('cloud-card');
   if (el) el.outerHTML = cloudCard();
@@ -306,6 +349,18 @@ export function onClick(act) {
   }
   if (act === 'life-import') { document.getElementById('life-import-file')?.click(); return true; }
   if (act === 'go-updates') { location.hash = '#settings'; return true; }
+  if (act === 'srv-bot-check') { loadBotStatus(); return true; }
+  if (act === 'srv-bot-on') {
+    loadBotStatus('on').then((st) => {
+      if (st?.on) {
+        ctx.toast(`@${st.bot} is always on now. Send it "coffee 35" to try.`);
+        // The desktop's own reader stands aside: Telegram can only send to one place.
+        if (isDesktop() && window.desktop?.telegram) window.desktop.telegram.disconnect?.().catch(() => {});
+      }
+    });
+    return true;
+  }
+  if (act === 'srv-bot-off') { loadBotStatus('off').then((st) => { if (st && !st.on) ctx.toast('Always-on bot is off.'); }); return true; }
   return false;
 }
 
@@ -387,6 +442,18 @@ export function init() {
     cloud.subscribe(() => { if (!cloud.status.busy) lastPull = Date.now(); });
     setInterval(paintStatus, 30_000);
     if (cloud.config.signedIn) soon(1500);
+    // Desktop: when the always-on bot runs on the server, this computer's own bot reader stands aside
+    // (Telegram can only send to one place; two readers would fight and the app would show a warning).
+    if (isDesktop() && window.desktop?.telegram) {
+      setTimeout(async () => {
+        const st = await loadBotStatus().catch(() => null);
+        const mine = await window.desktop.telegram.status?.().catch(() => null);
+        if (st?.on && mine?.connected) {
+          await window.desktop.telegram.disconnect?.().catch(() => {});
+          ctx.toast(`Your bot @${st.bot} runs on your server now, so this computer stopped reading it.`);
+        }
+      }, 6000);
+    }
     else if (isWeb()) {
       probeServer().then((here) => {
         if (!here || ctx.state._sealed || document.querySelector('.sheet')) return;

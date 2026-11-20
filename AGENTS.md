@@ -85,7 +85,11 @@ Rules that keep three agents from tripping over each other:
 - Server (Vercel, `vercel.json`): `api/login.mjs`, `api/db.mjs` and their `_*.mjs` helpers are
   MEGA's, copied as they are (PIN only on the server in `sys_auth`, no default PIN, wrong-PIN
   limits, `/api/db` refuses `sys_*` tables, PRAGMA/ATTACH, a database hiccup is a 503, never a
-  sign-out). `api/money.mjs` is Money's sync. At most 12 functions (Hobby plan); now 3.
+  sign-out). `api/money.mjs` is Money's sync. `api/telegram.mjs` + `api/_tgbot.mjs` is the always-on bot
+  (Telegram webhook with a secret header; only your chat; records `tg-<update id>` go into the
+  synced copy through `pushCopy`; Undo = deletion marker; token MONEY_BOT_TOKEN or
+  FINANCE_BOT_TOKEN, chat MONEY_CHAT_ID or TELEGRAM_CHAT_ID; on/off from Settings → Telegram &
+  Binance; the desktop's own reader disconnects while it is on). At most 12 functions (Hobby); now 4.
 - Money's server copy keeps Life System's exact format (`settings.app_sync_finance` =
   `{savedAt, editedAt, data}`, big copies as a manifest + `setting_parts`, js/parts.js): never
   change how pieces are named (tests/parts.test.js pins Life's values).

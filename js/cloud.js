@@ -277,6 +277,8 @@ export function createCloud({ transport, store, app, now = () => Date.now() }) {
       return true;
     },
     signOut() { cfg.session = ''; save(); set({ state: 'signedout', error: '' }); },
+    /** Another server call with this device's session (e.g. /api/telegram). Throws a plain-English error. */
+    api(path, body) { return call(path, body); },
     /** One round (a running one is joined). */
     sync(opts) {
       if (!running) running = round(opts).finally(() => { running = null; });

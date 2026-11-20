@@ -114,7 +114,7 @@ ipcMain.handle('app-info', () => ({ version: app.getVersion(), platform: process
 // cross-site rules are needed and the session only ever goes to the server
 // address the person chose: https only (http just for 127.0.0.1 in tests),
 // only the sign-in and Money endpoints, JSON in and out.
-const CLOUD_PATHS = new Set(['/api/login', '/api/money']);
+const CLOUD_PATHS = new Set(['/api/login', '/api/money', '/api/telegram']);
 ipcMain.handle('cloud-request', async (_e, base, p, body, token) => {
   let u;
   try { u = new URL(String(p), String(base)); } catch { return { status: 0, json: { error: 'Bad server address' } }; }
