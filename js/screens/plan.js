@@ -11,6 +11,7 @@ import { convert } from '../fx.js';
 import { forecast } from '../forecast.js';
 import { lineChart } from '../charts.js';
 import { findSubscriptions, recurringFrom } from '../subs.js';
+import * as SubTable from './subtable.js';
 import * as MoneyB2 from './moneyb2.js';
 import * as Repeating from './repeating.js';
 import * as Budgets from './budgetkinds.js';
@@ -669,7 +670,8 @@ export function view() {
   const rules = all.filter((r) => r.every !== 'once').sort((a, b) => Number(a.paused) - Number(b.paused) || a.type.localeCompare(b.type) || b.amount - a.amount);
   const sugg = R.suggestions(state, today).slice(0, 5);
 
-  const tab = ctx.ui.planTab || 'subs';
+  SubTable.init();
+  const tab = ctx.ui.planTab || 'subtable';
   const expenseRules = rules.filter((r) => r.type === 'expense');
 
   let tabContent = '';
@@ -688,6 +690,9 @@ export function view() {
       break;
     case 'yearly':
       tabContent = MoneyB2.subsTab();
+      break;
+    case 'subtable':
+      tabContent = SubTable.tab();
       break;
     default:
       tabContent = subsFinderCard(state, today) + subscriptionsTab(state, today, rules, scheduled);
@@ -708,7 +713,8 @@ export function view() {
     </header>
 
     <div class="chips plan-tabs">
-      <button class="chip" data-act="plan-tab" data-tab="subs" aria-pressed="${tab === 'subs'}">✨ Subscriptions &amp; Bills <span class="tab-badge">${expenseRules.length}</span></button>
+      <button class="chip" data-act="plan-tab" data-tab="subtable" aria-pressed="${tab === 'subtable'}" data-testid="plan-tab-subtable">🧾 Subscriptions</button>
+      <button class="chip" data-act="plan-tab" data-tab="subs" aria-pressed="${tab === 'subs'}">✨ All bills &amp; what-if <span class="tab-badge">${expenseRules.length}</span></button>
       <button class="chip" data-act="plan-tab" data-tab="repeating" aria-pressed="${tab === 'repeating'}" data-testid="plan-tab-repeating">🔁 Repeating ${due.length ? `<span class="tab-badge bad">${due.length}</span>` : ''}</button>
       <button class="chip" data-act="plan-tab" data-tab="calendar" aria-pressed="${tab === 'calendar'}">📅 Payment Timeline ${due.length ? `<span class="tab-badge bad">${due.length} due</span>` : ''}</button>
       <button class="chip" data-act="plan-tab" data-tab="forecast" aria-pressed="${tab === 'forecast'}">📈 Cash-Flow Forecast</button>

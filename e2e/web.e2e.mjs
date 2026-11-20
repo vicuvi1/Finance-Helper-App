@@ -88,6 +88,49 @@ test('a record for an earlier day: Yesterday under the Date, and "yesterday" in 
   await context.close();
 });
 
+test('subscriptions table: add one in USD, edit it, pick a type; Quick add keeps the subcategory', async () => {
+  const { page, errors, context } = await openPage(browser, server.url);
+  await page.goto(`${server.url}#plan`);
+  await page.waitForSelector('[data-testid="sub-table"]');
+  await page.fill('[data-st-new="name"]', 'Made-up AI');
+  await page.fill('[data-st-new="amount"]', '20');
+  await page.selectOption('[data-st-new="currency"]', 'USD');
+  await page.click('[data-testid="sub-add"]');
+  await page.waitForSelector('[data-testid="sub-row"]');
+  const rule = () => page.evaluate(() => JSON.parse(globalThis.__fhStore.getItem('finance-helper.state')).recurring.find((r) => r.note === 'Made-up AI'));
+  await page.waitForFunction(() => JSON.parse(globalThis.__fhStore.getItem('finance-helper.state')).recurring.some((r) => r.note === 'Made-up AI'));
+  let r = await rule();
+  assert.equal(r.amount, 2000);
+  assert.equal(r.currency, 'USD');
+  assert.equal(r.subscription, true);
+  // Edit the amount in place.
+  await page.fill('[data-testid="sub-row"] [data-st="amount"]', '25');
+  await page.press('[data-testid="sub-row"] [data-st="amount"]', 'Enter');
+  await page.waitForFunction(() => JSON.parse(globalThis.__fhStore.getItem('finance-helper.state')).recurring.find((x) => x.note === 'Made-up AI').amount === 2500);
+  // Pick a type (subcategory) when there is one.
+  const types = await page.$$eval('[data-testid="sub-row"] [data-st="sub"] option', (o) => o.map((x) => x.value).filter((v) => v && v !== '__new'));
+  if (types.length) {
+    await page.selectOption('[data-testid="sub-row"] [data-st="sub"]', types[0]);
+    await page.waitForFunction((id) => JSON.parse(globalThis.__fhStore.getItem('finance-helper.state')).recurring.find((x) => x.note === 'Made-up AI').sub === id, types[0]);
+  }
+  // Quick add: choose the Subscriptions category, then a type.
+  await page.evaluate(() => { location.hash = '#home'; });
+  await page.waitForSelector('[data-testid="qa-input"]');
+  await page.fill('[data-testid="qa-input"]', '450 made-up gpt');
+  await page.waitForSelector('[data-testid="qa-cat"]');
+  const subsCat = await page.$$eval('[data-testid="qa-cat"] option', (o) => o.find((x) => /subscri/i.test(x.textContent))?.value);
+  if (subsCat) {
+    await page.selectOption('[data-testid="qa-cat"]', subsCat);
+    await page.waitForSelector('[data-testid="qa-sub"]');
+    const opt = await page.$$eval('[data-testid="qa-sub"] option', (o) => o.map((x) => x.value).find(Boolean));
+    await page.selectOption('[data-testid="qa-sub"]', opt);
+    await page.click('[data-testid="qa-save"]');
+    await page.waitForFunction((id) => JSON.parse(globalThis.__fhStore.getItem('finance-helper.state')).tx.some((t) => t.note === 'made-up gpt' && t.sub === id), opt);
+  }
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
 test('Home: a verdict, a spending limit that sets Safe to spend, and the month recap story', async () => {
   const { page, errors, context } = await openPage(browser, server.url);
   await page.goto(`${server.url}#home`);

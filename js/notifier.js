@@ -1,5 +1,5 @@
 // The standalone app's own notifications (inside Life System, Life sent them):
-// budget warnings at 80% / 100%, the salary watch (salary or an income source
+// subscriptions due soon (js/subtable.js), budget warnings at 80% / 100%, the salary watch (salary or an income source
 // late or low), and the reality check reminder. At most 4 a day, each one
 // once (per month, or per budget period). On the desktop they are the
 // system's notifications (Electron, through window.desktop.notify); on the
@@ -12,6 +12,7 @@ import { salaryStatus, sourceAlerts } from './salary.js';
 import { checkupDue } from './checkup.js';
 import { monthKey } from './dates.js';
 import { formatMoney } from './money.js';
+import { subscriptionNotices } from './subtable.js';
 
 export const SENT_KEY = 'finance-helper.notices';
 export const PER_DAY = 4;
@@ -25,6 +26,11 @@ export function dueNotices(state, today, sent = {}, { hidden = false } = {}) {
   const cur = state.settings?.currency || 'MDL';
   const amt = (c) => (hidden ? '' : ` (${formatMoney(c, cur)})`);
   const out = []; // {key, title, body, remember: [keys]}
+  // Subscriptions first (a date can't wait): due soon, today, late, or the card it's paid from is too low.
+  for (const n of subscriptionNotices(state, today, { hidden, money: (c, cur) => formatMoney(c, cur, { reveal: true }) })) {
+    const k = `${month}:${n.key}`;
+    if (!keys.includes(k)) out.push({ key: n.key, remember: [k], title: n.title, body: n.body });
+  }
   if (warningsOn(state)) {
     const { warn } = newWarnings(budgetCrossings(state, today), keys);
     for (const c of warn) {

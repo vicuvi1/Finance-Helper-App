@@ -137,6 +137,7 @@ export function makeTx(rule, date, { id, now = Date.now(), rate = 1 } = {}) {
     recurring: rule.id,
   };
   if (rule.person) tx.person = rule.person;
+  if (rule.sub) tx.sub = rule.sub; // its subcategory (Subscriptions › Tech / AI…)
   return tx;
 }
 

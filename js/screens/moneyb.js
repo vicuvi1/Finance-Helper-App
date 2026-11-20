@@ -14,9 +14,11 @@ import { colorVar, sourceById } from '../incomesources.js';
 import { priceMemory } from '../prices.js';
 import { askMoney, CANT } from '../ask.js';
 import { shortDay } from '../safespend.js';
+import { subsOf, suggestSub } from '../cattree.js';
 
 let qaText = '';
 let qaCat = null;
+let qaSub = null; // null = the app's guess; '' = none; else a subcategory id
 let askText = '';
 let askOut = null; // the last answer, kept while the page redraws
 
@@ -26,6 +28,14 @@ const KIND = { expense: 'Expense', income: 'Income', refund: 'Refund (lowers spe
 const LEVEL = { sure: 'learned from your records', maybe: 'learned, not sure', name: 'from the words you typed', guess: 'a guess', chosen: 'your pick', none: 'not sure' };
 
 const parse = () => parseQuick(ctx.state, qaText, { catOverride: qaCat, today: todayISO() });
+// The subcategory for the quick record: your pick, else what fits the note (Subscriptions › Tech / AI…).
+function subFor(r) {
+  const subs = r?.ok && r.kind !== 'income' ? subsOf(ctx.state, r.category) : [];
+  if (!subs.length) return { subs, id: '' };
+  if (qaSub != null) return { subs, id: subs.some((x) => x.id === qaSub) ? qaSub : '' };
+  const g = r.note ? suggestSub(ctx.state, r.note, { category: r.category })?.sub : null;
+  return { subs, id: g && subs.some((x) => x.id === g.id) ? g.id : '' };
+}
 
 function previewHTML() {
   const { state } = ctx;
@@ -41,6 +51,7 @@ function previewHTML() {
     <span class="qa-amt" data-testid="qa-amount">${esc(shown)}</span>
     ${r.otherDay ? `<span class="qa-day" data-testid="qa-day">${esc(r.date === addDays(todayISO(), -1) ? 'Yesterday' : dayLabel(r.date))}</span>` : ''}
     <label class="qa-cat"><span>Category <i>(${esc(LEVEL[r.level] || '')})</i></span><select id="qa-cat" data-testid="qa-cat" aria-label="Category">${catOpts}</select></label>
+    ${(() => { const q = subFor(r); return q.subs.length ? `<label class="qa-cat"><span>Type</span><select id="qa-sub" data-testid="qa-sub" aria-label="Subcategory"><option value="">—</option>${q.subs.map((x) => `<option value="${esc(x.id)}"${x.id === q.id ? ' selected' : ''}>${esc(`${x.emoji ? `${x.emoji} ` : ''}${x.name}`)}</option>`).join('')}</select></label>` : ''; })()}
     <span data-testid="qa-account">${esc(accName)}</span>
     ${r.sourceName ? `<span class="src-tag" data-testid="qa-source" style="--c:${colorVar(sourceById(ctx.state, r.source))}"><i aria-hidden="true"></i>${esc(r.sourceName)}</span>` : ''}
     <span data-testid="qa-note" class="qa-note">${r.note ? `“${esc(r.note)}”` : '<i>no note</i>'}</span>
@@ -51,14 +62,15 @@ function previewHTML() {
 function paintPreview() {
   const box = document.getElementById('qa-preview');
   if (!box) return;
-  const hadSelect = document.activeElement?.id === 'qa-cat';
+  const had = document.activeElement?.id;
   box.innerHTML = previewHTML();
-  if (hadSelect) document.getElementById('qa-cat')?.focus();
+  if (had === 'qa-cat' || had === 'qa-sub') document.getElementById(had)?.focus();
 }
 
 function clearQuick(focus = true) {
   qaText = '';
   qaCat = null;
+  qaSub = null;
   const el = document.getElementById('qa-input');
   if (el) el.value = '';
   paintPreview();
@@ -72,10 +84,13 @@ function saveQuick() {
   if (!r.ok) { ctx.toast(r.missing || 'Type an amount first, like "120 lunch".'); return; }
   const now = Date.now();
   const tx = { id: M.uid(), createdAt: now, updatedAt: now, ...r.tx };
+  const sub = subFor(r).id;
+  if (sub) tx.sub = sub;
   state.tx.push(tx);
   ctx.ui.flashId = tx.id;
   qaText = '';
   qaCat = null;
+  qaSub = null;
   ctx.commit();
   ctx.toast(`Added ${formatMoney(tx.amount, tx.currency)}${tx.note ? ` · ${tx.note}` : ''}${tx.date !== todayISO() ? ` · ${dayLabel(tx.date)}` : ''}`, 'Undo', () => ctx.undo());
   setTimeout(() => document.getElementById('qa-input')?.focus(), 0);
@@ -284,17 +299,18 @@ export function init() {
   bound = true;
   document.addEventListener('input', (e) => {
     const t = e.target;
-    if (t.id === 'qa-input') { qaText = t.value; qaCat = null; paintPreview(); }
+    if (t.id === 'qa-input') { qaText = t.value; qaCat = null; qaSub = null; paintPreview(); }
     else if (t.id === 'ask-input') askText = t.value;
   });
   document.addEventListener('change', (e) => {
     const t = e.target;
-    if (t.id === 'qa-cat') { qaCat = t.value; paintPreview(); }
+    if (t.id === 'qa-cat') { qaCat = t.value; qaSub = null; paintPreview(); }
+    else if (t.id === 'qa-sub') { qaSub = t.value; paintPreview(); }
     else if (t.dataset?.sal) onSalaryChange(t);
   });
   document.addEventListener('keydown', (e) => {
     const t = e.target;
-    if (t.id === 'qa-input' || t.id === 'qa-cat') {
+    if (t.id === 'qa-input' || t.id === 'qa-cat' || t.id === 'qa-sub') {
       if (e.key === 'Enter') { e.preventDefault(); saveQuick(); }
       else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); clearQuick(); }
       else if (e.key === 'ArrowDown' && t.id === 'qa-input') { const s = document.getElementById('qa-cat'); if (s) { e.preventDefault(); s.focus(); } }

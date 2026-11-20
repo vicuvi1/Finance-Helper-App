@@ -6349,3 +6349,35 @@ html[data-in-life] .lt-eye svg { width: 18px; height: 18px; fill: none; stroke: 
   .set-grid { display: block; columns: 2 380px; column-gap: 20px; }
   .set-grid > .card { break-inside: avoid; margin: 0 0 20px; width: 100%; }
 }
+
+/* Plan → Subscriptions table (js/screens/subtable.js). */
+.st-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; margin-bottom: 14px; }
+.st-totals { display: flex; gap: 22px; }
+.st-totals span { display: flex; flex-direction: column; align-items: flex-end; }
+.st-totals small { color: var(--muted); font-size: 12px; }
+.st-totals b { font: 500 22px/1.2 var(--display); }
+.st-wrap { overflow-x: auto; margin: 0 -6px; padding: 0 6px; }
+.st-table { width: 100%; table-layout: fixed; border-collapse: separate; border-spacing: 0 4px; min-width: 1000px; font-size: 13px; }
+.st-table th { text-align: left; font-weight: 600; font-size: 11.5px; letter-spacing: 0; text-transform: none; color: var(--muted); padding: 2px 6px; white-space: nowrap; }
+.st-table td { padding: 2px 2px; vertical-align: middle; background: var(--surface-2); }
+.st-table td:first-child { border-radius: 10px 0 0 10px; padding-left: 6px; }
+.st-table td:last-child { border-radius: 0 10px 10px 0; padding-right: 6px; }
+.st-table tr.st-new td { background: transparent; padding-top: 8px; }
+.st-table .st-in, .st-table select.st-in, .st-table input.st-in { width: 100%; min-width: 0; height: 34px; padding: 4px 6px; border-radius: 8px; border: 1px solid transparent; background-color: transparent; color: var(--text); font: inherit; font-size: 13px; box-shadow: none; }
+.st-table select.st-in { appearance: auto; -webkit-appearance: menulist; background-image: none; padding: 4px 2px 4px 4px; text-overflow: clip; }
+.st-table .st-in:hover { border-color: var(--line); }
+.st-table .st-in:focus { outline: none; border-color: var(--gold); background-color: var(--surface); }
+.st-table .st-new .st-in { border-color: var(--line); background-color: var(--surface); }
+.st-table .st-num { text-align: right; font-variant-numeric: tabular-nums; }
+.st-table th:nth-child(1) { width: 15%; } .st-table th:nth-child(2) { width: 12%; } .st-table th:nth-child(3) { width: 7.5%; }
+.st-table th:nth-child(4) { width: 7.5%; } .st-table th:nth-child(5) { width: 10%; } .st-table th:nth-child(6) { width: 12.5%; }
+.st-table th:nth-child(7) { width: 11%; } .st-table th:nth-child(8) { width: 8%; } .st-table th:nth-child(10) { width: 64px; }
+.st-status { white-space: normal; line-height: 1.9; padding-left: 6px !important; }
+.st-acts { white-space: nowrap; text-align: right; }
+.st-acts .icon-btn { display: inline-grid; width: 28px; height: 28px; }
+.st-status .btn.sm { padding: 3px 9px; font-size: 12px; }
+.st-chip { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11.5px; font-weight: 600; line-height: 1.6; background: color-mix(in srgb, var(--text) 8%, transparent); color: var(--muted); margin-right: 4px; white-space: nowrap; }
+.st-chip.ok { color: var(--income); background: color-mix(in srgb, var(--income) 12%, transparent); }
+.st-chip.warn { color: var(--gold); background: var(--gold-soft); }
+.st-chip.bad { color: var(--expense); background: color-mix(in srgb, var(--expense) 13%, transparent); }
+.st-row.st-paused td { opacity: 0.55; }
