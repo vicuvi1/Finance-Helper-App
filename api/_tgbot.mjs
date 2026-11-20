@@ -174,3 +174,8 @@ export async function stopBot(bot, fetchImpl = fetch) {
   await tg(bot, 'deleteWebhook', {}, fetchImpl)
   return { on: false }
 }
+
+/** The scheduled messages (api/cron.mjs). Filled in by the bot messages release; does nothing yet. */
+export async function runBotJob(cfg, job) {
+  return { job, sent: 0 }
+}

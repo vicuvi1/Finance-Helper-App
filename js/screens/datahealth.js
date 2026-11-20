@@ -7,11 +7,12 @@ import { ctx, esc } from '../ctx.js';
 import { todayISO } from '../dates.js';
 import { APP_VERSION } from '../version.js';
 import { updateStatus, webUpdateWaiting } from './updates.js';
-import { cloudEngine } from '../standalone.js';
+import { cloudEngine, lastServerBackup } from '../standalone.js';
 import { SERVER_LIMIT, formatBytes, dataCounts, recordsPerMonth, roomLeft, yearsText, healthChecks, ago } from '../datahealth.js';
 
 let srv = null; // {moneyChars, pieces, dbBytes, devices} | {error}
 let bot = null;
+let srvBackupAt = 0; // the newest server backup
 let dev = null; // {usage, quota}
 let loading = false;
 let loadedAt = 0;
@@ -24,6 +25,7 @@ async function load(force = false) {
   if (navigator.storage?.estimate) jobs.push(navigator.storage.estimate().then((e) => { dev = { usage: e.usage || 0, quota: e.quota || 0 }; }).catch(() => {}));
   if (cloud?.config.signedIn) {
     jobs.push(cloud.api('/api/money', { op: 'stats' }).then((r) => { srv = r; }).catch((e) => { srv = { error: e.message }; }));
+    jobs.push(cloud.api('/api/money', { op: 'backups' }).then((r) => { srvBackupAt = r.backups?.[0]?.at || 0; }).catch(() => {}));
     jobs.push(cloud.api('/api/telegram', { op: 'status' }).then((r) => { bot = r; }).catch(() => { bot = null; }));
   }
   await Promise.all(jobs);
@@ -57,7 +59,7 @@ export function card() {
     server, device,
     bot: bot && bot.configured !== undefined ? bot : null,
     update: { version: APP_VERSION, waiting: webUpdateWaiting() || u.status === 'ready' || u.status === 'available' },
-    lastBackup: state.meta?.lastBackup || 0,
+    lastBackup: Math.max(state.meta?.lastBackup || 0, lastServerBackup(), srvBackupAt),
   });
   const icon = { ok: '✅', warn: '🟡', bad: '🔴' };
   const worst = checks.some((c) => c.level === 'bad') ? 'bad' : checks.some((c) => c.level === 'warn') ? 'warn' : 'ok';

@@ -18,6 +18,10 @@
     "api/telegram.mjs": {
       "maxDuration": 30,
       "includeFiles": "js/**"
+    },
+    "api/cron.mjs": {
+      "maxDuration": 60,
+      "includeFiles": "js/**"
     }
   },
   "headers": [
@@ -58,6 +62,16 @@
           "value": "no-cache"
         }
       ]
+    }
+  ],
+  "crons": [
+    {
+      "path": "/api/cron?job=morning",
+      "schedule": "5 7 * * *"
+    },
+    {
+      "path": "/api/cron?job=evening",
+      "schedule": "5 19 * * *"
     }
   ]
 }

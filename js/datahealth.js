@@ -88,7 +88,7 @@ export function healthChecks({ sync, server, device, bot, update, lastBackup, no
   }
   if (bot) out.push({ id: 'bot', level: bot.on ? (bot.lastError ? 'warn' : 'ok') : 'warn', title: bot.on ? 'Telegram bot on' : 'Telegram bot off', text: bot.on ? (bot.lastError ? `Last problem: ${bot.lastError}` : `@${bot.bot} answers day and night.`) : (bot.why || 'Turn it on in Settings → Telegram & Binance.') });
   if (update) out.push({ id: 'update', level: update.waiting ? 'warn' : 'ok', title: update.waiting ? 'A new version is ready' : `Up to date (v${update.version})`, text: update.waiting ? 'Restart or reload to use it.' : 'Updates come by themselves.' });
-  if (lastBackup !== undefined) out.push({ id: 'backup', level: lastBackup && now - lastBackup < 8 * 86400_000 ? 'ok' : 'warn', title: 'Backups', text: lastBackup ? `Last backup ${ago(now - lastBackup)}.` : 'No backup on this device yet (Settings → Data & backups).' });
+  if (lastBackup !== undefined) out.push({ id: 'backup', level: lastBackup && now - lastBackup < 8 * 86400_000 ? 'ok' : 'warn', title: 'Backups', text: lastBackup ? `Last backup ${ago(now - lastBackup)}.` : 'No backup yet. Your server makes one every night once you are signed in (Settings → Data & backups).' });
   return out;
 }
 

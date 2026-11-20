@@ -92,6 +92,10 @@ test('first visit: sign in with the PIN and Money comes from the server; a web r
   await page.click('[data-act="set-tab"][data-sec="data"]');
   await page.waitForSelector('[data-testid="cloud-card"]');
   assert.match(await page.textContent('[data-testid="cloud-status"]'), /Synced|waiting/);
+  // Server backups: back up now, then it is listed with a Restore button.
+  await page.click('[data-testid="srv-backup-now"]');
+  await page.waitForSelector('[data-testid="srv-restore"]', { timeout: 15000 });
+  assert.match(await page.textContent('[data-testid="srv-backups"]'), /made by you/);
   // Data & health: the server's space and how long it lasts, and the checks.
   await page.click('[data-act="set-tab"][data-sec="health"]');
   await page.waitForSelector('[data-testid="data-health"]');

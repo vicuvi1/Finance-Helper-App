@@ -103,7 +103,58 @@ export function importCard() {
   </section>`;
 }
 
-export const dataCards = () => cloudCard() + importCard();
+export const dataCards = () => cloudCard() + serverBackupsCard() + importCard();
+
+// ---------- Server backups (api/_backups.mjs): every night, kept 30 days ----------
+
+let bk = null; // {list} | {error}
+let bkBusy = '';
+async function loadBackups() {
+  if (!cloud?.config.signedIn) return;
+  try { bk = { list: (await cloud.api('/api/money', { op: 'backups' })).backups || [] }; }
+  catch (e) { bk = { error: e.message }; }
+  paintBackups();
+}
+function paintBackups() { const el = document.getElementById('srv-backups'); if (el) el.outerHTML = serverBackupsCard(); }
+/** The newest server backup's time (for Data & health), or 0. */
+export const lastServerBackup = () => bk?.list?.[0]?.at || 0;
+export function serverBackupsCard() {
+  if (!cloud || ctx.DEMO) return '';
+  const signed = cloud.config.signedIn;
+  if (signed && !bk && !bkBusy) setTimeout(loadBackups, 0);
+  const label = (b) => {
+    const d = new Date(b.at);
+    const when = d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' }) + ' ' + d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+    return `${when}${b.kind === 'before-restore' ? ' · before a restore' : b.kind === 'manual' ? ' · made by you' : ''}`;
+  };
+  const rows = (bk?.list || []).map((b) => `<div class="kv"><span>${esc(label(b))} <small class="muted">· ${b.records.toLocaleString()} records</small></span><b><button type="button" class="btn sm" data-act="srv-restore" data-id="${esc(b.id)}" data-testid="srv-restore">Restore</button></b></div>`).join('');
+  return `<section class="card" id="srv-backups" data-testid="srv-backups"><h2>Server backups</h2>
+    <p class="muted small" style="margin-top:0">${signed ? 'Your server saves a full copy of your Money every night (around 9:00) and keeps the last 30 days. Restoring one puts it back on every device; how things were just before is saved first, so a restore can be undone.' : 'Sign in to Cloud sync (above) to see your server backups.'}</p>
+    ${bk?.error ? `<p class="small" style="color:var(--expense)">${esc(bk.error)}</p>` : ''}
+    ${signed ? `<div class="set-kv-list">${rows || '<div class="kv"><span class="muted">No backup yet. The first one is made tonight, or press Back up now.</span></div>'}</div>
+    <div class="btns" style="margin-top:12px"><button type="button" class="btn" data-act="srv-backup-now" data-testid="srv-backup-now"${bkBusy ? ' disabled' : ''}>${bkBusy === 'now' ? 'Saving…' : 'Back up now'}</button></div>` : ''}
+  </section>`;
+}
+function confirmRestore(id) {
+  const b = (bk?.list || []).find((x) => x.id === id);
+  if (!b) return;
+  ctx.openSheet(`<h3>Restore this backup? <button type="button" class="icon-btn" data-close aria-label="Close">✕</button></h3>
+    <p style="margin-top:0">Your Money goes back to <b>${esc(new Date(b.at).toLocaleString())}</b> (${b.records.toLocaleString()} records) on every device.</p>
+    <p class="muted small">Anything added after that is replaced. How things are right now is saved first as a backup, so you can restore that one to undo this.</p>
+    <div class="btns"><button type="button" class="btn" data-close>Cancel</button><button type="button" class="btn danger" id="srv-restore-go" data-testid="srv-restore-go">Restore</button></div>`, (sheet) => {
+    sheet.querySelector('#srv-restore-go').addEventListener('click', async () => {
+      sheet.querySelector('#srv-restore-go').disabled = true;
+      try {
+        const r = await cloud.api('/api/money', { op: 'restore', id });
+        ctx.closeSheet();
+        ctx.toast(`Restored: ${r.records.toLocaleString()} records. Syncing…`);
+        const s = await cloud.sync({ check: true });
+        after(s);
+        bk = null; loadBackups();
+      } catch (e) { ctx.closeSheet(); ctx.toast(e.message); }
+    });
+  });
+}
 
 // ---------- Always-on Telegram bot on your server (api/telegram.mjs) ----------
 
@@ -356,7 +407,7 @@ function paintBadge() {
 
 // ---------- Clicks ----------
 
-export function onClick(act) {
+export function onClick(act, el) {
   if (act === 'cloud-signin') { openSignIn(); return true; }
   if (act === 'cloud-signout') { cloud.signOut(); refreshCard(); ctx.toast('Signed out of Cloud sync. Your data stays on this device.'); return true; }
   if (act === 'cloud-sync') {
@@ -367,6 +418,12 @@ export function onClick(act) {
   if (act === 'life-import') { document.getElementById('life-import-file')?.click(); return true; }
   if (act === 'go-updates') { location.hash = '#settings'; return true; }
   if (act === 'srv-bot-check') { loadBotStatus(); return true; }
+  if (act === 'srv-restore') { confirmRestore(el?.dataset.id); return true; }
+  if (act === 'srv-backup-now') {
+    bkBusy = 'now'; paintBackups();
+    cloud.api('/api/money', { op: 'backup-now' }).then(() => ctx.toast('Backup saved on your server'), (e) => ctx.toast(e.message)).finally(() => { bkBusy = ''; bk = null; loadBackups(); });
+    return true;
+  }
   if (act === 'srv-bot-on') {
     loadBotStatus('on').then((st) => {
       if (st?.on) {

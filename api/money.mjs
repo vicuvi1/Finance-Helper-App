@@ -6,11 +6,13 @@
 //   {op:'upload', parts}        → {n}                 pieces of a big copy, before {op:'push', manifest}
 //   {op:'push', text|manifest, edited, editedAt} → {raw, changed, editedAt, restore, sealed}
 //   {op:'heal', text}           → {healed}            puts back pieces the server lost
+//   {op:'backups'} → {backups}   {op:'backup-now'} → {backup}   {op:'restore', id} → {restored, before}
 //   {op:'stats'}                → {moneyChars, pieces, dbBytes, devices}  Data & health
 // Our own session check is the only 401; a database problem is a 503 (never a sign-out).
 import { bearer, config, readBody, requireSession, send, countCall } from './_lib.mjs'
 import { ANSWER_CHARS, hasParts, healCopy, incomingText, moneyStats, pushCopy, readParts, readRaw, readSlice, uploadParts } from './_money.mjs'
 import { listDevices } from './_devices.mjs'
+import { listBackups, makeBackup, restoreBackup } from './_backups.mjs'
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return send(res, 405, { error: 'POST only' })
@@ -59,6 +61,13 @@ export default async function handler(req, res) {
         return send(res, 400, { error: `Not a Money copy: ${e.message}` })
       }
       out = await pushCopy(cfg, incoming, { edited: !!body.edited, editedAt: Number(body.editedAt) || 0 })
+    } else if (op === 'backups') {
+      out = { backups: await listBackups(cfg) }
+    } else if (op === 'backup-now') {
+      out = { backup: await makeBackup(cfg, { kind: 'manual' }) }
+    } else if (op === 'restore') {
+      if (typeof body.id !== 'string' || !body.id) return send(res, 400, { error: 'Which backup?' })
+      out = await restoreBackup(cfg, body.id)
     } else if (op === 'stats') {
       const st = await moneyStats(cfg)
       const dev = await listDevices(cfg).catch(() => ({ devices: [] }))

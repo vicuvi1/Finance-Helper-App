@@ -9,7 +9,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.svg': 'image/svg+xml', '.png': 'image/png', '.woff2': 'font/woff2' };
-const FUNCTIONS = new Set(['login', 'db', 'money', 'telegram']);
+const FUNCTIONS = new Set(['login', 'db', 'money', 'telegram', 'cron']);
 
 export async function startDevServer({ port = 0, env = {} } = {}) {
   Object.assign(process.env, env);
