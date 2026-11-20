@@ -23,6 +23,7 @@ import { subscriptionTable } from '../js/subtable.js'
 import { dueItems, upcomingItems } from '../js/recurring.js'
 import { weeklyReview } from '../js/review.js'
 import { recapText } from '../js/recap.js'
+import { smartSteps } from '../js/smartwarn.js'
 import { addMonths, monthKey } from '../js/dates.js'
 import { pushCopy, readValue } from './_money.mjs'
 
@@ -202,6 +203,8 @@ export function morningText(state, today) {
     if (it.rule.type !== 'expense' || subIds.has(it.rule.id)) continue
     lines.push(`📅 ${esc(it.rule.note || 'Bill')} ${money(state, it.rule.amount, it.rule.currency)}: ${it.date < today ? 'overdue' : it.date === today ? 'due <b>today</b>' : `due ${shortDay(it.date)}`}`)
   }
+  const tip = smartSteps(state, today)[0]
+  if (tip) lines.push(`💡 ${esc(tip.title)}. ${esc(tip.text)}`)
   return lines.length > 1 ? lines.join('\n') : null
 }
 

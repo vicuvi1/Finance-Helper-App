@@ -14,6 +14,7 @@ import { invoiceStatus, invoiceTotal } from './invoices.js';
 import { rateAdvice, heldIn } from './fxsmart.js';
 import { monthKey, addMonths, daysBetween, monthLabel, DOW_LONG, dowIndex } from './dates.js';
 import { formatMoney } from './money.js';
+import { smartSteps } from './smartwarn.js';
 
 const pctOf = (a, b) => (b > 0 ? Math.round((a / b) * 100) : 0);
 
@@ -108,6 +109,9 @@ export function nextSteps(state, today, { hidden = {}, max = 3, demo = false } =
   if (lim && lim.left >= 0 && lim.projected > lim.amount) {
     add({ id: `pace:${key}`, level: 'warn', icon: '🚦', title: 'Slow down a little', text: `At this pace you'd spend ${fmt(lim.projected)} this month, over your ${fmt(lim.amount)} limit. Keep to ${fmt(lim.perDay)} a day and you're fine.`, btn: 'See limit', act: 'limit-setup' });
   }
+  // 4b. Smart warnings (js/smartwarn.js): logged twice, a category well ahead of usual, a price rise, a forgotten subscription.
+  for (const w of smartSteps(state, today)) add(w);
+
 
   // 5. Savings plan not moved yet (without a salary from a buffer).
   if (sf.savingsLeft > 0 && Number(today.slice(8)) >= 3 && sf.liquid > sf.savingsLeft) {

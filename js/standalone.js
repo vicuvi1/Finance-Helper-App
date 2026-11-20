@@ -54,6 +54,8 @@ function soon(ms = 3000) {
   timer = setTimeout(() => cloud?.sync().then(after), ms);
 }
 function after(r) {
+  // A good sync means the server holds a copy (and backs it up nightly): Home's "Make a backup" step stays away.
+  if (r?.ok && ctx.state?.meta && !ctx.state._sealed) ctx.state.meta.lastSync = Date.now();
   if (r?.again) soon(1500);
   else if (r && !r.ok && cloud.config.signedIn && cloud.config.dirty) soon(60_000);
   refreshCard();

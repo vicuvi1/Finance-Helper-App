@@ -44,6 +44,7 @@ const SHELL = [
   './js/subslist.js',
   './js/subtable.js',
   './js/datahealth.js',
+  './js/smartwarn.js',
   './js/screens/datahealth.js',
   './js/screens/subtable.js',
   './js/screens/moneyb2.js',
