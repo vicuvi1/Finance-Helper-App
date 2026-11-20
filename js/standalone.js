@@ -16,6 +16,7 @@ import { openImported, deviceStorage, flushSave } from './store.js';
 import { todayISO } from './dates.js';
 import { isMoneyHidden } from './money.js';
 import { updateStatus, onUpdateChange, watchServiceWorker, webUpdateWaiting } from './screens/updates.js';
+import { APP_VERSION } from './version.js';
 
 const isDesktop = () => typeof window !== 'undefined' && !!window.desktop?.isDesktop;
 const isWeb = () => !isDesktop() && typeof location !== 'undefined' && /^https?:$/.test(location.protocol);
@@ -179,6 +180,8 @@ const STYLE = `
 .brand-sub.fh-sync.bad .brand-dot{background:var(--expense);box-shadow:none}
 .brand-sub.fh-sync.off .brand-dot{background:var(--faint);box-shadow:none}
 @keyframes fhPulse{50%{opacity:.35}}
+.fh-ver{display:block;font-size:10px;font-weight:600;color:var(--faint);cursor:pointer;line-height:1.3;width:max-content}
+.fh-ver:hover{color:var(--gold)}
 #update-badge.fh-update{display:none}
 @media (min-width:720px){#update-badge.fh-update{display:block;width:100%;margin:0 0 12px;padding:7px 10px;font-size:12.5px;white-space:nowrap;text-align:center}}
 `;
@@ -190,9 +193,22 @@ function injectStyle() {
   document.head.appendChild(st);
 }
 
+/** The app's version, its own small line under the name (a click opens About & updates). */
+function paintVersion() {
+  const meta = document.querySelector('.tabbar .brand-meta');
+  if (!meta || meta.querySelector('.fh-ver')) return;
+  const v = document.createElement('span');
+  v.className = 'fh-ver';
+  v.dataset.testid = 'app-version';
+  v.textContent = `Version ${APP_VERSION}`;
+  v.title = 'About & updates';
+  meta.appendChild(v);
+}
+
 function paintStatus() {
-  if (!cloud || ctx.DEMO || typeof document === 'undefined') return;
+  if (typeof document === 'undefined') return;
   const el = document.querySelector('.tabbar .brand-sub');
+  if (el && (!cloud || ctx.DEMO)) { el.innerHTML = '<i class="brand-dot"></i>Example data'; paintVersion(); return; }
   if (!el) return;
   const st = cloud.status;
   const cfg = cloud.config;
@@ -207,6 +223,7 @@ function paintStatus() {
   });
   el.className = `brand-sub fh-sync ${s.tone}`;
   el.innerHTML = `<i class="brand-dot"></i>${esc(s.text)}`;
+  paintVersion();
   el.title = s.act === 'cloud-signin' ? 'Sign in so this device and your other one share the same Money' : s.act === 'cloud-sync' ? 'Sync now' : s.text;
   el.dataset.testid = 'sync-status';
   if (s.act) { el.dataset.act = s.act; el.setAttribute('role', 'button'); el.tabIndex = 0; }
@@ -402,6 +419,12 @@ export function init() {
     clearTimeout(noteTimer);
     noteTimer = setTimeout(notifyNow, 5000);
   };
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest?.('.fh-ver')) return;
+    e.stopPropagation();
+    ctx.ui.settingsTab = 'about';
+    if (location.hash === '#settings') ctx.render(); else location.hash = '#settings';
+  }, true);
   document.addEventListener('change', (e) => {
     if (e.target?.id === 'cloud-url') { cloud.setUrl(e.target.value); ctx.toast('Server address saved'); }
     if (e.target?.id === 'life-import-file') {
