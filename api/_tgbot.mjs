@@ -16,7 +16,14 @@
 import { createHash } from 'node:crypto'
 import { normalizeState, SCHEMA_VERSION } from '../js/model.js'
 import { parseQuick } from '../js/quickadd.js'
-import { loggedText, todayText, balanceText, monthText, lastText } from '../js/telegram.js'
+import { loggedText, todayText, balanceText, monthText, lastText, weeklyText } from '../js/telegram.js'
+import { formatMoney } from '../js/money.js'
+import { safeLine, shortDay } from '../js/safespend.js'
+import { subscriptionTable } from '../js/subtable.js'
+import { dueItems, upcomingItems } from '../js/recurring.js'
+import { weeklyReview } from '../js/review.js'
+import { recapText } from '../js/recap.js'
+import { addMonths, monthKey } from '../js/dates.js'
 import { pushCopy, readValue } from './_money.mjs'
 
 export const MONEY_TZ = 'Europe/Chisinau'
@@ -175,7 +182,60 @@ export async function stopBot(bot, fetchImpl = fetch) {
   return { on: false }
 }
 
-/** The scheduled messages (api/cron.mjs). Filled in by the bot messages release; does nothing yet. */
-export async function runBotJob(cfg, job) {
-  return { job, sent: 0 }
+/** Which scheduled messages are on (settings.botMsgs, synced; all on unless turned off). */
+export const botMsgs = (state) => ({ morning: true, evening: true, weekly: true, monthly: true, ...(state?.settings?.botMsgs || {}) })
+
+const money = (state, c, cur) => esc(formatMoney(Math.round(c / 100) * 100, cur || state.settings.currency, { reveal: true }))
+
+/** The morning message: Safe to spend, what is due in the next 2 days (subscriptions and bills). */
+export function morningText(state, today) {
+  const lines = ['☀️ <b>Good morning</b>']
+  if (state.tx.length) lines.push(safeLine(state, today, (c) => money(state, c)))
+  const subs = subscriptionTable(state, today).rows.filter((x) => x.status !== 'paused' && x.days != null && x.days <= 2)
+  const subIds = new Set(subs.map((x) => x.id))
+  for (const x of subs) {
+    const acc = state.settings.accounts.find((a) => a.id === x.rule.account)
+    const when = x.days < 0 ? `was due ${shortDay(x.next)}, not logged yet` : x.days === 0 ? 'due <b>today</b>' : x.days === 1 ? 'due tomorrow' : 'due in 2 days'
+    lines.push(`🧾 ${esc(x.name)} ${money(state, x.rule.amount, x.rule.currency)}: ${when}${acc ? ` from ${esc(acc.name)}` : ''}${x.low ? ` ⚠️ ${esc(acc.name)} has only ${money(state, Math.max(0, x.have), x.accCur)}` : ''}`)
+  }
+  for (const it of [...dueItems(state, today), ...upcomingItems(state, today, 2)]) {
+    if (it.rule.type !== 'expense' || subIds.has(it.rule.id)) continue
+    lines.push(`📅 ${esc(it.rule.note || 'Bill')} ${money(state, it.rule.amount, it.rule.currency)}: ${it.date < today ? 'overdue' : it.date === today ? 'due <b>today</b>' : `due ${shortDay(it.date)}`}`)
+  }
+  return lines.length > 1 ? lines.join('\n') : null
+}
+
+/** The evening nudge: only when nothing was logged today. */
+export function eveningText(state, today) {
+  if ((state.tx || []).some((t) => t.date === today || (t.createdAt && moneyDay(t.createdAt) === today))) return null
+  return '🌙 Nothing logged today. Anything to add? Reply like <code>lunch 85</code> or <code>taxi 45 maib</code>. If you spent nothing, ignore me 🙂'
+}
+
+/**
+ * The scheduled messages (api/cron.mjs): morning = the morning message, plus the week on
+ * Sundays and last month's recap on the 1st; evening = the nudge. Only while the
+ * always-on bot is on (Telegram sends to this server) and each message is switched on.
+ */
+export async function runBotJob(cfg, job, { now = Date.now(), fetchImpl = fetch, tgFetch = fetchImpl, env = process.env } = {}) {
+  const bot = botConfig(env)
+  if (!bot.token || !bot.chat) return { job, sent: 0, skipped: 'not configured' }
+  const info = await tg(bot, 'getWebhookInfo', {}, tgFetch).catch(() => null)
+  if (!info?.url || !/\/api\/telegram$/.test(info.url)) return { job, sent: 0, skipped: 'bot off' }
+  const cur = await readValue(cfg, fetchImpl)
+  if (!cur.value?.data) return { job, sent: 0, skipped: 'no data' }
+  const s = state(cur.value)
+  const on = botMsgs(s)
+  const today = moneyDay(now)
+  const texts = []
+  if (job === 'morning') {
+    if (on.morning) texts.push(morningText(s, today))
+    if (on.weekly && new Date(`${today}T12:00:00Z`).getUTCDay() === 0) texts.push(weeklyText(s, weeklyReview(s, today)))
+    if (on.monthly && today.endsWith('-01')) texts.push(recapText(s, addMonths(monthKey(today), -1)))
+  } else if (job === 'evening' && on.evening) texts.push(eveningText(s, today))
+  let sent = 0
+  for (const text of texts.filter(Boolean)) {
+    await tg(bot, 'sendMessage', { chat_id: bot.chat, text, parse_mode: 'HTML', disable_web_page_preview: true }, tgFetch)
+    sent++
+  }
+  return { job, sent }
 }

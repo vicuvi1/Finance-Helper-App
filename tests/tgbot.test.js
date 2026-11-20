@@ -125,8 +125,52 @@ test('commands answer from the synced copy; a message without an amount gets hel
   assert.match(texts[1], /amount/i);
 });
 
+test('scheduled messages: morning with what is due, evening only when nothing was logged, each can be turned off', async () => {
+  const cron = (job) => fetch(`${server.url}/api/cron?job=${job}`, { headers: { Authorization: `Bearer ${SETUP}` } }).then((r) => r.json());
+  // A subscription due tomorrow, from the made-up desktop's copy.
+  const desk = app();
+  await desk.cloud.signIn(PIN);
+  await desk.cloud.sync();
+  const tomorrow = new Date(Date.now() + 86400_000).toLocaleDateString('en-CA', { timeZone: 'Europe/Chisinau' });
+  const st = structuredClone(desk.state);
+  st.recurring.push({ id: 'sub1', type: 'expense', subscription: true, note: 'Made-up Stream', amount: 19900, currency: 'MDL', account: st.settings.accounts[0].id, category: 'other', every: 'month', start: tomorrow, lastDone: new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Chisinau' }), createdAt: 1, updatedAt: Date.now() });
+  Object.assign(desk.state, st);
+  desk.cloud.changed();
+  assert.equal((await desk.cloud.sync()).ok, true);
+
+  sent.length = 0;
+  const m = await cron('morning');
+  assert.equal(m.bot.sent >= 1, true, JSON.stringify(m));
+  const morning = sent.find((x) => x.method === 'sendMessage').p.text;
+  assert.match(morning, /Good morning/);
+  assert.match(morning, /Made-up Stream/);
+  assert.match(morning, /due tomorrow/);
+  assert.ok(m.backup, 'the morning job also makes the backup');
+
+  // Records were logged today (the bot test above), so no evening nudge.
+  sent.length = 0;
+  assert.equal((await cron('evening')).bot.sent, 0);
+
+  // Turned off in settings: nothing in the morning either.
+  const st2 = structuredClone(desk.state);
+  st2.settings.botMsgs = { morning: false, weekly: false, monthly: false, evening: false };
+  st2.settings.updatedAt = Date.now() + 1000;
+  Object.assign(desk.state, st2);
+  desk.cloud.changed();
+  await desk.cloud.sync();
+  sent.length = 0;
+  assert.equal((await cron('morning')).bot.sent, 0);
+});
+
 test('the app turns it off', async () => {
   const off = await transport('/api/telegram', { op: 'off' }, session);
   assert.equal(off.status, 200);
   assert.equal(off.json.on, false);
+});
+
+test('the evening nudge comes only on a day with nothing logged', async () => {
+  const { eveningText } = await import('../api/_tgbot.mjs');
+  const st = normalizeState({ tx: [{ id: 'x', date: '2026-11-19', type: 'expense', amount: 100, createdAt: Date.parse('2026-11-19T10:00:00Z') }] });
+  assert.match(eveningText(st, '2026-11-20'), /Nothing logged today/);
+  assert.equal(eveningText(st, '2026-11-19'), null);
 });

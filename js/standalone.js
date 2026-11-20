@@ -158,6 +158,19 @@ function confirmRestore(id) {
 
 // ---------- Always-on Telegram bot on your server (api/telegram.mjs) ----------
 
+const BOT_MSGS = [
+  ['morning', 'Morning (about 9:00)', 'Safe to spend today and what is due in the next 2 days.'],
+  ['evening', 'Evening (about 21:00)', 'Only if you logged nothing that day: a reminder to add it.'],
+  ['weekly', 'Sunday morning', 'Your week: spent, kept, the biggest leak.'],
+  ['monthly', 'On the 1st', 'Last month\'s recap.'],
+];
+const botMsgsOn = () => ({ morning: true, evening: true, weekly: true, monthly: true, ...(ctx.state.settings.botMsgs || {}) });
+function botMsgsHTML() {
+  const on = botMsgsOn();
+  return `<div class="bot-msgs" data-testid="bot-msgs"><b class="small">Messages the bot sends you</b>
+    ${BOT_MSGS.map(([k, t, d]) => `<label class="motion-setting"><span><b>${t}</b><small>${d}</small></span><input type="checkbox" data-bot-msg="${k}" ${on[k] ? 'checked' : ''} aria-label="${t}"></label>`).join('')}</div>`;
+}
+
 let botSt = null; // last status from the server
 let botBusy = false;
 async function loadBotStatus(op = 'status') {
@@ -194,6 +207,7 @@ export function botCard() {
   return `<section class="card" id="srv-bot-card" data-testid="srv-bot-card"><h2>Always-on bot (your server)</h2>
     <p class="muted small" style="margin-top:0">${line}</p>
     <p class="muted small">Type <code>coffee 35</code>, <code>+500 salary</code>, <code>yesterday 120 lunch</code>. Each reply has an Undo button. /today /month /balance /last /undo</p>
+    ${st?.on ? botMsgsHTML() : ''}
     ${btn ? `<div class="btns">${btn}</div>` : ''}
   </section>`;
 }
@@ -483,6 +497,16 @@ export function init() {
     if (location.hash === '#settings') ctx.render(); else location.hash = '#settings';
   }, true);
   document.addEventListener('change', (e) => {
+    const k = e.target?.dataset?.botMsg;
+    if (k) {
+      const s = ctx.state.settings;
+      s.botMsgs = { ...botMsgsOn(), [k]: e.target.checked };
+      s.updatedAt = Date.now();
+      ctx.commit();
+      const name = BOT_MSGS.find((m) => m[0] === k)?.[1] || 'Message';
+      ctx.toast(`${name}: ${e.target.checked ? 'on' : 'off'}`, 'Undo', () => ctx.undo());
+      return;
+    }
     if (e.target?.id === 'cloud-url') { cloud.setUrl(e.target.value); ctx.toast('Server address saved'); }
     if (e.target?.id === 'life-import-file') {
       const f = e.target.files?.[0];
