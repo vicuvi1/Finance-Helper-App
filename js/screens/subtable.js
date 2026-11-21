@@ -9,6 +9,7 @@ import * as M from '../model.js';
 import { evalAmount, centsToPlain, formatMoney } from '../money.js';
 import { todayISO } from '../dates.js';
 import { recId } from '../recurring.js';
+import { cloudEngine } from '../standalone.js';
 import { addSub } from '../cattree.js';
 import { EVERY, REMIND, DEFAULT_REMIND, subscriptionTable, addSubscription, editSubscription, subTypes, subsCategory } from '../subtable.js';
 
@@ -68,7 +69,7 @@ export function tab() {
     <div class="st-top">
       <div><h2 style="margin:0">Subscriptions</h2>
         <p class="muted small" style="margin:4px 0 0">${t.count} active · ${soon ? `<b>${soon} due soon</b>` : 'nothing due in the next days'}${low ? ` · <b class="expense">${low} card${low === 1 ? '' : 's'} short</b>` : ''}. You get a notification before each payment (the days you pick).</p></div>
-      <div class="st-totals"><span><small>A month</small><b>${esc(formatMoney(t.month, base))}</b></span><span><small>A year</small><b>${esc(formatMoney(t.year, base))}</b></span></div>
+      <div class="st-totals"><button type="button" class="btn sm" data-st-act="calendar" data-testid="sub-calendar" style="align-self:center">📅 Add to Google Calendar</button><span><small>A month</small><b>${esc(formatMoney(t.month, base))}</b></span><span><small>A year</small><b>${esc(formatMoney(t.year, base))}</b></span></div>
     </div>
     ${t.missingRate ? '<p class="muted small">Some foreign amounts have no exchange rate yet (Accounts → Rates), so the totals leave them out.</p>' : ''}
     <div class="st-wrap"><table class="st-table">
@@ -77,6 +78,19 @@ export function tab() {
     </table></div>
     <p class="muted small" style="margin-bottom:0">Each change saves at once and can be undone (Ctrl+Z). Logging a payment makes a normal record in the Log.</p>
   </section>`;
+}
+
+async function openCalendar(reset = false) {
+  const cloud = cloudEngine();
+  if (!cloud?.config.signedIn) { ctx.toast('Sign in to Cloud sync first (the line under the app\'s name).'); return; }
+  let url;
+  try { url = (await cloud.api('/api/calendar', { op: reset ? 'reset' : 'link' })).url; } catch (e) { ctx.toast(e.message); return; }
+  if (document.querySelector('.sheet')) ctx.closeSheet();
+  ctx.openSheet(`<h3>Bills and subscriptions in your calendar <button type="button" class="icon-btn" data-close aria-label="Close">✕</button></h3>
+    <p class="muted" style="margin-top:0">Each payment shows on its day ("Netflix 199 MDL · maib card"), with a reminder the evening before. Changes here reach the calendar by themselves (Google refreshes every few hours).</p>
+    <label class="field"><span>Your private link (keep it to yourself)</span><input id="cal-url" readonly value="${esc(url)}" data-testid="cal-url"></label>
+    <div class="btns"><button type="button" class="btn primary" data-st-act="cal-copy">Copy link</button><button type="button" class="btn" data-st-act="cal-reset" title="Makes a new link; the old one stops working">New link</button></div>
+    <ol class="muted small" style="padding-left:18px"><li>Open <b>calendar.google.com</b> on your computer.</li><li>On the left, next to <b>Other calendars</b>, press <b>+</b> → <b>From URL</b>.</li><li>Paste the link and press <b>Add calendar</b>. It shows on your phone too.</li></ol>`);
 }
 
 function rerender() { if (location.hash === '#plan' || ctx.ui.tab === 'plan') ctx.render(); }
@@ -180,6 +194,9 @@ export function init() {
     if (!b) return;
     const act = b.dataset.stAct;
     if (act === 'add') add();
+    else if (act === 'calendar') openCalendar();
+    else if (act === 'cal-copy') { const i = document.getElementById('cal-url'); i?.select(); navigator.clipboard?.writeText(i?.value || '').then(() => ctx.toast('Link copied'), () => ctx.toast('Select the link and press Ctrl+C')); }
+    else if (act === 'cal-reset') openCalendar(true);
     else if (act === 'log') log(b.dataset.id);
     else if (act === 'delete') confirmDelete(b.dataset.id);
     else if (act === 'pause') {

@@ -22,6 +22,10 @@
     "api/cron.mjs": {
       "maxDuration": 60,
       "includeFiles": "js/**"
+    },
+    "api/calendar.mjs": {
+      "maxDuration": 20,
+      "includeFiles": "js/**"
     }
   },
   "headers": [

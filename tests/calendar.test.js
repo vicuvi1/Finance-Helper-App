@@ -1,50 +1,44 @@
-import { test } from 'node:test';
+// Bills and subscriptions as a calendar (api/calendar.mjs). Made-up data.
+import test, { after, before } from 'node:test';
 import assert from 'node:assert/strict';
-import { calendarHTML } from '../js/logviews.js';
+import { startFakeTurso } from '../e2e/faketurso.mjs';
+import { startDevServer } from '../e2e/devserver.mjs';
+import { calendarICS } from '../api/calendar.mjs';
+import { normalizeState } from '../js/model.js';
 
-test('calendarHTML builds modern day cards, week totals, and insights bar', () => {
-  const state = {
-    settings: {
-      currency: 'MDL',
-      categories: [
-        { id: 'c1', name: 'Food', emoji: '🍔' },
-        { id: 'c2', name: 'Work', emoji: '💼' },
-      ],
-      accounts: [{ id: 'a1', name: 'Card' }],
-    },
-    tx: [
-      { id: 't1', date: '2026-10-04', type: 'income', amount: 200000, category: 'c2', account: 'a1' },
-      { id: 't2', date: '2026-10-04', type: 'expense', amount: 20700, category: 'c1', account: 'a1' },
-      { id: 't3', date: '2026-10-10', type: 'expense', amount: 574500, category: 'c1', account: 'a1', note: 'groceries' },
-      { id: 't4', date: '2026-10-15', type: 'expense', amount: 8000, category: 'c1', account: 'a1', note: 'lunch' },
-    ],
-  };
+test('one all-day event per payment, with a reminder', () => {
+  const s = normalizeState({ settings: { accounts: [{ id: 'm', name: 'Made-up card', currency: 'MDL', kind: 'card' }] }, recurring: [
+    { id: 'r1', type: 'expense', note: 'Made-up Stream', amount: 19900, currency: 'MDL', account: 'm', every: 'month', start: '2026-12-05' },
+    { id: 'r2', type: 'expense', note: 'Paused one', amount: 100, currency: 'MDL', every: 'month', start: '2026-12-01', paused: true },
+    { id: 'r3', type: 'income', note: 'Pay', amount: 100, currency: 'MDL', every: 'month', start: '2026-12-01' },
+  ] });
+  const ics = calendarICS(s, '2026-11-21', { months: 2 });
+  assert.match(ics, /^BEGIN:VCALENDAR\r\n/);
+  assert.equal((ics.match(/BEGIN:VEVENT/g) || []).length, 2, '5 Dec and 5 Jan; paused and income left out');
+  assert.match(ics, /DTSTART;VALUE=DATE:20261205/);
+  assert.match(ics, /SUMMARY:Made-up Stream 199\sMDL · Made-up card/);
+  assert.match(ics, /BEGIN:VALARM/);
+});
 
-  const html = calendarHTML(state, '2026-10');
+let turso; let server;
+before(async () => {
+  turso = await startFakeTurso();
+  server = await startDevServer({ env: { TURSO_URL: turso.url, TURSO_TOKEN: turso.token, CRON_SECRET: 'k', SESSION_SECRET: 's' } });
+});
+after(async () => { await server?.close(); await turso?.close(); });
 
-  // Container and grid
-  assert.ok(html.includes('cal-container'), 'must wrap in cal-container');
-  assert.ok(html.includes('cal-dow'), 'must render day of week headers');
-  assert.ok(html.includes('Weekly'), 'must include weekly header');
-
-  // Day cards and content
-  assert.ok(html.includes('cal-date-badge'), 'must render date badges');
-  assert.ok(html.includes('cal-quick-add'), 'must render quick add buttons');
-  assert.ok(html.includes('data-act="day-add"'), 'quick add button must have day-add action');
-  assert.ok(html.includes('cal-pill income'), 'must render income pill for +2 000');
-  assert.ok(html.includes('cal-pill expense'), 'must render expense pill for spent days');
-
-  // Category emoji
-  assert.ok(html.includes('cal-emojis'), 'must display category emojis');
-  assert.ok(html.includes('🍔'), 'must show food emoji');
-
-  // Week card
-  assert.ok(html.includes('cal-week-card'), 'must render week cards');
-  assert.ok(html.includes('cw-out'), 'must render weekly outflow');
-
-  // Insights bar
-  assert.ok(html.includes('cal-insights-bar'), 'must render month insights bar');
-  assert.ok(html.includes('Peak spend:'), 'must identify peak spend day');
-  assert.ok(html.includes('Daily avg:'), 'must display daily average');
-  assert.ok(html.includes('No-spend days:'), 'must display no-spend days count');
+test('only the private link opens it; a new link replaces the old one', async () => {
+  const post = (body, token) => fetch(`${server.url}/api/calendar`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify(body) });
+  assert.equal((await post({ op: 'link' })).status, 401);
+  const session = (await (await fetch(`${server.url}/api/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ setup: 'k', pin: '2468' }) })).json()).session;
+  const url = (await (await post({ op: 'link' }, session)).json()).url;
+  const k = new URL(url).searchParams.get('k');
+  assert.ok(k.length > 20);
+  const ok = await fetch(`${server.url}/api/calendar?k=${k}`);
+  assert.equal(ok.status, 200);
+  assert.match(ok.headers.get('content-type'), /text\/calendar/);
+  assert.equal((await fetch(`${server.url}/api/calendar?k=wrong`)).status, 404);
+  const url2 = (await (await post({ op: 'reset' }, session)).json()).url;
+  assert.notEqual(url2, url);
+  assert.equal((await fetch(`${server.url}/api/calendar?k=${k}`)).status, 404, 'the old link stops working');
 });
