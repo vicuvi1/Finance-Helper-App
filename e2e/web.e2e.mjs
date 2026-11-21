@@ -156,6 +156,23 @@ test('Reports → Report: Excel for last month, and the printable page', async (
   await context.close();
 });
 
+test('Plan → Planned: add a big expense, it is spread over the months', async () => {
+  const { page, errors, context } = await openPage(browser, server.url);
+  await page.goto(`${server.url}#plan`);
+  await page.waitForSelector('[data-testid="plan-tab-planned"]');
+  await page.click('[data-testid="plan-tab-planned"]');
+  await page.waitForSelector('[data-testid="planned-card"]');
+  await page.fill('[data-pl="name"]', 'Made-up insurance');
+  await page.fill('[data-pl="amount"]', '3600');
+  await page.click('[data-testid="plan-add"]');
+  await page.waitForSelector('[data-testid="plan-row"]');
+  assert.match(await page.textContent('[data-testid="plan-row"]'), /a month/);
+  const saved = await page.evaluate(() => JSON.parse(globalThis.__fhStore.getItem('finance-helper.state')).settings.planned);
+  assert.equal(saved[0].amount, 360000);
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
 test('Home: a verdict, a spending limit that sets Safe to spend, and the month recap story', async () => {
   const { page, errors, context } = await openPage(browser, server.url);
   await page.goto(`${server.url}#home`);

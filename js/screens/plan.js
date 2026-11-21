@@ -12,6 +12,7 @@ import { forecast } from '../forecast.js';
 import { lineChart } from '../charts.js';
 import { findSubscriptions, recurringFrom } from '../subs.js';
 import * as SubTable from './subtable.js';
+import * as Planned from './plannedui.js';
 import * as MoneyB2 from './moneyb2.js';
 import * as Repeating from './repeating.js';
 import * as Budgets from './budgetkinds.js';
@@ -671,6 +672,7 @@ export function view() {
   const sugg = R.suggestions(state, today).slice(0, 5);
 
   SubTable.init();
+  Planned.init();
   const tab = ctx.ui.planTab || 'subtable';
   const expenseRules = rules.filter((r) => r.type === 'expense');
 
@@ -694,6 +696,9 @@ export function view() {
     case 'subtable':
       tabContent = SubTable.tab();
       break;
+    case 'planned':
+      tabContent = Planned.tab();
+      break;
     default:
       tabContent = subsFinderCard(state, today) + subscriptionsTab(state, today, rules, scheduled);
       break;
@@ -714,6 +719,7 @@ export function view() {
 
     <div class="chips plan-tabs">
       <button class="chip" data-act="plan-tab" data-tab="subtable" aria-pressed="${tab === 'subtable'}" data-testid="plan-tab-subtable">🧾 Subscriptions</button>
+      <button class="chip" data-act="plan-tab" data-tab="planned" aria-pressed="${tab === 'planned'}" data-testid="plan-tab-planned">🗓️ Planned</button>
       <button class="chip" data-act="plan-tab" data-tab="subs" aria-pressed="${tab === 'subs'}">✨ All bills &amp; what-if <span class="tab-badge">${expenseRules.length}</span></button>
       <button class="chip" data-act="plan-tab" data-tab="repeating" aria-pressed="${tab === 'repeating'}" data-testid="plan-tab-repeating">🔁 Repeating ${due.length ? `<span class="tab-badge bad">${due.length}</span>` : ''}</button>
       <button class="chip" data-act="plan-tab" data-tab="calendar" aria-pressed="${tab === 'calendar'}">📅 Payment Timeline ${due.length ? `<span class="tab-badge bad">${due.length} due</span>` : ''}</button>

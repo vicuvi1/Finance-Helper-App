@@ -7,6 +7,7 @@
 // Pure and tested; Home and the Telegram bot show it.
 
 import { accountBalances, personalMonth, savingsJar, isBillCategory, isWorkCost, payOn, knownRates, B } from './model.js';
+import { plannedHeld } from './planned.js';
 import { payStatus } from './payyourself.js';
 import { dueItems, upcomingItems } from './recurring.js';
 import { spendingIds } from './forecast.js';
@@ -105,7 +106,9 @@ export function safeToSpend(state, today) {
   // Bills paid today (rent, internet…) are not today's spending: they already
   // left your balance, so they shrink every day's share a little instead.
   const spentToday = everydaySpent(state, today, today);
-  const pool = liquid + spentToday - billsTotal - savingsLeft;
+  // Planned big expenses (js/planned.js): what should be put aside by now stays out of today's money.
+  const planned = plannedHeld(state, today);
+  const pool = liquid + spentToday - billsTotal - savingsLeft - planned;
   const moneyPerDay = pool > 0 ? lei(pool / days) : 0;
   // Spent more than today's share: what each day after today gets instead.
   let tomorrow = days > 1 && pool - spentToday > 0 ? lei((pool - spentToday) / (days - 1)) : 0;
@@ -119,7 +122,7 @@ export function safeToSpend(state, today) {
   }
   const leftToday = perDay - spentToday;
   return {
-    liquid, bills, billsTotal, plan, moved, savingsLeft, spentToday, pool, perDay, leftToday, tomorrow,
+    liquid, bills, billsTotal, plan, moved, savingsLeft, planned, spentToday, pool, perDay, leftToday, tomorrow,
     payday, days, paydayFrom: pay ? 'salary' : inc ? inc.rule.note || 'Income' : null,
     short: pool <= 0 ? -pool : 0, moneyPerDay, limit, byLimit,
   };

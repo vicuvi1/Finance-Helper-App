@@ -1056,13 +1056,14 @@ function safeCard(today) {
   const used = sf.perDay > 0 ? Math.min(100, (sf.spentToday / sf.perDay) * 100) : 100;
   const fig = empty ? 0 : Math.max(0, left);
 
-  const sub = empty
+  let sub = empty
     ? `Bills and savings need <b>${money(sf.short)}</b> more before ${esc(shortDay(sf.payday))}.`
     : isOver
       ? `Over by <b>${money(-left)}</b>. From tomorrow: <b>${money(sf.tomorrow)}</b> a day until ${esc(shortDay(sf.payday))}.`
       : sf.byLimit
         ? `Spent <b>${money(sf.spentToday)}</b> of today's <b>${money(sf.perDay)}</b> · your limit decides today`
         : `Spent <b>${money(sf.spentToday)}</b> of today's <b>${money(sf.perDay)}</b> · <b>${money(whole(Math.max(0, sf.pool)))}</b> for ${sf.days} day${sf.days === 1 ? '' : 's'}, until ${esc(shortDay(sf.payday))}`;
+  if (sf.planned > 0) sub += ` · <b>${money(sf.planned)}</b> kept aside for planned expenses`;
   const lim = sf.limit;
   const limitRow = lim
     ? `<button type="button" class="sh-limit ${lim.left < 0 ? 'over' : lim.projected > lim.amount ? 'pace' : ''}" data-act="limit-setup" title="Change your spending limit">

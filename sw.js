@@ -48,6 +48,8 @@ const SHELL = [
   './js/report.js',
   './js/whatsnew.js',
   './js/habits.js',
+  './js/planned.js',
+  './js/screens/plannedui.js',
   './js/screens/report.js',
   './js/screens/datahealth.js',
   './js/screens/subtable.js',
