@@ -6,6 +6,7 @@
 import { isNewerVersion } from './version.js';
 
 export const NOTES = [
+  { v: '1.98.0', items: ['Reports → Your spending habits: which weekdays cost the most ("Fridays cost you 2× a normal day") and when in the day you spend.'] },
   { v: '1.97.0', items: ['"What\'s new" like this one, once after each update (and any time in Settings → About & updates).'] },
   { v: '1.96.0', items: ['Reports → 📄 Report: any month or year as Excel or PDF.', 'Reality check shows a small picture of each account\'s card, so you type into the right one.', 'Data & health shows whether this device locks itself when you step away.'] },
   { v: '1.95.0', items: ['Smart warnings in "Do this next": logged twice, spending ahead of usual, price rises, forgotten subscriptions.'] },

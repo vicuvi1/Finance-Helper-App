@@ -9,6 +9,7 @@
 // year") narrow everything on the page.
 
 import { ctx, esc } from '../ctx.js';
+import { spendingMap } from '../habits.js';
 import * as ReportSheet from './report.js';
 import * as M from '../model.js';
 import * as T from '../cattree.js';
@@ -330,6 +331,8 @@ export function view() {
     </section>
   </div>
 
+  ${habitsCard(fs, r0)}
+
   ${IncomeSources.reportCard(today)}
 
   <div class="rep-row-tables">
@@ -548,4 +551,19 @@ export function onKey(e) {
     return true;
   }
   return false;
+}
+
+// Your spending habits: weekdays and time of day (js/habits.js).
+function habitsCard(state, r0) {
+  const m = spendingMap(state, r0.from, r0.to);
+  if (m.count < 5) return '';
+  const max = Math.max(...m.weekdays.map((w) => w.perDay), 1);
+  const cur = state.settings.currency;
+  const days = m.weekdays.map((w) => `<div class="hb-day${w.ratio >= 1.4 ? ' hot' : ''}" title="${esc(w.name)}: about ${esc(formatMoney(Math.round(w.perDay), cur))} a day"><i style="height:${Math.max(3, (w.perDay / max) * 100).toFixed(0)}%"></i><span>${esc(w.name.slice(0, 2))}</span></div>`).join('');
+  const times = m.timed ? m.times.map((t) => `<div class="hb-time"><span>${esc(t.label)} <small>${esc(t.hours)}</small></span><span class="hb-bar"><i style="width:${Math.max(1, Math.round(t.share * 100))}%"></i></span><b>${Math.round(t.share * 100)}%</b></div>`).join('') : '<p class="muted small">Log records on the day you spend and the time of day shows here.</p>';
+  return `<section class="card hb-card" data-testid="habits-card"><h2 style="margin:0 0 4px">Your spending habits</h2>
+    <p class="muted small" style="margin:0 0 12px">Everyday spending (bills and repeating payments left out). Time of day comes from when you logged it.</p>
+    ${m.insights.length ? `<ul class="hb-insights">${m.insights.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
+    <div class="hb-grid"><div><b class="small">By weekday (a day on average)</b><div class="hb-days">${days}</div></div><div><b class="small">By time of day</b>${times}</div></div>
+  </section>`;
 }
