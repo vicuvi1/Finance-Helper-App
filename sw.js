@@ -46,6 +46,7 @@ const SHELL = [
   './js/datahealth.js',
   './js/smartwarn.js',
   './js/report.js',
+  './js/whatsnew.js',
   './js/screens/report.js',
   './js/screens/datahealth.js',
   './js/screens/subtable.js',

@@ -40,7 +40,6 @@ export async function initUpdates() {
     m.installedVersion = info.version;
     m.installedAt = Date.now();
     ctx.persist();
-    if (m.previousVersion) ctx.toast(`Updated to version ${info.version}`);
   }
   desk()?.onEvent((e) => {
     if (e.type === 'available') {
@@ -136,6 +135,7 @@ export function settingsCard() {
       ${desk() ? `<div class="kv"><span>Last update check</span><b>${esc(when(m.lastUpdateCheck))}</b></div>` : ''}
     </div>
     <div style="margin-top:14px">${body}</div>
+    <button type="button" class="btn block" style="margin-top:8px" data-act="whats-new" data-testid="whats-new-btn">What's new</button>
   </section>`;
 }
 

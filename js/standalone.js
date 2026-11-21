@@ -17,6 +17,7 @@ import { todayISO } from './dates.js';
 import { isMoneyHidden } from './money.js';
 import { updateStatus, onUpdateChange, watchServiceWorker, webUpdateWaiting } from './screens/updates.js';
 import { APP_VERSION } from './version.js';
+import { notesSince, shouldShow, NOTES } from './whatsnew.js';
 
 const isDesktop = () => typeof window !== 'undefined' && !!window.desktop?.isDesktop;
 const isWeb = () => !isDesktop() && typeof location !== 'undefined' && /^https?:$/.test(location.protocol);
@@ -103,6 +104,16 @@ export function importCard() {
     <button class="btn block" data-act="life-import" data-testid="life-import">Import from Life System…</button>
     <input type="file" id="life-import-file" accept=".json,application/json" hidden data-testid="life-import-file">
   </section>`;
+}
+
+// ---------- What's new (js/whatsnew.js) ----------
+
+export function openWhatsNew(from = null) {
+  const list = from ? notesSince(from, APP_VERSION) : NOTES.filter((n) => !n.v || n.v <= APP_VERSION).slice(0, 8);
+  if (!list.length) return;
+  ctx.openSheet(`<h3>What's new ${from ? `in ${esc(APP_VERSION)}` : ''} <button type="button" class="icon-btn" data-close aria-label="Close">✕</button></h3>
+    <div class="whatsnew" data-testid="whats-new">${list.map((n) => `<section><b>Version ${esc(n.v)}</b><ul>${n.items.map((i) => `<li>${esc(i)}</li>`).join('')}</ul></section>`).join('')}</div>
+    <div class="btns"><button type="button" class="btn primary" data-close>Got it</button></div>`);
 }
 
 export const dataCards = () => cloudCard() + serverBackupsCard() + importCard();
@@ -247,6 +258,7 @@ const STYLE = `
 .brand-sub.fh-sync.bad .brand-dot{background:var(--expense);box-shadow:none}
 .brand-sub.fh-sync.off .brand-dot{background:var(--faint);box-shadow:none}
 @keyframes fhPulse{50%{opacity:.35}}
+.whatsnew section{margin:0 0 12px}.whatsnew ul{margin:6px 0 0;padding-left:20px;color:var(--muted)}.whatsnew li{margin:3px 0}
 .fh-ver{display:block;font-size:10px;font-weight:600;color:var(--faint);cursor:pointer;line-height:1.3;width:max-content}
 .fh-ver:hover{color:var(--gold)}
 #update-badge.fh-update{display:none}
@@ -433,6 +445,7 @@ export function onClick(act, el) {
   }
   if (act === 'life-import') { document.getElementById('life-import-file')?.click(); return true; }
   if (act === 'go-updates') { location.hash = '#settings'; return true; }
+  if (act === 'whats-new') { openWhatsNew(); return true; }
   if (act === 'srv-bot-check') { loadBotStatus(); return true; }
   if (act === 'srv-restore') { confirmRestore(el?.dataset.id); return true; }
   if (act === 'srv-backup-now') {
@@ -518,6 +531,15 @@ export function init() {
   });
   injectStyle();
   paintStatus();
+  // After an update: what changed, once (this device).
+  setTimeout(() => {
+    const m = ctx.state?.meta;
+    if (!m || ctx.DEMO || document.querySelector('.sheet') || !shouldShow(m, APP_VERSION)) return;
+    const from = m.previousVersion;
+    m.whatsNewSeen = APP_VERSION;
+    ctx.persist?.();
+    openWhatsNew(from);
+  }, 2500);
   // Once (1.86.0): the moving background starts off, like on new installs. Say so, and where to turn it back on.
   try {
     if (!ctx.DEMO && !localStorage.getItem('fh-calm-bg-1')) {
