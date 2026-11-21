@@ -90,7 +90,7 @@ export function cloudCard() {
       <div class="set-sb-content"><b>${cfg.signedIn ? 'Signed in' : 'Signed out'}</b><p class="muted small" style="margin:2px 0 0" data-testid="cloud-status">${line}</p>${st.note && st.state === 'ok' ? `<p class="muted small" style="margin:4px 0 0">${esc(st.note)}</p>` : ''}</div></div>
     ${isDesktop() ? `<label class="field" style="margin-top:12px"><span>Server address</span><input id="cloud-url" type="url" value="${esc(baseUrl())}" placeholder="${DEFAULT_URL}" data-testid="cloud-url"></label>` : ''}
     ${cfg.signedIn
-      ? `<div class="btns" style="margin-top:12px"><button class="btn primary" data-act="cloud-sync" data-testid="cloud-sync">Sync now</button><button class="btn" data-act="cloud-signout">Sign out</button></div>`
+      ? `<div class="btns" style="margin-top:12px"><button class="btn primary" data-act="cloud-sync" data-testid="cloud-sync">Sync now</button><button class="btn" data-act="cloud-pin" data-testid="cloud-pin-change">Change PIN</button><button class="btn" data-act="cloud-devices" data-testid="cloud-devices">Devices</button><button class="btn" data-act="cloud-signout">Sign out</button></div>`
       : `<div class="btns" style="margin-top:12px"><button class="btn primary" data-act="cloud-signin" data-testid="cloud-signin">Sign in</button></div>`}
     <p class="muted small" style="margin-bottom:0">Each record's newest edit wins and nothing is deleted by syncing. Your data stays on this device too and works offline.</p>
   </section>`;
@@ -310,6 +310,39 @@ function paintStatus() {
 }
 export const _probe = probeServer;
 
+// ---------- Server PIN and devices ----------
+
+function openChangePin() {
+  ctx.openSheet(`<h3>Change your server PIN <button type="button" class="icon-btn" data-close aria-label="Close">✕</button></h3>
+    <p class="muted" style="margin-top:0">The PIN you sign in with on the web and the desktop. This device stays signed in; on new devices use the new PIN.</p>
+    <form id="cp-form"><label class="field"><span>Current PIN</span><input id="cp-old" type="password" inputmode="numeric" required autocomplete="current-password"></label>
+      <label class="field"><span>New PIN (4 to 12 digits)</span><input id="cp-new" type="password" inputmode="numeric" required minlength="4" maxlength="12" autocomplete="new-password"></label>
+      <label class="field"><span>New PIN again</span><input id="cp-new2" type="password" inputmode="numeric" required autocomplete="new-password"></label>
+      <p class="small" id="cp-err" role="alert" style="color:var(--expense)"></p>
+      <div class="btns"><button type="button" class="btn" data-close>Cancel</button><button class="btn primary" data-testid="cp-go">Change PIN</button></div></form>`, (sheet) => {
+    sheet.querySelector('#cp-old').focus();
+    sheet.querySelector('#cp-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const err = sheet.querySelector('#cp-err');
+      const a = sheet.querySelector('#cp-new').value;
+      if (!/^\d{4,12}$/.test(a)) { err.textContent = 'Use 4 to 12 digits.'; return; }
+      if (a !== sheet.querySelector('#cp-new2').value) { err.textContent = 'The two new PINs are different.'; return; }
+      try { await cloud.changePin(sheet.querySelector('#cp-old').value, a); ctx.closeSheet(); ctx.toast('PIN changed'); } catch (e2) { err.textContent = e2.message; }
+    });
+  });
+}
+
+async function openDevices() {
+  let r;
+  try { r = await cloud.devices(); } catch (e) { ctx.toast(e.message); return; }
+  const rows = (r.devices || []).map((d) => `<div class="kv"><span>${esc(d.label)}${d.sid === r.current ? ' <b class="income">· this device</b>' : ''}<br><small class="muted">last sign-in ${d.lastSeen ? esc(new Date(d.lastSeen).toLocaleString()) : '—'}</small></span><b>${d.sid === r.current ? '' : `<button type="button" class="btn sm" data-act="cloud-revoke" data-sid="${esc(d.sid)}">Sign out</button>`}</b></div>`).join('');
+  if (document.querySelector('.sheet')) ctx.closeSheet();
+  ctx.openSheet(`<h3>Your devices <button type="button" class="icon-btn" data-close aria-label="Close">✕</button></h3>
+    <p class="muted" style="margin-top:0">Every device signed in to your server. Sign out one you no longer use (an old computer, Life System): it must enter the PIN again.</p>
+    <div class="set-kv-list" data-testid="devices-list">${rows || '<div class="kv"><span class="muted">No devices listed.</span></div>'}</div>
+    <div class="btns"><button type="button" class="btn" data-close>Close</button></div>`);
+}
+
 // ---------- Sign in ----------
 
 export function openSignIn({ first = false, keep = false } = {}) {
@@ -437,6 +470,13 @@ function paintBadge() {
 
 export function onClick(act, el) {
   if (act === 'cloud-signin') { openSignIn(); return true; }
+  if (act === 'cloud-pin') { openChangePin(); return true; }
+  if (act === 'cloud-devices') { openDevices(); return true; }
+  if (act === 'cloud-revoke') {
+    const sid = el?.dataset.sid;
+    cloud.revokeDevice(sid).then(() => { ctx.toast('Signed out. That device asks for the PIN next time.'); openDevices(); }, (e) => ctx.toast(e.message));
+    return true;
+  }
   if (act === 'cloud-signout') { cloud.signOut(); refreshCard(); ctx.toast('Signed out of Cloud sync. Your data stays on this device.'); return true; }
   if (act === 'cloud-sync') {
     cloud.sync({ check: true }).then((r) => { after(r); ctx.toast(r.ok ? (r.got ? `Synced: ${r.got} records came in` : 'Synced: the server has everything') : r.error || r.skipped); });

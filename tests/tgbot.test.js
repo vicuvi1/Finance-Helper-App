@@ -174,3 +174,11 @@ test('the evening nudge comes only on a day with nothing logged', async () => {
   assert.match(eveningText(st, '2026-11-20'), /Nothing logged today/);
   assert.equal(eveningText(st, '2026-11-19'), null);
 });
+
+test('morning: a good day to change dollars', async () => {
+  const { morningText } = await import('../api/_tgbot.mjs');
+  const tx = [];
+  for (let i = 1; i <= 10; i++) tx.push({ id: `u${i}`, date: `2026-11-${String(i).padStart(2, '0')}`, type: 'income', amount: 1000, currency: 'USD', rate: 17 + i / 100, account: 'usd', category: 'other-in', createdAt: 1, updatedAt: 1 });
+  const st = normalizeState({ tx, settings: { accounts: [{ id: 'usd', name: 'Made-up USD', currency: 'USD', kind: 'card' }] }, lastRates: { date: '2026-11-20', usd: { MDL: 18.6, USD: 1 } } });
+  assert.match(morningText(st, '2026-11-20') || '', /Good day to change dollars/);
+});

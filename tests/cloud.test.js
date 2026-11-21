@@ -169,3 +169,23 @@ test('forgot the PIN: the setup key sets a new one, the old PIN and old sessions
   assert.equal((await transport('/api/money', { op: 'read' }, oldSession)).status, 401);
   assert.equal((await transport('/api/login', { pin: '1357' })).status, 200);
 });
+
+test('change the server PIN from the app; list devices and sign one out', async () => {
+  const c = client();
+  await c.cloud.signIn('1357');
+  await assert.rejects(c.cloud.changePin('0000', '8642'), /current PIN is wrong/);
+  assert.equal(await c.cloud.changePin('1357', '8642'), true);
+  assert.equal((await c.cloud.sync()).ok, true, 'this device stays signed in');
+  assert.equal((await transport('/api/login', { pin: '8642' })).status, 200);
+  assert.equal((await transport('/api/login', { pin: '1357' })).status, 401);
+  const other = client();
+  await other.cloud.signIn('8642');
+  const list = await c.cloud.devices();
+  assert.ok(list.devices.length >= 1);
+  assert.ok(list.current);
+  const theirs = list.devices.find((d) => d.sid !== list.current);
+  if (theirs) {
+    await c.cloud.revokeDevice(theirs.sid);
+    assert.equal((await c.cloud.devices()).devices.some((d) => d.sid === theirs.sid), false);
+  }
+});

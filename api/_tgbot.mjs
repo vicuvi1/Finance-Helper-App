@@ -24,6 +24,8 @@ import { dueItems, upcomingItems } from '../js/recurring.js'
 import { weeklyReview } from '../js/review.js'
 import { recapText } from '../js/recap.js'
 import { smartSteps } from '../js/smartwarn.js'
+import { rateAdvice, heldIn } from '../js/fxsmart.js'
+import { accountBalances } from '../js/model.js'
 import { addMonths, monthKey } from '../js/dates.js'
 import { pushCopy, readValue } from './_money.mjs'
 
@@ -203,6 +205,10 @@ export function morningText(state, today) {
     if (it.rule.type !== 'expense' || subIds.has(it.rule.id)) continue
     lines.push(`📅 ${esc(it.rule.note || 'Bill')} ${money(state, it.rule.amount, it.rule.currency)}: ${it.date < today ? 'overdue' : it.date === today ? 'due <b>today</b>' : `due ${shortDay(it.date)}`}`)
   }
+  // A good day to change dollars: today's rate is higher than 75% of the last 90 days, and you hold some.
+  const usd = state.settings.currency !== 'USD' ? rateAdvice(state, 'USD', today) : null
+  const held = usd?.verdict === 'high' ? heldIn(state, 'USD', accountBalances(state)) : 0
+  if (held > 0) lines.push(`💵 Good day to change dollars: 1 USD = <b>${usd.rate.toFixed(2)} ${esc(state.settings.currency)}</b>, higher than ${Math.round(usd.pct * 100)}% of the last 90 days. You hold ${money(state, held, 'USD')}.`)
   const tip = smartSteps(state, today)[0]
   if (tip) lines.push(`💡 ${esc(tip.title)}. ${esc(tip.text)}`)
   return lines.length > 1 ? lines.join('\n') : null

@@ -277,6 +277,20 @@ export function createCloud({ transport, store, app, now = () => Date.now() }) {
       return true;
     },
     signOut() { cfg.session = ''; save(); set({ state: 'signedout', error: '' }); },
+    /** A new server PIN (needs the current one); this device stays signed in. */
+    async changePin(current, next) {
+      let r;
+      try { r = await call('/api/login', { changePin: cfg.session, current: String(current), pin: String(next) }, ''); } catch (e) {
+        if (e.status === 403) throw new Error('The current PIN is wrong.');
+        throw e;
+      }
+      if (r?.session) { cfg.session = r.session; save(); }
+      return true;
+    },
+    /** The devices signed in to the server, and which one is this. */
+    devices() { return call('/api/login', { devices: cfg.session }, ''); },
+    /** Signs one device out (it must enter the PIN again). */
+    revokeDevice(sid) { return call('/api/login', { revokeDevice: sid, session: cfg.session }, ''); },
     /** Another server call with this device's session (e.g. /api/telegram). Throws a plain-English error. */
     api(path, body) { return call(path, body); },
     /** One round (a running one is joined). */
