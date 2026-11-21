@@ -9,6 +9,7 @@
 // year") narrow everything on the page.
 
 import { ctx, esc } from '../ctx.js';
+import * as ReportSheet from './report.js';
 import * as M from '../model.js';
 import * as T from '../cattree.js';
 import { formatMoney } from '../money.js';
@@ -271,8 +272,9 @@ export function view() {
   const opt = (v, label, sel) => `<option value="${esc(v)}" ${v === sel ? 'selected' : ''}>${esc(label)}</option>`;
   const anyFilter = rs.acc || rs.tag || rs.person || rs.q;
 
+  ReportSheet.init();
   return `<header class="top"><div><h1>Reports</h1><div class="sub">${esc(r0.label)} · ${r.days} day${r.days === 1 ? '' : 's'} · ${r.count} record${r.count === 1 ? '' : 's'}${filtered ? ' · filtered' : ''}</div></div>
-    <div class="btns rep-head-btns"><button class="btn" data-act="recap-open" data-key="${rs.preset === 'month' ? rs.month || monthKey(today) : addMonths(monthKey(today), -1)}">✨ ${rs.preset === 'month' && (rs.month || monthKey(today)) === monthKey(today) ? 'Recap so far' : 'Month recap'}</button><button class="btn" data-act="rep-export">Export to Excel</button></div></header>
+    <div class="btns rep-head-btns"><button class="btn" data-act="recap-open" data-key="${rs.preset === 'month' ? rs.month || monthKey(today) : addMonths(monthKey(today), -1)}">✨ ${rs.preset === 'month' && (rs.month || monthKey(today)) === monthKey(today) ? 'Recap so far' : 'Month recap'}</button><button class="btn" data-act="rep-export">Export to Excel</button><button class="btn primary" data-rep-open data-testid="report-open">📄 Report</button></div></header>
   <div class="rep-bar">
     <div class="chips">${PRESETS.map((x) => `<button class="chip" data-act="rep-preset" data-preset="${x.id}" aria-pressed="${rs.preset === x.id && !r0.searched}">${x.name}</button>`).join('')}</div>
     ${r0.step && !r0.searched ? `<div class="month-switch"><button class="icon-btn" data-act="rep-step" data-step="-1" aria-label="Previous">‹</button><b>${esc(r0.label)}</b><button class="icon-btn" data-act="rep-step" data-step="1" aria-label="Next">›</button></div>` : ''}

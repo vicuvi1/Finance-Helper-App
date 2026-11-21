@@ -131,6 +131,31 @@ test('subscriptions table: add one in USD, edit it, pick a type; Quick add keeps
   await context.close();
 });
 
+test('Reports → Report: Excel for last month, and the printable page', async () => {
+  const { page, errors, context } = await openPage(browser, server.url);
+  await page.goto(`${server.url}#log`);
+  await page.waitForSelector('#app header.top');
+  await page.keyboard.press('n');
+  await page.waitForSelector('#tx-amount');
+  await page.fill('#tx-amount', '42');
+  await page.fill('#tx-note', 'e2e report item');
+  await page.click('.sheet button[type=submit]');
+  await page.evaluate(() => { location.hash = '#reports'; });
+  await page.waitForSelector('[data-testid="report-open"]');
+  await page.click('[data-testid="report-open"]');
+  await page.check('input[name="rep-period"][value="this-month"]');
+  const dl = page.waitForEvent('download');
+  await page.click('[data-testid="rep-xlsx"]');
+  const file = await dl;
+  assert.match(file.suggestedFilename(), /^finance-helper-report-\d{4}-\d{2}\.xlsx$/);
+  await page.evaluate(() => { window.print = () => {}; });
+  await page.click('[data-testid="rep-pdf"]');
+  await page.waitForSelector('#print-root .report');
+  assert.match(await page.textContent('#print-root .report'), /Where the money went/);
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
 test('Home: a verdict, a spending limit that sets Safe to spend, and the month recap story', async () => {
   const { page, errors, context } = await openPage(browser, server.url);
   await page.goto(`${server.url}#home`);

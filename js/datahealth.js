@@ -70,7 +70,7 @@ export function deviceName(label = '') {
  * The checks at the top: [{id, level: 'ok'|'warn'|'bad', title, text}].
  * Inputs are what the page already knows; anything unknown is left out.
  */
-export function healthChecks({ sync, server, device, bot, update, lastBackup, now = Date.now() }) {
+export function healthChecks({ sync, server, device, bot, update, lastBackup, lock, now = Date.now() }) {
   const out = [];
   if (sync) {
     if (!sync.signedIn) out.push({ id: 'sync', level: 'bad', title: 'Not syncing', text: 'This device keeps its own copy. Sign in (the line under the app\'s name) so web and desktop share one.' });
@@ -87,6 +87,7 @@ export function healthChecks({ sync, server, device, bot, update, lastBackup, no
     out.push({ id: 'device', level: lvl, title: 'This device\'s space', text: `${formatBytes(device.used)} used of ${formatBytes(device.limit)} the browser allows. At your pace it lasts ${yearsText(device.years)}.` });
   }
   if (bot) out.push({ id: 'bot', level: bot.on ? (bot.lastError ? 'warn' : 'ok') : 'warn', title: bot.on ? 'Telegram bot on' : 'Telegram bot off', text: bot.on ? (bot.lastError ? `Last problem: ${bot.lastError}` : `@${bot.bot} answers day and night.`) : (bot.why || 'Turn it on in Settings → Telegram & Binance.') });
+  if (lock) out.push(lock.on && lock.minutes > 0 ? { id: 'lock', level: 'ok', title: 'Auto-lock on', text: `This device asks for its PIN after ${lock.minutes} minute${lock.minutes === 1 ? '' : 's'} away.` } : lock.on ? { id: 'lock', level: 'warn', title: 'Locks only at start', text: 'Choose "Lock after N minutes away" in Settings → Security.' } : { id: 'lock', level: 'warn', title: 'No auto-lock on this device', text: 'Set a PIN in Settings → Security: the app then locks itself when you step away.' })
   if (update) out.push({ id: 'update', level: update.waiting ? 'warn' : 'ok', title: update.waiting ? 'A new version is ready' : `Up to date (v${update.version})`, text: update.waiting ? 'Restart or reload to use it.' : 'Updates come by themselves.' });
   if (lastBackup !== undefined) out.push({ id: 'backup', level: lastBackup && now - lastBackup < 8 * 86400_000 ? 'ok' : 'warn', title: 'Backups', text: lastBackup ? `Last backup ${ago(now - lastBackup)}.` : 'No backup yet. Your server makes one every night once you are signed in (Settings → Data & backups).' });
   return out;

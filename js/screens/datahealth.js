@@ -59,6 +59,7 @@ export function card() {
     server, device,
     bot: bot && bot.configured !== undefined ? bot : null,
     update: { version: APP_VERSION, waiting: webUpdateWaiting() || u.status === 'ready' || u.status === 'available' },
+    lock: { on: !!state.meta?.lock, minutes: state.meta?.lockAfter ?? 5 },
     lastBackup: Math.max(state.meta?.lastBackup || 0, lastServerBackup(), srvBackupAt),
   });
   const icon = { ok: '✅', warn: '🟡', bad: '🔴' };

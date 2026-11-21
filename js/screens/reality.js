@@ -17,6 +17,7 @@ import * as RC from '../reality.js';
 import * as Plan from './plan.js';
 import { evalAmount, formatMoney, centsToPlain } from '../money.js';
 import { todayISO, dayLabel } from '../dates.js';
+import { cardHTML } from '../cards.js';
 
 /** What you typed in this window (kept while the window is open; nothing is saved until you finish a row). */
 const W = { real: {}, first: {}, firstBase: {}, counter: {}, notes: {}, checkId: null, day: '', focus: null };
@@ -77,7 +78,7 @@ function rowHTML(x, today, histToday) {
       <span class="muted small">It moves the balance only: not income, not spending. Undo takes it back.</span></div></div>`;
   }
   return `<div class="rc-row${done ? ' done' : ''}${x.due <= today && !done ? ' due' : ''}" data-testid="reality-row" data-acc="${esc(a.id)}">
-    <div class="rc-name"><b>${esc(a.name)}</b><span class="muted small">${esc(cur)} · last check ${esc(lastTxt)} · ${esc(dueTxt)}</span></div>
+    <div class="rc-name rc-with-card"><span class="mini-card" aria-hidden="true" title="${esc(a.name)}">${cardHTML({ account: a, own: 0, inBase: 0 }, { money: () => '', act: null, base: ctx.state.settings.currency })}</span><span class="rc-name-t"><b>${esc(a.name)}</b><span class="muted small">${esc(cur)} · last check ${esc(lastTxt)} · ${esc(dueTxt)}</span></span></div>
     <div class="rc-app"><span class="muted small rc-lbl">In the app</span><span class="money" data-testid="reality-app">${esc(fm(d.app, cur))}</span>${inMain(d.appBase)}</div>
     <div class="rc-real"><span class="muted small rc-lbl">Real balance</span>${done ? `<span class="money">${esc(fm(done.real, cur))}</span>` : `<input type="text" inputmode="decimal" data-rc-real="${esc(a.id)}" value="${real != null ? esc(centsToPlain(real)) : ''}" placeholder="What the bank shows" aria-label="Real balance of ${esc(a.name)} in ${esc(cur)}" data-testid="reality-real">${inMain(d.realBase)}${a.kind === 'cash' ? `<button type="button" class="btn sm rc-count-btn" data-act="rc-counter" data-acc="${esc(a.id)}" aria-expanded="${W.counter[a.id] ? 'true' : 'false'}">Count notes</button>` : ''}`}</div>
     <div class="rc-diff"><span class="muted small rc-lbl">Difference</span>${diffCell}</div>

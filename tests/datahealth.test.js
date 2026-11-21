@@ -38,5 +38,7 @@ test('checks say plainly what is wrong', () => {
   const c = healthChecks({ sync: { signedIn: false }, server: { used: 95, limit: 100, pct: 95, years: 0.1 }, bot: { on: false, why: 'No token' }, update: { version: '1.0.0', waiting: false }, lastBackup: 0, now: 10 });
   assert.deepEqual(c.map((x) => [x.id, x.level]), [['sync', 'bad'], ['server', 'bad'], ['bot', 'warn'], ['update', 'ok'], ['backup', 'warn']]);
   assert.match(c[0].text, /Sign in/);
+  assert.equal(healthChecks({ lock: { on: true, minutes: 5 } })[0].level, 'ok');
+  assert.match(healthChecks({ lock: { on: false } })[0].text, /Settings → Security/);
   assert.equal(deviceName('Mozilla/5.0 (Windows NT 10.0) Electron/33'), 'Desktop app · Windows');
 });

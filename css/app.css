@@ -6397,3 +6397,30 @@ html[data-in-life] .lt-eye svg { width: 18px; height: 18px; fill: none; stroke: 
 .dh-bar i { display: block; height: 100%; border-radius: inherit; background: var(--income); }
 .dh-bar.warn i { background: var(--gold); }
 .dh-bar.bad i { background: var(--expense); }
+
+/* Reports → Report: the printable page (Save as PDF) and the period picker. */
+.rep-periods { display: grid; gap: 2px; margin-bottom: 12px; }
+.rep-periods input[type="month"] { padding: 4px 6px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--text); font: inherit; }
+#print-root .report { font: 13px/1.45 var(--font, system-ui), sans-serif; color: #111; background: #fff; padding: 24px 28px; max-width: 800px; margin: 0 auto; }
+#print-root .report header { border-bottom: 2px solid #111; margin-bottom: 14px; }
+#print-root .report h1 { margin: 0; font: 600 26px/1.2 var(--display, Georgia), serif; }
+#print-root .report header p { margin: 4px 0 10px; color: #555; }
+#print-root .report h2 { font-size: 15px; margin: 20px 0 6px; }
+#print-root .report table { width: 100%; border-collapse: collapse; }
+#print-root .report th, #print-root .report td { text-align: left; padding: 5px 6px; border-bottom: 1px solid #ddd; }
+#print-root .report td:nth-last-child(-n+2), #print-root .report th:nth-last-child(-n+2) { text-align: right; }
+#print-root .report .rp-totals { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+#print-root .report .rp-totals div { border: 1px solid #ddd; border-radius: 8px; padding: 8px 10px; }
+#print-root .report .rp-totals span { display: block; color: #555; font-size: 12px; }
+#print-root .report .rp-totals b { font-size: 17px; }
+#print-root .report .rp-bar { display: inline-block; width: 140px; height: 8px; background: #eee; border-radius: 4px; overflow: hidden; vertical-align: middle; }
+#print-root .report .rp-bar i { display: block; height: 100%; background: #a8823c; }
+#print-root .report .rp-sum td { font-weight: 600; }
+#print-root .report .rp-foot { color: #555; margin-top: 16px; }
+
+/* Reality check: a small picture of each account's card next to its name, so the colors help. */
+.rc-with-card { display: flex !important; flex-direction: row !important; align-items: center !important; justify-content: flex-start !important; gap: 12px; text-align: left; }
+.rc-name-t { display: flex; flex-direction: column; min-width: 0; }
+.mini-card { flex: none; width: 58px; height: 37px; display: block; border-radius: 6px; overflow: hidden; box-shadow: 0 2px 8px -3px rgba(0, 0, 0, 0.45); }
+.mini-card .bcard { zoom: 0.193; width: 300px; pointer-events: none; transform: none !important; margin: 0; }
+.mini-card .bc-bal, .mini-card .bc-bottom, .mini-card .bc-kind { visibility: hidden; }
