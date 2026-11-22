@@ -14,6 +14,7 @@ import { findSubscriptions, recurringFrom } from '../subs.js';
 import * as SubTable from './subtable.js';
 import * as Planned from './plannedui.js';
 import * as Debts from './debtsui.js';
+import * as BudgetAuto from '../budgetauto.js';
 import * as MoneyB2 from './moneyb2.js';
 import * as Repeating from './repeating.js';
 import * as Budgets from './budgetkinds.js';
@@ -544,7 +545,7 @@ function budgetCard() {
   const subRows = T.subBudgetStatus(ctx.state, key);
   if (!st.rows.length && !subRows.length) {
     return `<section class="card"><h2>Budgets</h2>${Tips.EMPTY.budgets()}
-      <div style="margin-top:8px;text-align:center">${MoneyB2.suggestButton()}</div></section>`;
+      <div style="margin-top:8px;text-align:center">${MoneyB2.suggestButton()} <button type="button" class="btn primary" data-act="budget-auto-on" data-testid="budget-auto-start">🔄 Let them set themselves every month</button></div></section>`;
   }
   const evenPace = (Number(today.slice(8, 10)) / daysInMonth(key)) * 100;
   const rows = st.rows.map((r) => {
@@ -569,7 +570,8 @@ function budgetCard() {
   return `<section class="card"><h2>Budgets · ${esc(monthLabel(key))} <button class="card-link right" data-act="budget-set">Edit</button></h2>
     <p class="muted small" style="margin-top:0">${ctx.money(st.spent)} of ${ctx.money(st.budget)} · ${st.left >= 0 ? `${ctx.money(st.left)} left` : `<b class="expense">${ctx.money(-st.left)} over</b>`} · ${st.daysLeft} day${st.daysLeft === 1 ? '' : 's'} to go. The line marks an even pace.</p>
     ${rows}${subs ? `<p class="muted small" style="margin:14px 0 6px">Subcategories</p>${subs}` : ''}
-    <div style="margin-top:12px">${MoneyB2.suggestButton()}</div></section>`;
+    <div style="margin-top:12px">${MoneyB2.suggestButton()}</div>
+    ${BudgetAuto.budgetAutoOn(ctx.state) ? `<p class="muted small" style="margin:12px 0 0" data-testid="budget-auto-on">🔄 They set themselves on the 1st from your last 3 months. <button type="button" class="linkish" data-act="budget-auto-off">Stop</button></p>` : `<div class="btns" style="margin-top:12px"><button type="button" class="btn" data-act="budget-auto-on" data-testid="budget-auto-start">🔄 Let them set themselves every month</button></div>`}</section>`;
 }
 
 function budgetSheet() {
@@ -610,7 +612,7 @@ function budgetSheet() {
       for (const c of cats) {
         const v = evalAmount(sheet.querySelector(`#b-${CSS.escape(c.id)}`).value) || 0;
         const next = v > 0 ? v : null;
-        if ((c.budget || null) !== next) { c.budget = next; M.touch(c); }
+        if ((c.budget || null) !== next) { c.budget = next; M.touch(c); BudgetAuto.markManual(state, c.id, todayISO()); }
         if (next) n++;
       }
       for (const input of sheet.querySelectorAll('[data-sub-budget]')) {
@@ -1054,6 +1056,13 @@ export function onClick(act, el) {
     return true;
   }
   if (act === 'budget-set') { budgetSheet(); return true; }
+  if (act === 'budget-auto-on') {
+    const ch = BudgetAuto.startBudgetAuto(ctx.state, todayISO());
+    ctx.commit();
+    ctx.toast(ch.length ? `${ch.length} budget${ch.length === 1 ? '' : 's'} set from your last 3 months. They update by themselves on the 1st.` : 'On: budgets update by themselves on the 1st (not enough spending yet to set them now).', 'Undo', () => ctx.undo());
+    return true;
+  }
+  if (act === 'budget-auto-off') { BudgetAuto.stopBudgetAuto(ctx.state); ctx.commit(); ctx.toast('Budgets stay as they are now'); return true; }
   if (act === 'fc-days') { ctx.ui.fcDays = Number(el.dataset.n); ctx.render(); return true; }
   if (act === 'plan-open-repeating') { ctx.ui.planTab = 'repeating'; location.hash = '#plan'; ctx.render?.(); return true; }
   if (act === 'plan-open-repeating') { ctx.ui.planTab = 'repeating'; if (location.hash === '#plan') ctx.render(); else location.hash = '#plan'; return true; }

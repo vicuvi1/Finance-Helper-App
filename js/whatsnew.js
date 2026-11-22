@@ -6,6 +6,7 @@
 import { isNewerVersion } from './version.js';
 
 export const NOTES = [
+  { v: '1.122.0', items: ['Budgets that set themselves: Plan → Budgets → 🔄 Let them set themselves every month. On the 1st each category gets the average of your last 3 months (one you set by hand keeps your number); Do this next shows what changed, with "Put the old ones back". Warnings at 80% and over, and the bot\'s morning message names a budget that\'s nearly used or over.'] },
   { v: '1.121.0', items: ['To check: payments recorded by themselves from your phone show as "3 payments to check" in Do this next. One list: right category and card? ✓, change it, or delete; "All look right" for all at once. Fixing one from the bot\'s buttons counts as checked.'] },
   { v: '1.120.0', items: ['A shorter New record: amount, what for, your 8 most used categories (More… for the rest), the card and the day. Split, who, lent, repeat, "doesn\'t count" and your own fields are under More (open by itself when one is in use). The whole form fits on one screen.'] },
   { v: '1.119.0', items: ['Choose what Home shows: Settings → General → Show on Home (or the link at the bottom of Home). Tick the cards you want; "Calm Home" keeps only the essentials (Safe to spend, Do this next, your month, emergency fund, recent records, what to confirm). Same Home on every device.'] },

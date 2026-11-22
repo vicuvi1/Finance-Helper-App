@@ -196,6 +196,18 @@ test('To check: a payment recorded by the phone is checked with one tap', async 
   await context.close();
 });
 
+test('Budgets that set themselves: one tap turns it on', async () => {
+  const { page, errors, context } = await openPage(browser, server.url);
+  await page.goto(`${server.url}#plan`);
+  await page.waitForSelector('[data-tab="budgets"]');
+  await page.click('[data-tab="budgets"]');
+  await page.waitForSelector('[data-testid="budget-auto-start"]');
+  await page.click('[data-testid="budget-auto-start"]');
+  await page.waitForFunction(() => JSON.parse(globalThis.__fhStore.getItem('finance-helper.state')).settings.budgetAuto === true);
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
 test('Plan → Planned: add a big expense, it is spread over the months', async () => {
   const { page, errors, context } = await openPage(browser, server.url);
   await page.goto(`${server.url}#plan`);

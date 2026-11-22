@@ -26,7 +26,7 @@ import { recapText } from '../js/recap.js'
 import { smartSteps } from '../js/smartwarn.js'
 import { streaks, streakLine } from '../js/streaks.js'
 import { rateAdvice, heldIn } from '../js/fxsmart.js'
-import { accountBalances } from '../js/model.js'
+import { accountBalances, budgetStatus } from '../js/model.js'
 import { addMonths, monthKey } from '../js/dates.js'
 import { pushCopy, readValue } from './_money.mjs'
 
@@ -267,6 +267,12 @@ export function morningText(state, today) {
   const usd = state.settings.currency !== 'USD' ? rateAdvice(state, 'USD', today) : null
   const held = usd?.verdict === 'high' ? heldIn(state, 'USD', accountBalances(state)) : 0
   if (held > 0) lines.push(`💵 Good day to change dollars: 1 USD = <b>${usd.rate.toFixed(2)} ${esc(state.settings.currency)}</b>, higher than ${Math.round(usd.pct * 100)}% of the last 90 days. You hold ${money(state, held, 'USD')}.`)
+  // Category budgets at 80% or over (the busiest two).
+  for (const r of budgetStatus(state, monthKey(today), today).rows.filter((x) => x.level === 'over' || x.level === 'near').slice(0, 2)) {
+    lines.push(r.level === 'over'
+      ? `🎯 ${esc(r.category.name)}: over its budget by ${money(state, -r.left)} (${money(state, r.spent)} of ${money(state, r.budget)})`
+      : `🎯 ${esc(r.category.name)}: ${Math.round(r.pct * 100)}% of the budget used, ${money(state, r.left)} left for the month`)
+  }
   const sl = streakLine(streaks(state, today))
   if (sl) lines.push(sl)
   const tip = smartSteps(state, today)[0]

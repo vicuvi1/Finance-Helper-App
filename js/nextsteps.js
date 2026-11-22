@@ -17,6 +17,8 @@ import { formatMoney } from './money.js';
 import { smartSteps } from './smartwarn.js';
 import { monthToClose } from './closemonth.js';
 import { toCheck } from './tocheck.js';
+import { budgetAutoOn } from './budgetauto.js';
+import { suggestBudgets } from './budgetsuggest.js';
 
 const pctOf = (a, b) => (b > 0 ? Math.round((a / b) * 100) : 0);
 
@@ -103,6 +105,16 @@ export function nextSteps(state, today, { hidden = {}, max = 3, demo = false } =
   // 2c. Payments that came in by themselves (phone): one look, right category and card?
   const check = toCheck(state);
   if (check.length) add({ id: `tocheck:${check.length}`, level: 'do', icon: '📲', title: `${check.length} payment${check.length === 1 ? '' : 's'} to check`, text: `Recorded by themselves from your phone${check[0].note ? ` (latest: ${check[0].note})` : ''}. Right category and card? One tap each.`, btn: 'Check', act: 'tocheck-open' });
+
+  // 2d. Budgets that set themselves: what changed this month (once), or the offer to turn it on.
+  const ba = state.settings.budgetAutoLast;
+  if (budgetAutoOn(state) && ba?.month === key && ba.changes?.length && state.meta?.budgetAutoSeen !== key) {
+    const list = ba.changes.slice(0, 3).map((c) => `${c.name} ${fmt(c.to)}`).join(', ');
+    add({ id: `budgetauto:${key}`, level: 'nice', icon: '🔄', title: `Budgets for ${monthLabel(key).split(' ')[0]} are set`, text: `From your last 3 months: ${list}${ba.changes.length > 3 ? ` and ${ba.changes.length - 3} more` : ''}.`, btn: 'See them', act: 'budget-auto-seen', alt: { btn: 'Put the old ones back', act: 'budget-auto-undo' } });
+  } else if (!budgetAutoOn(state) && !state.settings.categories.some((c) => c.budget > 0) && Number(today.slice(8)) <= 10) {
+    const sug = suggestBudgets(state, today);
+    if (sug.length >= 3) add({ id: `budgetoffer:${key}`, level: 'nice', icon: '🎯', title: 'Budgets that set themselves', text: `Each category gets the average of your last 3 months (e.g. ${sug[0].name} ${fmt(sug[0].suggested)}), updated on the 1st. You get a warning at 80%.`, btn: 'Turn on', act: 'budget-auto-on' });
+  }
 
   // 3. A client is late paying.
   for (const inv of (state.invoices || []).filter((i) => invoiceStatus(i, today) === 'overdue').slice(0, 1)) {

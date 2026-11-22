@@ -4,6 +4,7 @@
 // js/budgetsuggest.js, js/monthreview.js and js/subslist.js (pure, tested).
 // Every write goes through ctx.commit, so it is one Undo step.
 
+import { markManual } from '../budgetauto.js';
 import { ctx, esc } from '../ctx.js';
 import * as M from '../model.js';
 import { todayISO, dayLabel, monthLabel } from '../dates.js';
@@ -47,7 +48,7 @@ function openSuggest() {
         const v = evalAmount(sheet.querySelector(`[data-b2-val="${CSS.escape(id)}"]`).value) || 0;
         const c = M.category(st, id);
         if (!c || !(v > 0)) continue;
-        if (c.budget !== v) { c.budget = v; M.touch(c); }
+        if (c.budget !== v) { c.budget = v; M.touch(c); markManual(st, id, todayISO()); }
         n++;
       }
       if (!n) { ctx.closeSheet(); ctx.toast('Nothing ticked: no budget changed'); return; }

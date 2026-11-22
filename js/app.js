@@ -31,6 +31,7 @@ import * as Standalone from './standalone.js'; // standalone app: cloud sync, Li
 import * as Binance from './screens/binance.js';
 import * as Sync from './screens/sync.js';
 import * as HomeCards from './homecards.js';
+import * as BudgetAuto from './budgetauto.js';
 import * as ToCheck from './screens/tocheck.js';
 import * as SelfCheck from './screens/selfcheck.js';
 import * as Backups from './screens/backups.js';
@@ -1115,7 +1116,7 @@ function stepsCard(today) {
     <div class="steps-grid">${steps.map((x, i) => `<article class="step lvl-${x.level}" style="--i:${i}">
       <span class="step-ic" aria-hidden="true">${esc(x.icon)}</span>
       <div class="step-t"><b>${esc(x.title)}</b><p>${esc(x.text)}</p></div>
-      <div class="step-btns"><button type="button" class="btn sm ${x.level === 'nice' ? '' : 'primary'}" ${attrs(x)}>${esc(x.btn)}</button><button type="button" class="step-later" data-act="step-later" data-id="${esc(x.id)}">Later</button></div>
+      <div class="step-btns"><button type="button" class="btn sm ${x.level === 'nice' ? '' : 'primary'}" ${attrs(x)}>${esc(x.btn)}</button>${x.alt ? `<button type="button" class="btn sm" data-act="${esc(x.alt.act)}">${esc(x.alt.btn)}</button>` : ''}<button type="button" class="step-later" data-act="step-later" data-id="${esc(x.id)}">Later</button></div>
     </article>`).join('')}</div>
   </section>`;
 }
@@ -1866,6 +1867,8 @@ function offerMonthlyBill(tx) {
 
 function render({ enter = false } = {}) {
   autoPay();
+  // Budgets that set themselves (js/budgetauto.js): once on the 1st open of a month.
+  if (!DEMO && !state._sealed && BudgetAuto.runBudgetAuto(state, todayISO())) { persist({ quiet: true }); Sync.changed(); }
   // Once: work costs ("Work fees", "Taxes") leave the personal jars.
   if (!state._sealed && !state.meta.workJarsMoved) {
     state.meta.workJarsMoved = 1;
@@ -3612,6 +3615,8 @@ document.addEventListener('click', (e) => {
   else if (act === 'limit-setup') openLimitSheet();
   else if (act === 'spend-setup') openSpendSheet();
   else if (act === 'tocheck-open') ToCheck.open();
+  else if (act === 'budget-auto-seen') { state.meta.budgetAutoSeen = state.settings.budgetAutoLast?.month; persist({ quiet: true }); ui.planTab = 'budgets'; location.hash = '#plan'; render(); }
+  else if (act === 'budget-auto-undo') { const n = BudgetAuto.undoBudgetAuto(state); state.meta.budgetAutoSeen = state.settings.budgetAutoLast?.month; commit(); toast(`${n} budget${n === 1 ? '' : 's'} put back`); }
   else if (act === 'recap-open') openRecap(el.dataset.key || addMonths(monthKey(todayISO()), -1));
   else if (act === 'step-later') {
     const today = todayISO();

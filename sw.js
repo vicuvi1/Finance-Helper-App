@@ -92,6 +92,7 @@ const SHELL = [
   './js/homecards.js',
   './js/tocheck.js',
   './js/screens/tocheck.js',
+  './js/budgetauto.js',
   './js/wishlist.js',
   './js/screens/calendar.js',
   './js/screens/afford.js',
