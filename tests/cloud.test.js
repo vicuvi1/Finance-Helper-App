@@ -209,3 +209,31 @@ test('a sync with nothing new on either side is one small read, no merge', async
   assert.equal(r2.same, undefined);
   assert.ok(c.state.tx.some((t) => t.id === 'fast2'));
 });
+
+test('a record added (in place, as the app does) while a sync is sending is never lost', async () => {
+  // The app changes its data in place (state.tx.push) and then calls changed(); the object stays the same.
+  let state = normalizeState({ version: SCHEMA_VERSION, tx: [tx('ip1', 100)] });
+  let cloud = null;
+  let late = false;
+  const slow = async (path, body, token) => {
+    if (path === '/api/money' && body?.op === 'push' && !late) {
+      late = true;
+      state.tx.push(tx('ip-late', 55)); // logged while the push is on its way
+      cloud.changed();
+    }
+    return transport(path, body, token);
+  };
+  cloud = createCloud({ transport: slow, store: memStore(), app: { getState: () => state, setState: (s) => { state = s; } } });
+  await cloud.signIn('8642');
+  const r = await cloud.sync();
+  assert.equal(late, true, 'the record was added during the push');
+  assert.ok(state.tx.some((t) => t.id === 'ip-late'), 'the record is still on this device');
+  assert.equal(cloud.config.dirty, true, 'and still waits to be sent');
+  assert.equal(r.again, true);
+  assert.equal((await cloud.sync()).ok, true);
+  assert.ok(state.tx.some((t) => t.id === 'ip-late'));
+  const other = client();
+  await other.cloud.signIn('8642');
+  await other.cloud.sync();
+  assert.ok(other.state.tx.some((t) => t.id === 'ip-late'), 'the server got it on the next round');
+});
