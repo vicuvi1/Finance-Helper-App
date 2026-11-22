@@ -17,6 +17,7 @@ import { formatMoney } from './money.js';
 import { smartSteps } from './smartwarn.js';
 import { monthToClose } from './closemonth.js';
 import { toCheck } from './tocheck.js';
+import { nameGroups } from './shopnames.js';
 import { budgetAutoOn } from './budgetauto.js';
 import { isDue as checkinDue, checkinData } from './checkin.js';
 import { suggestBudgets } from './budgetsuggest.js';
@@ -106,6 +107,10 @@ export function nextSteps(state, today, { hidden = {}, max = 3, demo = false } =
   // 2c. Payments that came in by themselves (phone): one look, right category and card?
   const check = toCheck(state);
   if (check.length) add({ id: `tocheck:${check.length}`, level: 'do', icon: '📲', title: `${check.length} payment${check.length === 1 ? '' : 's'} to check`, text: `Recorded by themselves from your phone${check[0].note ? ` (latest: ${check[0].note})` : ''}. Right category and card? One tap each.`, btn: 'Check', act: 'tocheck-open' });
+
+  // 2f. The same shop written several ways ("LINELLA SRL 123", "Linella"): one name each.
+  const shops = nameGroups(state);
+  if (shops.length) add({ id: `shops:${shops.length}`, level: 'nice', icon: '🏷️', title: `${shops.length} shop${shops.length === 1 ? '' : 's'} written different ways`, text: `${shops[0].variants.slice(0, 3).map((v) => `"${v.note}"`).join(', ')}… One name each, so reports group them right.`, btn: 'Tidy', act: 'shops-open' });
 
   // 2e. The 10-minute Sunday check-in (Saturday to Monday, until done).
   if (checkinDue(state, today)) {

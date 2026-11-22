@@ -255,6 +255,27 @@ test('Year: from Reports to Year in review, with month by month and net worth', 
   await context.close();
 });
 
+test('One name for each shop: tidy a shop written two ways', async () => {
+  const { page, errors, context } = await openPage(browser, server.url);
+  await page.goto(server.url);
+  await page.waitForSelector('#app header.top');
+  await page.evaluate(() => {
+    const st = JSON.parse(globalThis.__fhStore.getItem('finance-helper.state'));
+    const acc = st.settings.accounts.find((a) => !a.archived).id;
+    const d = new Date().toISOString().slice(0, 10);
+    for (const [id, note] of [['sn1', 'Madeupmart'], ['sn2', 'MADEUPMART SRL 123']]) st.tx.push({ id, date: d, type: 'expense', amount: 2000, currency: st.settings.currency || 'MDL', account: acc, category: 'other', note, createdAt: Date.now(), updatedAt: Date.now() });
+    globalThis.__fhStore.setItem('finance-helper.state', JSON.stringify(st));
+  });
+  await page.reload();
+  await page.waitForSelector('[data-act="shops-open"]');
+  await page.click('[data-act="shops-open"]');
+  await page.waitForSelector('[data-testid="shopnames"]');
+  await page.click('[data-testid="shopnames-go"]');
+  await page.waitForFunction(() => JSON.parse(globalThis.__fhStore.getItem('finance-helper.state')).tx.find((t) => t.id === 'sn2').note === 'Madeupmart');
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
 test('Plan → Planned: add a big expense, it is spread over the months', async () => {
   const { page, errors, context } = await openPage(browser, server.url);
   await page.goto(`${server.url}#plan`);

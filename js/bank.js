@@ -4,6 +4,7 @@
 // the currency, in Romanian, Russian or English. The user can fix the
 // guess; the mapping is remembered per statement layout.
 
+import { canonicalFor } from './shopnames.js';
 import { parseAmount } from './money.js';
 import { parseLooseDate, daysBetween } from './dates.js';
 import { suggest } from './learn.js';
@@ -112,7 +113,8 @@ export function parseStatement(rows, { headerRow, map }, state, { account, flip 
     stamp++;
     // `source: 'bank'`: came from a statement, not logged by you that day, so it
     // never pays "Spending logged" points in Life System.
-    out.push({ id: uid(), createdAt: stamp, updatedAt: stamp, ...t, currency, rate, base: rate ? Math.round(amount * rate) : amount, source: 'bank',
+    // The shop's spelling you already use ("LINELLA SRL 123" → "Linella"), js/shopnames.js.
+    out.push({ id: uid(), createdAt: stamp, updatedAt: stamp, ...t, note: canonicalFor(state, t.note), currency, rate, base: rate ? Math.round(amount * rate) : amount, source: 'bank',
       _level: level, ...(near ? { _likely: { id: near.id, date: near.date, note: near.note || '' } } : {}) });
   }
   const income = out.filter((t) => t.type === 'income').reduce((a, t) => a + t.base, 0);

@@ -6577,3 +6577,11 @@ tr.week-row b.bad { color: var(--expense); } tr.week-row b.good { color: var(--i
 .yr-table tr.dim td { opacity: 0.45; }
 .yr-table tfoot td { border-bottom: 0; }
 @media (max-width: 600px) { .yr-grid { grid-template-columns: 1fr; } }
+
+/* One name for each shop (js/screens/shopnames.js) */
+.sn-list { display: grid; gap: 8px; margin-bottom: 8px; }
+.sn-row { padding: 10px 12px; border-radius: 12px; background: var(--surface-2); display: grid; gap: 6px; }
+.sn-head { display: flex; align-items: center; gap: 10px; }
+.sn-head input[type="checkbox"] { width: 18px; height: 18px; flex: none; }
+.sn-name { flex: 1; min-width: 0; }
+.sn-row .linkish { justify-self: start; }

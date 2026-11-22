@@ -34,6 +34,7 @@ import * as HomeCards from './homecards.js';
 import * as BudgetAuto from './budgetauto.js';
 import * as ToCheck from './screens/tocheck.js';
 import * as CheckIn from './screens/checkin.js';
+import * as ShopNames from './screens/shopnames.js';
 import * as SelfCheck from './screens/selfcheck.js';
 import * as Backups from './screens/backups.js';
 import * as Tidy from './screens/moneytidy.js';
@@ -3617,6 +3618,7 @@ document.addEventListener('click', (e) => {
   else if (act === 'spend-setup') openSpendSheet();
   else if (act === 'tocheck-open') ToCheck.open();
   else if (act === 'checkin-open') CheckIn.open();
+  else if (act === 'shops-open') ShopNames.open();
   else if (act === 'budget-auto-seen') { state.meta.budgetAutoSeen = state.settings.budgetAutoLast?.month; persist({ quiet: true }); ui.planTab = 'budgets'; location.hash = '#plan'; render(); }
   else if (act === 'budget-auto-undo') { const n = BudgetAuto.undoBudgetAuto(state); state.meta.budgetAutoSeen = state.settings.budgetAutoLast?.month; commit(); toast(`${n} budget${n === 1 ? '' : 's'} put back`); }
   else if (act === 'recap-open') openRecap(el.dataset.key || addMonths(monthKey(todayISO()), -1));

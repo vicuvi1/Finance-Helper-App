@@ -6,6 +6,7 @@
 import { isNewerVersion } from './version.js';
 
 export const NOTES = [
+  { v: '1.125.0', items: ['One name for each shop: "LINELLA SRL 123" and "Linella" become one, so reports and categories group them. New payments from your phone or a bank statement get the spelling you already use; for older records, Do this next offers the shops written different ways (tick, rename if you like, Tidy; Undo works). Your own notes like "bus 3" are never changed.'] },
   { v: '1.124.0', items: ['Your year on one page: Reports → 📅 Year opens Year in review, which now also has the year month by month (earned, spent, kept, % saved and net worth at each month\'s end, with the year\'s totals) and a net worth line, next to the best month, top categories and last-year comparison already there.'] },
   { v: '1.123.0', items: ['A 10-minute week check-in, offered in Do this next from Saturday to Monday: your week in one number (against a usual week, and where most went), the payments and bills to confirm, a category for anything in "Other" right there, and next week\'s safe amount a day, bills and one tip. "Done for this week" and it waits until next weekend.'] },
   { v: '1.122.0', items: ['Budgets that set themselves: Plan → Budgets → 🔄 Let them set themselves every month. On the 1st each category gets the average of your last 3 months (one you set by hand keeps your number); Do this next shows what changed, with "Put the old ones back". Warnings at 80% and over, and the bot\'s morning message names a budget that\'s nearly used or over.'] },

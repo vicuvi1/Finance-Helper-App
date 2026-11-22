@@ -7,6 +7,7 @@
 // This file reads either one into a record. Pure and tested (tests/phonepay.test.js).
 
 import { parseQuick } from './quickadd.js';
+import { canonicalFor } from './shopnames.js';
 import { activeAccounts } from './model.js';
 
 const CURS = { MDL: 'MDL', LEI: 'MDL', LEU: 'MDL', L: 'MDL', USD: 'USD', $: 'USD', EUR: 'EUR', '€': 'EUR', RON: 'RON', RUB: 'RUB', UAH: 'UAH', GBP: 'GBP', '£': 'GBP' };
@@ -125,7 +126,7 @@ export function paymentRecord(state, input, { now = Date.now(), today }) {
   if ((state.tx || []).some((t) => t.id === id) || state.deleted?.[id]) return { ok: false, skip: true, why: 'Already recorded.', p };
   const recent = (state.tx || []).find((t) => t.type === p.kind && t.date === today && Math.abs((t.createdAt || 0) - now) < 10 * 60000 && (t.amount === p.amount || t.original?.amount === p.amount));
   if (recent) return { ok: false, skip: true, why: 'Already recorded a moment ago.', p, existing: recent.id };
-  const what = p.merchant || (p.kind === 'income' ? 'Money in' : 'Card payment');
+  const what = p.merchant ? canonicalFor(state, p.merchant) : p.kind === 'income' ? 'Money in' : 'Card payment';
   const text = `${p.kind === 'income' ? '+' : ''}${(p.amount / 100).toFixed(2)} ${p.currency || ''} ${what}`.replace(/\s+/g, ' ');
   const r = parseQuick(state, text, { today, accountId: accountFor(state, p) });
   if (!r.ok) return { ok: false, why: r.missing || 'Could not read it.', p };
