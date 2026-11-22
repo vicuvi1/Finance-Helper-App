@@ -25,6 +25,7 @@ import * as Updates from './screens/updates.js';
 import * as DataHealth from './screens/datahealth.js'; // Settings → Data & health
 import { parseQuick } from './quickadd.js';
 import * as CloseMonth from './screens/closemonth.js';
+import * as Wrapped from './screens/wrapped.js';
 import { isClosed as monthClosed } from './closemonth.js';
 import * as Standalone from './standalone.js'; // standalone app: cloud sync, Life import, update badge, notifications
 import * as Binance from './screens/binance.js';
@@ -4279,6 +4280,7 @@ route();
 Updates.initUpdates();
 Standalone.init();
 CloseMonth.init();
+Wrapped.init();
 Binance.initBinance();
 Sync.initSync();
 Backups.initBackups();

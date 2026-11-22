@@ -6486,3 +6486,5 @@ tr.week-row b.bad { color: var(--expense); } tr.week-row b.good { color: var(--i
 .cm-steps li.done .cm-dot { border-color: var(--income); background: color-mix(in srgb, var(--income) 14%, transparent); }
 .cm-clean li span { display: flex; gap: 6px; flex: none; }
 .cm-h { margin: 6px 0 8px; font-size: 14px; }
+.hb-streak { margin: 0 0 10px; font-weight: 600; color: var(--gold); }
+.wr-canvas { width: 100%; max-width: 360px; aspect-ratio: 4 / 5; display: block; margin: 0 auto 12px; border-radius: 14px; box-shadow: var(--shadow-card); }

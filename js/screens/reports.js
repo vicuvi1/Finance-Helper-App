@@ -10,6 +10,7 @@
 
 import { ctx, esc } from '../ctx.js';
 import { spendingMap } from '../habits.js';
+import { streaks, streakLine } from '../streaks.js';
 import * as ReportSheet from './report.js';
 import * as M from '../model.js';
 import * as T from '../cattree.js';
@@ -563,6 +564,7 @@ function habitsCard(state, r0) {
   const times = m.timed ? m.times.map((t) => `<div class="hb-time"><span>${esc(t.label)} <small>${esc(t.hours)}</small></span><span class="hb-bar"><i style="width:${Math.max(1, Math.round(t.share * 100))}%"></i></span><b>${Math.round(t.share * 100)}%</b></div>`).join('') : '<p class="muted small">Log records on the day you spend and the time of day shows here.</p>';
   return `<section class="card hb-card" data-testid="habits-card"><h2 style="margin:0 0 4px">Your spending habits</h2>
     <p class="muted small" style="margin:0 0 12px">Everyday spending (bills and repeating payments left out). Time of day comes from when you logged it.</p>
+    ${(() => { const sl = streakLine(streaks(state, todayISO())); return sl ? `<p class="hb-streak" data-testid="streak-line">${esc(sl)}</p>` : ''; })()}
     ${m.insights.length ? `<ul class="hb-insights">${m.insights.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
     <div class="hb-grid"><div><b class="small">By weekday (a day on average)</b><div class="hb-days">${days}</div></div><div><b class="small">By time of day</b>${times}</div></div>
   </section>`;

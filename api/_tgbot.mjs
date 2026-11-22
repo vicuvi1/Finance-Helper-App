@@ -24,6 +24,7 @@ import { dueItems, upcomingItems } from '../js/recurring.js'
 import { weeklyReview } from '../js/review.js'
 import { recapText } from '../js/recap.js'
 import { smartSteps } from '../js/smartwarn.js'
+import { streaks, streakLine } from '../js/streaks.js'
 import { rateAdvice, heldIn } from '../js/fxsmart.js'
 import { accountBalances } from '../js/model.js'
 import { addMonths, monthKey } from '../js/dates.js'
@@ -209,6 +210,8 @@ export function morningText(state, today) {
   const usd = state.settings.currency !== 'USD' ? rateAdvice(state, 'USD', today) : null
   const held = usd?.verdict === 'high' ? heldIn(state, 'USD', accountBalances(state)) : 0
   if (held > 0) lines.push(`💵 Good day to change dollars: 1 USD = <b>${usd.rate.toFixed(2)} ${esc(state.settings.currency)}</b>, higher than ${Math.round(usd.pct * 100)}% of the last 90 days. You hold ${money(state, held, 'USD')}.`)
+  const sl = streakLine(streaks(state, today))
+  if (sl) lines.push(sl)
   const tip = smartSteps(state, today)[0]
   if (tip) lines.push(`💡 ${esc(tip.title)}. ${esc(tip.text)}`)
   return lines.length > 1 ? lines.join('\n') : null
@@ -217,7 +220,8 @@ export function morningText(state, today) {
 /** The evening nudge: only when nothing was logged today. */
 export function eveningText(state, today) {
   if ((state.tx || []).some((t) => t.date === today || (t.createdAt && moneyDay(t.createdAt) === today))) return null
-  return '🌙 Nothing logged today. Anything to add? Reply like <code>lunch 85</code> or <code>taxi 45 maib</code>. If you spent nothing, ignore me 🙂'
+  const st = streaks(state, today)
+  return `🌙 Nothing logged today. Anything to add? Reply like <code>lunch 85</code> or <code>taxi 45 maib</code>.${st.logging >= 3 ? ` Keep your 🔥 ${st.logging}-day streak going.` : ' If you spent nothing, ignore me 🙂'}`
 }
 
 /**

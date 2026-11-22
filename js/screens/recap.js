@@ -73,7 +73,7 @@ function slides(r) {
     <span class="rc-k">For ${esc(next)}</span>
     <h3 class="rc-h">One thing to try</h3>
     <p class="rc-tip">${esc(r.tip.text)}</p>
-    <div class="rc-btns">${r.tip.act ? `<button type="button" class="btn primary" data-act="${esc(r.tip.act)}" data-recap-close>${esc(r.tip.btn)}</button>` : ''}<button type="button" class="btn ${r.tip.act ? '' : 'primary'}" data-recap-close>Done</button></div>
+    <div class="rc-btns">${r.tip.act ? `<button type="button" class="btn primary" data-act="${esc(r.tip.act)}" data-recap-close>${esc(r.tip.btn)}</button>` : ''}<button type="button" class="btn" data-wrapped="${esc(r.key)}" data-recap-close data-testid="wrapped-open">Share as a picture</button><button type="button" class="btn ${r.tip.act ? '' : 'primary'}" data-recap-close>Done</button></div>
   </div>`);
   return out;
 }

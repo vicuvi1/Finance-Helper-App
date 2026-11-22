@@ -51,6 +51,8 @@ const SHELL = [
   './js/planned.js',
   './js/logextras.js',
   './js/closemonth.js',
+  './js/streaks.js',
+  './js/screens/wrapped.js',
   './js/screens/closemonth.js',
   './js/screens/plannedui.js',
   './js/screens/report.js',
