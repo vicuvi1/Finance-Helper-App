@@ -9,9 +9,10 @@ import { FIELDS, guessMapping, parseStatement, signature } from '../bank.js';
 import { parseCSV } from '../csv.js';
 import { readWorkbook } from '../xlsx-read.js';
 import { formatMoney } from '../money.js';
-import { dayLabel, monthLabel } from '../dates.js';
+import { dayLabel, monthLabel, todayISO } from '../dates.js';
 import { fillRate, fillKnownRates, skipNoRate } from '../importer.js';
 import * as RateGaps from './rategaps.js';
+import { bankMatch, confirmMatched } from '../bankmatch.js';
 
 // Bank CSVs are often not UTF-8 (Windows Cyrillic or Central European).
 export function decodeText(buf) {
@@ -73,6 +74,19 @@ export function openBankImport(rows, { fileName = '' } = {}) {
     return out;
   }).filter((t) => !unticked.has(t._k));
 
+  // The match with the app: exact copies + rows left unticked as "probably already logged".
+  const match = () => (res ? bankMatch(state, res, res.tx.filter((t, i) => t._likely && unticked.has(rowKey(t, i))).map((t) => t._likely.id)) : { matched: [], missing: [] });
+  const matchHTML = () => {
+    const m = match();
+    if (!m.matched.length && !m.missing.length) return '';
+    return `<div class="bk-match" data-testid="bk-match">
+      ${m.matched.length ? `<div class="split-row"><span>✓ Matched with what's in the app (typed, phone, bot): marked checked</span><b>${m.matched.length}</b></div>` : ''}
+      ${m.missing.length ? `<details class="bk-missing"><summary class="split-row"><span>In the app on these dates, but <b>not on the statement</b>: worth a look</span><b class="expense">${m.missing.length}</b></summary>
+        <div class="list">${m.missing.map((t) => `<div class="bp-row"><span class="muted">${esc(dayLabel(t.date))}</span><span class="bp-note">${esc(t.note || '—')}</span><b class="${t.type === 'income' ? 'income' : ''}">${formatMoney(t.type === 'income' ? t.amount : -t.amount, t.currency, { sign: t.type === 'income' })}</b></div>`).join('')}</div>
+        <p class="muted small">Paid in cash or from another card? Logged twice? A payment the bank hasn't booked yet? Open the Log to change or delete one.</p></details>` : ''}
+    </div>`;
+  };
+
   const header = () => (rows[cfg.headerRow] || []).map((h, i) => ({ i, name: String(h ?? '').trim() || `Column ${i + 1}` }));
   const colSelect = (f) => `<label class="field"><span>${esc(f.label)}</span><select data-map="${f.id}">
     <option value="">—</option>${header().map((h) => `<option value="${h.i}" ${cfg.map[f.id] === h.i ? 'selected' : ''}>${esc(h.name)}</option>`).join('')}</select></label>`;
@@ -90,11 +104,12 @@ export function openBankImport(rows, { fileName = '' } = {}) {
     }
     if (res) res.tx.forEach((t, i) => { const k = rowKey(t, i); if (t._likely && !seeded.has(k)) { seeded.add(k); unticked.add(k); } });
     if (!ok) return '<p class="lock-msg">Pick the date column and either the amount column or the money in / out columns.</p>';
-    if (!res.tx.length) return `<p class="muted">${res.duplicates ? `All ${res.duplicates} records are already in the app.` : 'No rows with a date and an amount under these headings. Check the heading row and the columns.'}</p>`;
+    if (!res.tx.length) return res.duplicates ? `<p class="muted">All ${res.duplicates} records are already in the app.</p>${matchHTML()}<div class="btns" style="margin-top:12px"><button class="btn" type="button" data-close>Cancel</button><button class="btn primary" type="button" id="bk-check" data-testid="bk-check">Mark them checked</button></div>` : '<p class="muted">No rows with a date and an amount under these headings. Check the heading row and the columns.</p>';
     const cur = (t) => formatMoney(t.type === 'income' ? t.amount : -t.amount, t.currency, { sign: t.type === 'income' });
     return `<div class="split-row"><span>${res.tx.filter((t) => t.type === 'income').length} in</span><b class="money income">${ctx.money(res.income)}</b></div>
       <div class="split-row"><span>${res.tx.filter((t) => t.type === 'expense').length} out</span><b class="money expense">${ctx.money(res.expense)}</b></div>
       ${res.duplicates ? `<div class="split-row"><span class="muted">Already in the app, skipped</span><b>${res.duplicates}</b></div>` : ''}
+      ${matchHTML()}
       ${res.likely ? `<div class="split-row" data-testid="bk-likely"><span class="muted">Probably already logged by you (same amount within 2 days), left unticked</span><b>${res.likely}</b></div>` : ''}
       ${res.unsure ? `<div class="split-row"><span class="muted">Category is a guess: check the ones marked ?</span><b>${res.unsure}</b></div>` : ''}
       ${res.skipped ? `<div class="split-row"><span class="muted">Rows without a date or amount (totals, notes)</span><b>${res.skipped}</b></div>` : ''}
@@ -138,7 +153,7 @@ export function openBankImport(rows, { fileName = '' } = {}) {
     };
     sheet.addEventListener('change', (e) => {
       const el = e.target;
-      if (el.dataset.bkRow) { if (el.checked) unticked.delete(el.dataset.bkRow); else unticked.add(el.dataset.bkRow); goLabel(); return; }
+      if (el.dataset.bkRow) { if (el.checked) unticked.delete(el.dataset.bkRow); else unticked.add(el.dataset.bkRow); goLabel(); const box = sheet.querySelector('[data-testid="bk-match"]'); if (box) box.outerHTML = matchHTML() || '<div data-testid="bk-match"></div>'; return; }
       if (el.dataset.bkCat) { catPick.set(el.dataset.bkCat, el.value); return; }
       if (el.dataset.map) {
         const v = el.value === '' ? null : Number(el.value);
@@ -170,17 +185,26 @@ export function openBankImport(rows, { fileName = '' } = {}) {
         goLabel();
         return;
       }
+      if (e.target.closest('#bk-check')) {
+        const n = confirmMatched(ctx.state, match().matched, todayISO());
+        ctx.commit();
+        ctx.closeSheet();
+        ctx.toast(`Everything matches the statement ✓${n ? ` (${n} from your phone checked)` : ''}`);
+        return;
+      }
       const picked = chosen().map(({ _k, ...t }) => t);
       if (!e.target.closest('#bk-go') || !picked.length || RateGaps.gapsOf(picked).length) return;
       const st = ctx.state;
       st.settings.bankPresets = { ...(st.settings.bankPresets || {}), [signature(rows, cfg.headerRow)]: { map: cfg.map, flip: cfg.flip, account: cfg.account } };
       st.settings.updatedAt = Date.now();
+      const matchedNow = match().matched;
       st.tx.push(...picked);
+      const checkedPhone = confirmMatched(st, matchedNow, todayISO());
       ctx.commit();
       ctx.closeSheet();
       if (res.months.length) ctx.ui.month = res.months.at(-1);
       location.hash = '#log';
-      ctx.toast(`Imported ${picked.length} record${picked.length === 1 ? '' : 's'} from the statement.`);
+      ctx.toast(`Imported ${picked.length} record${picked.length === 1 ? '' : 's'} from the statement${matchedNow.length ? `; ${matchedNow.length} already in the app matched${checkedPhone ? ` (${checkedPhone} from your phone checked)` : ''}` : ''}.`);
     });
   });
 }

@@ -6588,3 +6588,8 @@ tr.week-row b.bad { color: var(--expense); } tr.week-row b.good { color: var(--i
 
 /* Long view → Freedom number (js/freedom.js) */
 .lv-free .lv-ret input { width: 56px; padding: 2px 6px; margin: 0 2px; }
+
+/* Bank import: the match with the app (js/bankmatch.js) */
+.bk-match { margin: 6px 0; }
+.bk-missing summary { cursor: pointer; list-style: none; }
+.bk-missing .list { margin: 6px 0; }

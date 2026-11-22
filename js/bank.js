@@ -64,8 +64,10 @@ const cleanNote = (v) => String(v ?? '').replace(/\s+/g, ' ').trim().slice(0, 14
 export function parseStatement(rows, { headerRow, map }, state, { account, flip = false } = {}) {
   const baseCur = state.settings.currency;
   const acc = state.settings.accounts.find((a) => a.id === account) || state.settings.accounts[0];
+  // Exact copies already in the app (same key): their ids, so the match can mark them checked.
   const existing = new Map();
-  for (const t of state.tx) existing.set(txKey(t), (existing.get(txKey(t)) || 0) + 1);
+  for (const t of state.tx) { const k = txKey(t); if (!existing.has(k)) existing.set(k, []); existing.get(k).push(t.id); }
+  const exactIds = [];
   // Records you logged yourself (any note): same type and amount, within 2 days → "probably already logged".
   const byAmount = new Map();
   for (const t of state.tx) {
@@ -79,6 +81,7 @@ export function parseStatement(rows, { headerRow, map }, state, { account, flip 
   const out = [];
   let duplicates = 0;
   let skipped = 0;
+  const rowsDates = { from: null, to: null };
   let stamp = Date.now();
   for (let r = headerRow + 1; r < rows.length; r++) {
     const row = rows[r] || [];
@@ -92,6 +95,8 @@ export function parseStatement(rows, { headerRow, map }, state, { account, flip 
       v = in_ - out_;
     }
     if (!date || !v) { skipped++; continue; }
+    if (!rowsDates.from || date < rowsDates.from) rowsDates.from = date;
+    if (!rowsDates.to || date > rowsDates.to) rowsDates.to = date;
     const type = v < 0 ? 'expense' : 'income';
     const amount = Math.abs(v);
     const note = cleanNote(cell(row, map.desc));
@@ -105,7 +110,7 @@ export function parseStatement(rows, { headerRow, map }, state, { account, flip 
     const level = learned ? s.level : kw ? 'guess' : 'none';
     const t = { type, amount, date, note, account: acc.id, category, ...(level === 'sure' ? {} : { catBy: 'auto' }) };
     const key = txKey(t);
-    if (existing.get(key) > 0) { existing.set(key, existing.get(key) - 1); duplicates++; continue; }
+    if (existing.get(key)?.length) { exactIds.push(existing.get(key).shift()); duplicates++; continue; }
     const near = (byAmount.get(`${type}|${amount}`) || []).filter((x) => !used.has(x.id) && x.date && Math.abs(daysBetween(x.date, date)) <= 2)
       .sort((a, b) => (a.account === acc.id ? -1 : 0) - (b.account === acc.id ? -1 : 0) || Math.abs(daysBetween(a.date, date)) - Math.abs(daysBetween(b.date, date)))[0];
     if (near) used.add(near.id);
@@ -120,5 +125,6 @@ export function parseStatement(rows, { headerRow, map }, state, { account, flip 
   const income = out.filter((t) => t.type === 'income').reduce((a, t) => a + t.base, 0);
   const expense = out.filter((t) => t.type === 'expense').reduce((a, t) => a + t.base, 0);
   const months = [...new Set(out.map((t) => t.date.slice(0, 7)))].sort();
-  return { tx: out, duplicates, skipped, income, expense, months, likely: out.filter((t) => t._likely).length, unsure: out.filter((t) => !t._likely && (t._level === 'guess' || t._level === 'none')).length };
+  const dates = rowsDates;
+  return { tx: out, exactIds, account: acc.id, from: dates.from, to: dates.to, duplicates, skipped, income, expense, months, likely: out.filter((t) => t._likely).length, unsure: out.filter((t) => !t._likely && (t._level === 'guess' || t._level === 'none')).length };
 }

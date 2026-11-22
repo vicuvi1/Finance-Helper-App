@@ -297,6 +297,37 @@ test('Freedom number in Long view; the return can be changed', async () => {
   await context.close();
 });
 
+test('Bank statement: phone payments matched and checked, what the bank lacks is listed', async () => {
+  const { page, errors, context } = await openPage(browser, server.url);
+  await page.goto(server.url);
+  await page.waitForSelector('#app header.top');
+  const acc = await page.evaluate(() => {
+    const st = JSON.parse(globalThis.__fhStore.getItem('finance-helper.state'));
+    const a = st.settings.accounts.find((x) => !x.archived && x.kind !== 'cash' && x.kind !== 'crypto') || st.settings.accounts[0];
+    const base = { currency: st.settings.currency || 'MDL', account: a.id, category: 'other', createdAt: Date.now(), updatedAt: Date.now() };
+    st.tx.push({ ...base, id: 'bm-ph', date: '2026-11-03', type: 'expense', amount: 12050, note: 'Madeupmart', source: 'phone', review: true });
+    st.tx.push({ ...base, id: 'bm-gone', date: '2026-11-04', type: 'expense', amount: 7700, note: 'Made-up only here' });
+    st.settings.bankPresets = {};
+    globalThis.__fhStore.setItem('finance-helper.state', JSON.stringify(st));
+    return a.id;
+  });
+  await page.reload();
+  await page.waitForSelector('#app header.top');
+  const csv = 'Date,Description,Amount\n03.11.2026,MADEUPMART SRL,-120.50\n05.11.2026,NEW MADE-UP SHOP,-30.00\n';
+  await page.setInputFiles('#file-bank', { name: 'statement.csv', mimeType: 'text/csv', buffer: Buffer.from(csv) });
+  await page.waitForSelector('[data-testid="bk-match"]');
+  // The bank import asks which account: the one with the records.
+  const pick = await page.$('#bk-acc');
+  if (pick) { await pick.selectOption(acc); await page.waitForSelector('[data-testid="bk-match"]'); }
+  const text = await page.textContent('[data-testid="bk-match"]');
+  assert.match(text, /Matched/);
+  assert.match(text, /not on the statement/);
+  await page.click('#bk-go');
+  await page.waitForFunction(() => !JSON.parse(globalThis.__fhStore.getItem('finance-helper.state')).tx.find((t) => t.id === 'bm-ph').review);
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
 test('Plan → Planned: add a big expense, it is spread over the months', async () => {
   const { page, errors, context } = await openPage(browser, server.url);
   await page.goto(`${server.url}#plan`);
