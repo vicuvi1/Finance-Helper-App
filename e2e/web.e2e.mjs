@@ -156,6 +156,25 @@ test('Reports → Report: Excel for last month, and the printable page', async (
   await context.close();
 });
 
+test('Show on Home: Calm Home hides the extras, a card can come back', async () => {
+  const { page, errors, context } = await openPage(browser, server.url);
+  await page.goto(server.url);
+  await page.waitForSelector('[data-testid="home-pick-open"]');
+  await page.click('[data-testid="home-pick-open"]');
+  await page.waitForSelector('[data-testid="home-pick"]');
+  await page.click('[data-testid="home-calm"]');
+  const hidden = await page.evaluate(() => JSON.parse(globalThis.__fhStore.getItem('finance-helper.state')).settings.homeHidden);
+  assert.equal(hidden.jars, true);
+  assert.equal(hidden.recent, undefined);
+  await page.check('[data-home-card="jars"]');
+  const after = await page.evaluate(() => JSON.parse(globalThis.__fhStore.getItem('finance-helper.state')).settings.homeHidden);
+  assert.equal(after.jars, undefined);
+  await page.evaluate(() => { location.hash = ''; });
+  await page.waitForSelector('[data-testid="home-pick-open"]');
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
 test('Plan → Planned: add a big expense, it is spread over the months', async () => {
   const { page, errors, context } = await openPage(browser, server.url);
   await page.goto(`${server.url}#plan`);

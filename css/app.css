@@ -6531,3 +6531,9 @@ tr.week-row b.bad { color: var(--expense); } tr.week-row b.good { color: var(--i
 .pp-app input { margin-top: 3px; width: 20px; height: 20px; }
 .pp-app span { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .pp-app small { color: var(--muted); overflow-wrap: anywhere; }
+
+/* Show on Home (js/homecards.js) */
+.hp-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 4px 16px; }
+.hp-row { display: flex; gap: 10px; align-items: center; padding: 6px 0; cursor: pointer; }
+.hp-row input { width: 18px; height: 18px; flex: none; }
+.home-pick-link { text-align: center; margin: 18px 0 8px; font-size: 13px; }

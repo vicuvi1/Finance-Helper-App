@@ -30,6 +30,7 @@ import { isClosed as monthClosed } from './closemonth.js';
 import * as Standalone from './standalone.js'; // standalone app: cloud sync, Life import, update badge, notifications
 import * as Binance from './screens/binance.js';
 import * as Sync from './screens/sync.js';
+import * as HomeCards from './homecards.js';
 import * as SelfCheck from './screens/selfcheck.js';
 import * as Backups from './screens/backups.js';
 import * as Tidy from './screens/moneytidy.js';
@@ -1141,6 +1142,7 @@ function viewHome() {
     <p class="muted small" style="margin-bottom:0">Already have money in the wallet or safe? Set it under Settings → Accounts.</p>
   </section>`;
 
+  const on = (id) => HomeCards.showOnHome(state, id);
   return `<header class="top home-top v-${v.tone}"><div><div class="eyebrow">${esc(monthLabel(key))} · ${hello}</div><h1>${esc(v.title)}</h1><div class="sub home-verdict">${esc(v.sub)}</div></div><div class="sub">${dayLabel(today)}</div></header>
   ${MoneyB.topHTML()}
   ${Updates.updateBanner()}
@@ -1150,29 +1152,30 @@ function viewHome() {
   ${MoneyB2.reviewCard(today)}
   ${welcome}
   ${safeCard(today)}
-  ${Afford.homeRow()}
-  ${MoneyB.askBox()}
+  ${on('afford') ? Afford.homeRow() : ''}
+  ${on('ask') ? MoneyB.askBox() : ''}
   ${stepsCard(today)}
-  ${payCard(today)}
-  ${CashCount.card(today)}
-  ${homeStrip(s, key)}
-  ${Spending.spendingCard({ key: 'home', period: ui.spendPeriod })}
-  ${isEmergencyGoal(M.mainGoal(state)) && Money3.emergencyCard() ? '' : Goals.homeCard({ featured: true })}
-  ${Money3.emergencyCard()}
-  ${monthComparison(today)}
-  ${Money3.favsCard() || quickRow()}
+  ${on('pay') ? payCard(today) : ''}
+  ${on('cash') ? CashCount.card(today) : ''}
+  ${on('strip') ? homeStrip(s, key) : ''}
+  ${on('spending') ? Spending.spendingCard({ key: 'home', period: ui.spendPeriod }) : ''}
+  ${on('goal') && !(on('emergency') && isEmergencyGoal(M.mainGoal(state)) && Money3.emergencyCard()) ? Goals.homeCard({ featured: true }) : ''}
+  ${on('emergency') ? Money3.emergencyCard() : ''}
+  ${on('compare') ? monthComparison(today) : ''}
+  ${on('favs') ? Money3.favsCard() || quickRow() : ''}
   <div class="dash">
     <div class="dash-main">
-      ${recent.length ? `<section class="card"><h2>Recent <button class="card-link right" data-go="log">Open log</button></h2><div class="list">${recent.map((t) => txRow(t, { showDate: true })).join('')}</div></section>` : ''}
+      ${on('recent') && recent.length ? `<section class="card"><h2>Recent <button class="card-link right" data-go="log">Open log</button></h2><div class="list">${recent.map((t) => txRow(t, { showDate: true })).join('')}</div></section>` : ''}
     </div>
     <div class="dash-side">
-      ${Goals.otherGoalsCard()}
-      ${Plan.homeCard()}
-      ${MoneyB2.netWorthCard(today)}
-      ${tips.length ? `<section class="card"><h2>Heads up <button class="card-link right" data-go="reports">Reports</button></h2>${tips.map(tipCard).join('')}</section>` : ''}
-      ${jarsCard(key)}
+      ${on('goals') ? Goals.otherGoalsCard() : ''}
+      ${on('plan') ? Plan.homeCard() : ''}
+      ${on('networth') ? MoneyB2.netWorthCard(today) : ''}
+      ${on('tips') && tips.length ? `<section class="card"><h2>Heads up <button class="card-link right" data-go="reports">Reports</button></h2>${tips.map(tipCard).join('')}</section>` : ''}
+      ${on('jars') ? jarsCard(key) : ''}
     </div>
-  </div>`;
+  </div>
+  <p class="home-pick-link"><button type="button" class="linkish" data-act="home-pick" data-testid="home-pick-open">Choose what Home shows</button></p>`;
 }
 
 /** The emergency fund as your main goal: Home's emergency card already shows it (once is enough). */
@@ -1753,7 +1756,7 @@ function viewSettings() {
   // One section at a time, picked on the left (like any settings screen).
   const sections = [
     { id: 'health', icon: '🩺', label: 'Data & health', sub: 'Space left, sync, devices', desc: 'Is everything working, how much room your data takes on the server and this device, and how long it lasts at your pace.', html: () => { DataHealth.init(); return DataHealth.card(); } },
-    { id: 'general', icon: '⚙️', label: 'General', sub: 'Look, keys', desc: 'How the app looks and the keyboard shortcuts.', html: () => cards.look + Shortcuts.settingsCard() },
+    { id: 'general', icon: '⚙️', label: 'General', sub: 'Look, keys', desc: 'How the app looks and the keyboard shortcuts.', html: () => cards.look + HomeCards.pickerHTML(state, esc) + Shortcuts.settingsCard() },
     { id: 'spending', icon: '💸', label: 'Spending', sub: 'Spending money, limit, salary', desc: 'Which accounts Safe to spend counts, your monthly spending limit, when your salary comes, and the checks that keep the numbers real.', html: () => spendSettingsCard() + limitSettingsCard() + MoneyB.settingsCard() + cards.accounts + Checkup.settingsCard() + CashCount.settingsCard() },
     { id: 'saving', icon: '🐷', label: 'Saving', sub: 'Smart split, pay yourself, goals', desc: 'How each income is split into jars, paying yourself a fixed salary, your goals and your emergency fund.', html: () => cards.split + paySettingsCard() + cards.goals + Money3.settingsCard() },
     { id: 'extras', icon: '✨', label: 'Extras', sub: 'Your hour, music, wallpapers', desc: 'What an hour of your work is worth, moving backgrounds, wallpapers, button sounds and focus music. All optional.', html: () => WorkHour.settingsCard() + cards.extras },
@@ -3721,6 +3724,8 @@ document.addEventListener('click', (e) => {
   else if (act === 'import-check') ImportCheck.open();
   else if (act === 'import-bank') document.getElementById('file-bank').click();
   else if (act === 'import-json') document.getElementById('file-json').click();
+  else if (act === 'home-pick') { ui.settingsTab = 'general'; location.hash = '#settings'; setTimeout(() => document.getElementById('home-pick')?.scrollIntoView({ block: 'start', behavior: 'smooth' }), 120); }
+  else if (act === 'home-preset') { HomeCards.applyPreset(state, el.dataset.preset); commit(); toast(el.dataset.preset === 'calm' ? 'Calm Home: only the essentials' : 'Home shows everything', 'Undo', () => undoRedo(-1)); }
   else if (act === 'install') installPrompt?.prompt().finally(() => { installPrompt = null; render(); });
   else if (act === 'add-cat') {
     const type = el.dataset.type;
@@ -3754,6 +3759,7 @@ document.addEventListener('click', (e) => {
 document.addEventListener('change', (e) => {
   if (e.target.closest('.sheet')) return;
   if (SCREENS[ui.tab]?.onChange?.(e.target)) return;
+  if (e.target.dataset.homeCard) { HomeCards.setShown(state, e.target.dataset.homeCard, e.target.checked); commit(); return; }
   if (e.target.dataset.bulk) onBulkChange(e.target);
   else if (e.target.dataset.sh) onSheetChange(e.target);
   else if (e.target.classList.contains('sel')) return;
