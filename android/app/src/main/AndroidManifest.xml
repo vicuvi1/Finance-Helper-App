@@ -2,6 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
   <uses-permission android:name="android.permission.INTERNET" />
   <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+  <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
   <application
     android:label="@string/app_name"
     android:icon="@mipmap/ic_launcher"
@@ -30,6 +31,32 @@
         <action android:name="android.service.notification.NotificationListenerService" />
       </intent-filter>
     </service>
+    <activity
+      android:name=".QuickAddActivity"
+      android:exported="false"
+      android:excludeFromRecents="true"
+      android:taskAffinity=""
+      android:theme="@style/Dialog"
+      android:windowSoftInputMode="stateVisible" />
+    <service
+      android:name=".QuickTile"
+      android:exported="true"
+      android:icon="@mipmap/ic_launcher"
+      android:label="@string/tile_name"
+      android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+      <intent-filter>
+        <action android:name="android.service.quicksettings.action.QS_TILE" />
+      </intent-filter>
+    </service>
+    <service
+      android:name=".AlertJob"
+      android:exported="false"
+      android:permission="android.permission.BIND_JOB_SERVICE" />
+    <receiver android:name=".BootReceiver" android:exported="false">
+      <intent-filter>
+        <action android:name="android.intent.action.BOOT_COMPLETED" />
+      </intent-filter>
+    </receiver>
     <receiver android:name=".SafeWidget" android:exported="true" android:label="@string/widget_name">
       <intent-filter>
         <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />

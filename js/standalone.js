@@ -431,7 +431,9 @@ function paintAndroid(sheet) {
     <p style="margin:12px 0 6px"><b>Step 2:</b> your bank apps. ${apps.length ? 'Tick the ones whose payments to record:' : 'Pay once with your card (or wait for your bank\'s next notification): the bank app shows up here.'}</p>
     ${apps.map((a) => `<label class="pp-app"><input type="checkbox" data-pp-app="${esc(a.pkg)}" ${a.on ? 'checked' : ''}><span><b>${esc(a.label)}</b><small>${esc(a.example)}</small></span></label>`).join('')}
     ${st.queued ? `<p style="margin:8px 0 0">${st.queued} payment${st.queued === 1 ? '' : 's'} waiting to be sent (no internet).</p>` : ''}
-    <p style="margin:10px 0 0">Add the <b>Safe to spend today</b> widget: press and hold the home screen → Widgets → Finance Helper.</p>`;
+    <label class="pp-app" style="margin-top:10px"><input type="checkbox" data-pp-alerts ${st.alerts !== false ? 'checked' : ''}><span><b>Phone alerts</b><small>A bill due tomorrow, a budget at 80%, money running low: a notification on the phone (checked about once an hour).</small></span></label>
+    <p style="margin:10px 0 0">Add the <b>Safe to spend today</b> widget: press and hold the home screen → Widgets → Finance Helper.</p>
+    <p style="margin:6px 0 0">Quick add from anywhere: swipe down twice from the top → ✏️ edit the tiles → drag <b>Add a record</b> in. Tap it, type "120 lunch", Save.</p>`;
 }
 
 async function openPhonePay(reset = false) {
@@ -472,7 +474,7 @@ async function openPhonePay(reset = false) {
       const again = () => { if (document.body.contains(sheet)) paintAndroid(sheet); };
       document.addEventListener('visibilitychange', again);
       sheet.addEventListener('click', (e) => { if (e.target.closest('[data-pp-android="allow"]')) window.FHAndroid.openListenerSettings(); });
-      sheet.addEventListener('change', (e) => { const pkg = e.target.dataset?.ppApp; if (pkg) { window.FHAndroid.setApp(pkg, e.target.checked); ctx.toast(e.target.checked ? 'Its payments will be recorded' : 'Not recorded any more'); } });
+      sheet.addEventListener('change', (e) => { if (e.target.matches?.('[data-pp-alerts]')) { try { window.FHAndroid.setAlerts(e.target.checked); } catch { /* older app */ } ctx.toast(e.target.checked ? 'Phone alerts on' : 'Phone alerts off'); return; } const pkg = e.target.dataset?.ppApp; if (pkg) { window.FHAndroid.setApp(pkg, e.target.checked); ctx.toast(e.target.checked ? 'Its payments will be recorded' : 'Not recorded any more'); } });
     }
     sheet.querySelectorAll('[data-pp-last4]').forEach((inp) => inp.addEventListener('change', () => {
       const a = st.settings.accounts.find((x) => x.id === inp.dataset.ppLast4);

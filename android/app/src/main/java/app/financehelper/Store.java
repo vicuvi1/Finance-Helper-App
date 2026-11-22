@@ -34,6 +34,14 @@ final class Store {
   String widgetNote() { return p.getString("w_note", ""); }
   void setWidget(String amount, String note) { p.edit().putString("w_amount", amount).putString("w_note", note).apply(); }
 
+  boolean alertsOn() { return p.getBoolean("alerts", true); }
+  void setAlertsOn(boolean on) { p.edit().putBoolean("alerts", on).apply(); }
+  /** Alert ids already shown (the last 200). */
+  JSONArray seenAlerts() {
+    try { return new JSONArray(p.getString("seen_alerts", "[]")); } catch (Exception e) { return new JSONArray(); }
+  }
+  void saveSeenAlerts(JSONArray a) { while (a.length() > 200) a.remove(0); p.edit().putString("seen_alerts", a.toString()).apply(); }
+
   String lastText() { return p.getString("last_text", ""); }
   long lastAt() { return p.getLong("last_at", 0); }
   void setLast(String t, long at) { p.edit().putString("last_text", t).putLong("last_at", at).apply(); }

@@ -38,6 +38,7 @@ final class Bridge {
       out.put("listener", listenerOn());
       out.put("capture", !s.capture().isEmpty());
       out.put("queued", s.queue().length());
+      out.put("alerts", s.alertsOn());
       org.json.JSONArray list = new org.json.JSONArray();
       JSONObject apps = s.apps();
       for (Iterator<String> it = apps.keys(); it.hasNext();) {
@@ -68,6 +69,13 @@ final class Bridge {
       apps.put(pkg, x);
       s.saveApps(apps);
     } catch (Exception ignored) { /* nothing to change */ }
+  }
+
+  /** Phone notifications for bills, budgets and money running low (on by default). */
+  @JavascriptInterface public void setAlerts(boolean on) {
+    if (!mine()) return;
+    s.setAlertsOn(on);
+    AlertJob.schedule(a);
   }
 
   @JavascriptInterface public void openListenerSettings() {

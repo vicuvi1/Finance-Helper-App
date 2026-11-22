@@ -154,6 +154,13 @@ test('first visit: sign in with the PIN and Money comes from the server; a web r
   assert.equal((await post('Codul de confirmare 123456')).saved, false);
   const safe = await fetch(`${ppLink}&q=safe`, { method: 'POST', body: '{}' }).then((r) => r.json());
   assert.match(safe.line, /^Safe to spend today: /, 'the Android widget gets today\'s line');
+  const alerts = await fetch(`${ppLink}&q=alerts`, { method: 'POST', body: '{}' }).then((r) => r.json());
+  assert.ok(Array.isArray(alerts.alerts), 'the Android app gets its alerts');
+  const quick = await fetch(ppLink, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ quick: '35 made-up tea', at: 1795000000000 }) }).then((r) => r.json());
+  assert.equal(quick.saved, true);
+  assert.match(quick.text, /35.*made-up tea/);
+  const again = await fetch(ppLink, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ quick: '35 made-up tea', at: 1795000000000 }) }).then((r) => r.json());
+  assert.equal(again.saved, false, 'the same tap sent twice (offline retry) is one record');
   assert.equal((await fetch(ppLink.replace(/k=[^&]+/, 'k=wrong'), { method: 'POST', body: 'Plata 5 MDL' })).status, 404);
   await page.click('.sheet [data-close]');
   // Data & health: the server's space and how long it lasts, and the checks.

@@ -5,4 +5,5 @@
   <string name="widget_name">Safe to spend today</string>
   <string name="add_expense">Add expense</string>
   <string name="add_income">Add income</string>
+  <string name="tile_name">Add a record</string>
 </resources>

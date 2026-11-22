@@ -51,12 +51,42 @@ final class Capture {
     JSONArray left = new JSONArray();
     for (int i = 0; i < q.length(); i++) {
       String t = q.optString(i);
-      JSONObject r = post(url, t, "text/plain; charset=utf-8");
+      // Quick adds wait as JSON ({"quick": "120 lunch", "at": …}); bank messages as plain text.
+      JSONObject r = post(url, t, t.startsWith("{") ? "application/json" : "text/plain; charset=utf-8");
       if (r == null) { left.put(t); continue; }
       if (r.optBoolean("saved")) Widget.fromLine(ctx, r.optString("text"));
     }
     trim(left);
     s.saveQueue(left);
+  }
+
+  /** The quick-add tile: "120 lunch", sent now or as soon as there's internet. Returns the server's line or null (queued). */
+  static String quick(Context ctx, String text) {
+    try {
+      String body = new JSONObject().put("quick", text).put("at", System.currentTimeMillis()).toString();
+      Store s = new Store(ctx);
+      String url = s.capture();
+      JSONObject r = url.isEmpty() ? null : post(url, body, "application/json");
+      if (r == null || r.optBoolean("gone")) {
+        JSONArray q = s.queue();
+        q.put(body);
+        trim(q);
+        s.saveQueue(q);
+        return null;
+      }
+      if (r.optBoolean("saved")) Widget.fromLine(ctx, r.optString("text"));
+      return r.optString("text", "Saved");
+    } catch (Exception e) {
+      return null;
+    }
+  }
+
+  /** The phone notifications your server has for you (bills due, budgets, money low). */
+  static JSONArray alerts(Context ctx) {
+    String url = new Store(ctx).capture();
+    if (url.isEmpty()) return null;
+    JSONObject r = post(url + (url.contains("?") ? "&" : "?") + "q=alerts", "{}", "application/json");
+    return r == null ? null : r.optJSONArray("alerts");
   }
 
   private static void trim(JSONArray q) { while (q.length() > 50) q.remove(0); }

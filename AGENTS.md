@@ -191,7 +191,9 @@ Rules that keep three agents from tripping over each other:
 - Android app (`android/`, Java, no libraries): a WebView of the live site + `BankListener`
   (NotificationListenerService: payment-looking notifications from the bank apps you tick go to
   `api/capture.mjs`; offline ones wait in a queue) + `SafeWidget` (Safe to spend, `?q=safe`) +
-  `window.FHAndroid` bridge used by the web app's "Record payments automatically" sheet. Version =
+  `window.FHAndroid` bridge used by the web app's "Record payments automatically" sheet + `QuickTile`
+  (quick settings) → `QuickAddActivity` (`{quick}` to api/capture.mjs, read with parseQuick, ids `qa-…`) +
+  `AlertJob` (hourly JobScheduler: `?q=alerts` from `js/phonealerts.js`, each alert id shown once). Version =
   package.json. CI (`desktop.yml` job `android`) builds it and adds `finance-helper.apk` to each
   release; signed with secrets FH_KEYSTORE_B64 / FH_KEYSTORE_PASSWORD (never commit a keystore).
   Local build: Android SDK in `/opt/android-sdk`, `cd android && gradle assembleRelease`.

@@ -59,6 +59,7 @@ public class MainActivity extends Activity {
       requestPermissions(new String[] { Manifest.permission.POST_NOTIFICATIONS }, 1);
     }
     new Thread(() -> Capture.send(this, null)).start(); // anything waiting from when the phone was offline
+    AlertJob.schedule(this);
   }
 
   /** fh://open/add-expense → https://server/#add-expense */
