@@ -24,6 +24,8 @@ import * as Security from './screens/security.js';
 import * as Updates from './screens/updates.js';
 import * as DataHealth from './screens/datahealth.js'; // Settings → Data & health
 import { parseQuick } from './quickadd.js';
+import * as CloseMonth from './screens/closemonth.js';
+import { isClosed as monthClosed } from './closemonth.js';
 import * as Standalone from './standalone.js'; // standalone app: cloud sync, Life import, update badge, notifications
 import * as Binance from './screens/binance.js';
 import * as Sync from './screens/sync.js';
@@ -1555,6 +1557,7 @@ function viewLog() {
       ${undoButtons()}
       ${Tidy.logButtons()}
       <button type="button" class="btn" data-act="copy-table" title="Copy this month as a table to paste into Excel or Google Sheets">Copy table</button>
+      ${ui.month < monthKey(todayISO()) ? `<button type="button" class="btn" data-act="cm-open" data-key="${ui.month}" data-testid="log-close-month">${monthClosed(state, ui.month) ? '✓ Checked' : 'Close the month'}</button>` : ''}
       <button type="button" class="btn" data-act="export-month" title="Download this month as a file Excel opens">Export month</button>
     </div>
   </div>
@@ -4275,6 +4278,7 @@ BudgetWarn.init();
 route();
 Updates.initUpdates();
 Standalone.init();
+CloseMonth.init();
 Binance.initBinance();
 Sync.initSync();
 Backups.initBackups();

@@ -50,6 +50,8 @@ const SHELL = [
   './js/habits.js',
   './js/planned.js',
   './js/logextras.js',
+  './js/closemonth.js',
+  './js/screens/closemonth.js',
   './js/screens/plannedui.js',
   './js/screens/report.js',
   './js/screens/datahealth.js',

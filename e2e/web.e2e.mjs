@@ -206,6 +206,23 @@ test('Log table: ＋ on a past day, type a record in its row; drag a record onto
   await context.close();
 });
 
+test('Close the month: the checklist, then marked as checked', async () => {
+  const { page, errors, context } = await openPage(browser, server.url);
+  await page.goto(`${server.url}#log`);
+  await page.waitForSelector('#app header.top');
+  // Go to last month, log something there, then close it.
+  await page.keyboard.press('ArrowLeft');
+  await page.waitForSelector('[data-testid="log-close-month"]');
+  await page.click('[data-testid="log-close-month"]');
+  await page.waitForSelector('[data-testid="cm-steps"]');
+  assert.equal(await page.$$eval('[data-testid="cm-steps"] li', (x) => x.length), 4);
+  await page.click('[data-testid="cm-close"]');
+  await page.waitForFunction(() => Object.keys(JSON.parse(globalThis.__fhStore.getItem('finance-helper.state')).settings.closedMonths || {}).length === 1);
+  await page.waitForFunction(() => /Checked/.test(document.querySelector('[data-testid="log-close-month"]')?.textContent || ''));
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
 test('Home: a verdict, a spending limit that sets Safe to spend, and the month recap story', async () => {
   const { page, errors, context } = await openPage(browser, server.url);
   await page.goto(`${server.url}#home`);

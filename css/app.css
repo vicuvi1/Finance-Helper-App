@@ -6475,3 +6475,14 @@ tr.week-row b.bad { color: var(--expense); } tr.week-row b.good { color: var(--i
   #tx-table thead th { position: sticky; top: 0; z-index: 4; background: var(--surface); }
   #tx-table tr.day-row > td { position: sticky; top: 36px; z-index: 3; background: var(--surface) !important; }
 }
+
+/* Close the month (js/screens/closemonth.js). */
+.cm-steps, .cm-clean { list-style: none; padding: 0; margin: 0 0 14px; display: grid; gap: 8px; }
+.cm-steps li, .cm-clean li { display: flex; gap: 12px; align-items: center; padding: 10px 12px; border-radius: 12px; background: var(--surface-2); }
+.cm-steps li > div, .cm-clean li > div { flex: 1; min-width: 0; }
+.cm-steps p, .cm-clean p { margin: 2px 0 0; font-size: 13px; color: var(--muted); }
+.cm-steps li.done { opacity: 0.7; }
+.cm-dot { flex: none; width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--line-strong, var(--line)); display: grid; place-items: center; font-weight: 700; color: var(--income); }
+.cm-steps li.done .cm-dot { border-color: var(--income); background: color-mix(in srgb, var(--income) 14%, transparent); }
+.cm-clean li span { display: flex; gap: 6px; flex: none; }
+.cm-h { margin: 6px 0 8px; font-size: 14px; }

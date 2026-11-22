@@ -15,6 +15,7 @@ import { rateAdvice, heldIn } from './fxsmart.js';
 import { monthKey, addMonths, daysBetween, monthLabel, DOW_LONG, dowIndex } from './dates.js';
 import { formatMoney } from './money.js';
 import { smartSteps } from './smartwarn.js';
+import { monthToClose } from './closemonth.js';
 
 const pctOf = (a, b) => (b > 0 ? Math.round((a / b) * 100) : 0);
 
@@ -109,6 +110,9 @@ export function nextSteps(state, today, { hidden = {}, max = 3, demo = false } =
   if (lim && lim.left >= 0 && lim.projected > lim.amount) {
     add({ id: `pace:${key}`, level: 'warn', icon: '🚦', title: 'Slow down a little', text: `At this pace you'd spend ${fmt(lim.projected)} this month, over your ${fmt(lim.amount)} limit. Keep to ${fmt(lim.perDay)} a day and you're fine.`, btn: 'See limit', act: 'limit-setup' });
   }
+  // 4a. Close last month (days 1–15, until it is checked).
+  const toClose = monthToClose(state, today);
+  if (toClose) add({ id: `close:${toClose}`, level: 'do', icon: '✅', title: `Close ${monthLabel(toClose).split(' ')[0]} in 5 minutes`, text: 'Check the accounts, file what is in Other, look at subscriptions, see the recap. Then the month is marked as checked.', btn: 'Start', act: 'cm-open', data: { key: toClose } });
   // 4b. Smart warnings (js/smartwarn.js): logged twice, a category well ahead of usual, a price rise, a forgotten subscription.
   for (const w of smartSteps(state, today)) add(w);
 
