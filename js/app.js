@@ -23,6 +23,7 @@ import * as ReportsScreen from './screens/reports.js';
 import * as Security from './screens/security.js';
 import * as Updates from './screens/updates.js';
 import * as DataHealth from './screens/datahealth.js'; // Settings → Data & health
+import { parseQuick } from './quickadd.js';
 import * as Standalone from './standalone.js'; // standalone app: cloud sync, Life import, update badge, notifications
 import * as Binance from './screens/binance.js';
 import * as Sync from './screens/sync.js';
@@ -1928,20 +1929,65 @@ document.addEventListener('click', (e) => {
   for (const c of b.parentElement.querySelectorAll('[data-day-back]')) { c.classList.toggle('on', c === b); c.setAttribute('aria-pressed', String(c === b)); }
 });
 // Log table: ＋ on a day adds a record on that day; drag a record onto another day to move it.
+// ＋ (or a click on the day's name) opens a line to type in: "120 lunch maib", Enter saves.
+function openDayQuick(date, text = '') {
+  const input = document.querySelector(`[data-day-quick="${date}"]`);
+  if (!input) return false;
+  document.querySelectorAll('.day-quick-wrap:not([hidden])').forEach((w) => { if (!w.contains(input)) w.hidden = true; });
+  input.closest('.day-quick-wrap').hidden = false;
+  input.value = text;
+  input.focus();
+  dayQuickHint(input);
+  return true;
+}
+function dayQuickHint(input) {
+  const hint = input.parentElement.querySelector('.day-quick-hint');
+  if (!hint) return;
+  const r = input.value.trim() ? parseQuick(state, input.value, { today: input.dataset.dayQuick }) : null;
+  hint.textContent = !r ? '' : r.ok ? `${r.kind === 'income' ? 'Earned' : r.kind === 'refund' ? 'Refund' : 'Spent'} ${formatMoney(r.amount, r.currency)} · ${M.category(state, r.category)?.name || 'Other'} · ${M.account(state, r.account)?.name || ''}${r.tx.date !== input.dataset.dayQuick ? ` · ${dayLabel(r.tx.date)}` : ''}` : (r.missing || '');
+  hint.classList.toggle('bad', !!r && !r.ok);
+}
 document.addEventListener('click', (e) => {
   const b = e.target.closest?.('[data-day-add]');
-  if (!b) return;
+  const name = !b && e.target.closest?.('#tx-table tr.day-row .dr');
+  const form = e.target.closest?.('[data-day-form]');
+  if (form) { e.stopPropagation(); openTxSheet(null, { date: form.dataset.dayForm }); return; }
+  const day = b?.dataset.dayAdd || (name && name.closest('tr.day-row')?.dataset.day);
+  if (!day || day > todayISO()) return;
   e.stopPropagation();
-  openTxSheet(null, { date: b.dataset.dayAdd });
+  if (!openDayQuick(day)) openTxSheet(null, { date: day });
+}, true);
+document.addEventListener('input', (e) => { if (e.target?.dataset?.dayQuick) dayQuickHint(e.target); });
+document.addEventListener('keydown', (e) => {
+  const el = e.target;
+  if (!el?.dataset?.dayQuick) return;
+  if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); el.closest('.day-quick-wrap').hidden = true; return; }
+  if (e.key !== 'Enter') return;
+  e.preventDefault();
+  e.stopPropagation();
+  if (state._sealed) { toast('The data is locked. Unlock it first.'); return; }
+  const date = el.dataset.dayQuick;
+  const r = parseQuick(state, el.value, { today: date });
+  if (!r.ok) { toast(r.missing || 'Type an amount first, like "120 lunch".'); return; }
+  const now = Date.now();
+  const tx = { id: M.uid(), createdAt: now, updatedAt: now, ...r.tx };
+  state.tx.push(tx);
+  ui.flashId = tx.id;
+  commit();
+  toast(`Added ${formatMoney(tx.amount, tx.currency)}${tx.note ? ` · ${tx.note}` : ''} · ${dayLabel(tx.date)}`, 'Undo', () => undoRedo(-1));
+  setTimeout(() => openDayQuick(date), 0); // ready for the next one that day
 }, true);
 let dragId = null;
+let dragIds = [];
 const dropDay = (el) => el?.closest?.('tr[data-day], tr[data-date]');
 document.addEventListener('dragstart', (e) => {
   if (!e.target.closest?.('.drag-h')) return;
   const tr = e.target.closest('#tx-table tr[data-id]');
   if (!tr) return;
   dragId = tr.dataset.id;
-  tr.classList.add('dragging');
+  // Ticked rows move together when you drag one of them.
+  dragIds = ui.selected?.has(dragId) && ui.selected.size > 1 ? [...ui.selected] : [dragId];
+  for (const id of dragIds) document.querySelector(`#tx-table tr[data-id="${CSS.escape(id)}"]`)?.classList.add('dragging');
   try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', dragId); } catch { /* ignore */ }
 });
 document.addEventListener('dragend', () => {
@@ -1965,13 +2011,15 @@ document.addEventListener('drop', (e) => {
   if (!tr || !tr.closest('#tx-table')) return;
   e.preventDefault();
   const day = tr.dataset.day || tr.dataset.date;
-  const t = state.tx.find((x) => x.id === id);
-  if (!t || !day || t.date === day) return;
-  t.date = day;
-  M.touch(t);
-  ui.flashId = t.id;
+  const ids = dragIds.length ? dragIds : [id];
+  dragIds = [];
+  const moved = state.tx.filter((x) => ids.includes(x.id) && x.date !== day);
+  if (!day || !moved.length) return;
+  const now = Date.now();
+  for (const t of moved) { t.date = day; M.touch(t, now); }
+  ui.flashId = moved[0].id;
   commit();
-  toast(`Moved to ${dayLabel(day)}`, 'Undo', () => undoRedo(-1));
+  toast(`Moved ${moved.length > 1 ? `${moved.length} records` : ''} to ${dayLabel(day)}`.replace('Moved  to', 'Moved to'), 'Undo', () => undoRedo(-1));
 });
 
 document.addEventListener('change', (e) => {

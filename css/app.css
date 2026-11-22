@@ -6444,8 +6444,8 @@ html[data-in-life] .lt-eye svg { width: 18px; height: 18px; fill: none; stroke: 
 /* Log table: ＋ on each day, empty days, drag a record onto another day. */
 .day-add { margin-left: 8px; width: 26px; height: 26px; border-radius: 8px; border: 1px dashed var(--line-strong, var(--line)); background: transparent; color: var(--muted); font: 600 15px/1 var(--font); cursor: pointer; display: inline-grid; place-items: center; vertical-align: middle; }
 .day-add:hover, .day-add:focus-visible { border-style: solid; border-color: var(--gold); color: var(--gold); background: var(--gold-soft); }
-tr.day-row.empty-day td { opacity: 0.62; }
-tr.day-row.empty-day:hover td { opacity: 1; }
+tr.day-row.empty-day .dr-wrap { opacity: 0.62; }
+tr.day-row.empty-day:hover .dr-wrap, tr.day-row.empty-day:focus-within .dr-wrap { opacity: 1; }
 .day-stat-pill.count.empty { font-style: italic; }
 #tx-table .drag-h { cursor: grab; color: var(--faint); font-size: 14px; margin-right: 4px; user-select: none; opacity: 0.5; }
 #tx-table tr:hover .drag-h { opacity: 1; }
@@ -6456,3 +6456,22 @@ tr.day-row.empty-day:hover td { opacity: 1; }
 .upd-history section { margin: 10px 0; }
 .upd-history ul { margin: 4px 0 0; padding-left: 20px; color: var(--muted); }
 .upd-history li { margin: 3px 0; }
+
+/* Log table: type a record right in a day's row, week lines, sticky day names. */
+.day-quick-wrap { display: inline-flex; align-items: center; gap: 8px; flex: 1; min-width: 0; margin: 0 12px; }
+.day-quick-wrap[hidden] { display: none; }
+.day-quick { flex: 1; min-width: 180px; max-width: 420px; height: 30px; padding: 4px 10px; border-radius: 8px; border: 1px solid var(--gold); background: var(--surface); color: var(--text); font: inherit; font-size: 13.5px; }
+.day-quick:focus { outline: none; box-shadow: 0 0 0 3px var(--gold-soft); }
+.day-quick-hint { font-size: 12.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 360px; }
+.day-quick-hint.bad { color: var(--expense); }
+#tx-table tr.day-row .dr { cursor: pointer; }
+tr.week-row td { padding: 6px 14px !important; font-size: 12.5px; color: var(--muted); background: color-mix(in srgb, var(--text) 3%, transparent); border-top: 1px dashed var(--line); }
+tr.week-row td { display: table-cell; }
+tr.week-row span + span { float: right; }
+tr.week-row b.bad { color: var(--expense); } tr.week-row b.good { color: var(--income); }
+/* The table scrolls inside its own box (both ways), so its header and the day you are in stay on top. */
+@media (min-width: 1100px) {
+  .grid-wrap:has(#tx-table) { overflow: auto; max-height: calc(100vh - 120px); overscroll-behavior: contain; }
+  #tx-table thead th { position: sticky; top: 0; z-index: 4; background: var(--surface); }
+  #tx-table tr.day-row > td { position: sticky; top: 36px; z-index: 3; background: var(--surface) !important; }
+}

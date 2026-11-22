@@ -6,6 +6,7 @@
 import { isNewerVersion } from './version.js';
 
 export const NOTES = [
+  { v: '1.104.0', items: ['Log table: ＋ (or a click on a day\'s name) opens a line right in that day: type "120 lunch maib", Enter saves, with a preview of what it will be. "Form…" opens the full form.', 'The column titles and the day you\'re in stay on top while you scroll.', 'A line after each week: what it cost, against a usual week.', 'Tick several records and drag one: they all move to that day.', 'Moves without a note show what they are: To savings, Cash withdrawal, Exchange USD → MDL…'] },
   { v: '1.103.0', items: ['Log table: every day of the month is listed, even days with nothing logged, each with a ＋ to add a record on that day.', 'Drag a record by its ⠿ handle onto another day to move it there (Undo works).', 'Settings → About & updates → Update history: every version and what it brought.'] },
   { v: '1.102.0', items: ['"Money runs low around 28 Nov": a warning in "Do this next" (and the bot\'s morning message) when bills would take your cards and cash under the money you want to keep.', 'Can I afford it? now says when, if not this month: "In about 4 months (March) if you keep saving like the last 3 months".'] },
   { v: '1.101.0', items: ['Plan → 🗓️ Planned: big expenses coming (insurance, a holiday) spread over the months until then; Safe to spend keeps that money aside.'] },

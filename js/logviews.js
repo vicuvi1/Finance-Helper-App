@@ -3,6 +3,7 @@
 
 import { formatMoney } from './money.js';
 import { daysInMonth, weekday, todayISO, dowIndex, DOW_LONG, DOW_SHORT, MONTHS, addDays } from './dates.js';
+import { transferPurpose, weekTotals, weekStart } from './logextras.js';
 import { TYPE_LABEL } from './importer.js';
 import { B, category } from './model.js';
 import { countsAsSpending, countsAsIncome, signed, isNotCounted } from './catshare.js';
@@ -141,7 +142,7 @@ function cells(state, t, { who = true } = {}) {
   const isBaseCur = !t.currency || t.currency === state.settings.currency;
   return `<td class="c-date"><span class="dcell">${shown}<input type="date" class="dpick" data-col="date" value="${esc(t.date)}" aria-label="Date"></span></td>
     <td class="c-type">${typeSel}</td><td class="c-cat">${cat}</td>
-    <td class="c-note"><span class="note-cell">${sourceTag(state, t)}${ncTag}${loanBadge}<input type="text" data-col="note" value="${esc(t.note)}" placeholder="${isLoan ? 'Loan note' : 'What for?'}" aria-label="Note"></span></td>
+    <td class="c-note"><span class="note-cell">${sourceTag(state, t)}${ncTag}${loanBadge}<input type="text" data-col="note" value="${esc(t.note)}" placeholder="${esc(isLoan ? 'Loan note' : isT ? transferPurpose(state, t) || 'What for?' : 'What for?')}" aria-label="Note"></span></td>
     ${who ? `<td class="c-who">${isT ? '' : `<input type="text" data-col="person" list="people-list" value="${esc(state.people.find((p) => p.id === t.person)?.name || t.personName || '')}" placeholder="—" aria-label="Who" autocomplete="off">`}</td>` : ''}
     <td class="c-acc">${acc}</td>
     <td class="c-amt"><span class="amt-cell ${t.type}${isNotCounted(t) ? ' not-counted' : ''}"><span class="amt-sign" aria-hidden="true">${signPrefix}</span><input type="text" inputmode="decimal" class="amt" data-col="amount" value="${t.amount ? plain(t.amount) : ''}" placeholder="0" aria-label="Amount" autocomplete="off"${split ? ' readonly title="A split record: open it to change the amount and its lines"' : ''}>${debtTag || (!isBaseCur ? `<span class="cur-tag">${esc(t.currency)}</span>` : `<span class="cur-tag cur-faint">${esc(state.settings.currency || 'MDL')}</span>`)}</span></td>`;
@@ -165,7 +166,7 @@ function dayRow(date, d, today, fmt0, year, span = 9) {
     d.n ? `<span class="day-stat-pill count">${d.n} record${d.n === 1 ? '' : 's'}</span>` : '<span class="day-stat-pill count empty">nothing logged</span>'
   ].filter(Boolean).join('');
   const add = date <= today ? `<button type="button" class="day-add" data-day-add="${date}" title="Add a record on this day" aria-label="Add a record on ${esc(date)}" data-testid="day-add">＋</button>` : '';
-  return `<tr class="day-row dow-${dowIndex(date)}${date === today ? ' is-today' : ''}${d.n ? '' : ' empty-day'}" data-day="${date}"><td colspan="${span}"><div class="dr-wrap"><span class="dr">${dayLabelHTML(date, today)}${year ? `<span class="muted">${date.slice(0, 4)}</span>` : ''}${add}</span><div class="dr-sum">${parts}</div></div></td></tr>`;
+  return `<tr class="day-row dow-${dowIndex(date)}${date === today ? ' is-today' : ''}${d.n ? '' : ' empty-day'}" data-day="${date}"><td colspan="${span}"><div class="dr-wrap"><span class="dr">${dayLabelHTML(date, today)}${year ? `<span class="muted">${date.slice(0, 4)}</span>` : ''}${add}</span>${date <= today ? `<span class="day-quick-wrap" hidden><input type="text" class="day-quick" data-day-quick="${date}" placeholder="Type 120 lunch maib · Enter saves · Esc closes" aria-label="Add a record on ${esc(date)}" autocomplete="off"><span class="day-quick-hint" aria-live="polite"></span><button type="button" class="btn sm" data-day-form="${date}">Form…</button></span>` : ''}<div class="dr-sum">${parts}</div></div></td></tr>`;
 }
 
 export function tableHTML(state, list, { sort, draft, fmt: fmtExact, selected = new Set(), years = false, extra = [], month = null }) {
@@ -202,20 +203,47 @@ export function tableHTML(state, list, { sort, draft, fmt: fmtExact, selected = 
     for (let d = `${month}-01`; d <= end; d = addDays(d, 1)) out.push(d);
     return out;
   })() : [];
-  const desc = sort.dir < 0;
-  const missing = (from, to) => allDays.filter((d) => !perDay[d] && (desc ? d < from && d > to : d > from && d < to));
-  let prevDate = null;
-  const body = rows.map((t) => {
-    const newDay = t.date !== prevDate;
-    let gap = '';
-    if (byDate && month && newDay) gap = missing(prevDate ?? (desc ? '9999' : '0000'), t.date).sort((a, b) => (desc ? b.localeCompare(a) : a.localeCompare(b))).map(emptyHead).join('');
-    prevDate = t.date;
+  const rowHTML = (t, newDay) => {
     const isLoan = Boolean(t.loan);
-    const head = byDate && newDay ? dayRow(t.date, perDay[t.date], today, fmt, years, span) : '';
     const on = selected.has(t.id);
-    return `${gap}${head}<tr data-id="${esc(t.id)}" data-date="${esc(t.date)}" class="t-${t.type}${isLoan ? ' is-loan' : ''}${newDay ? ' newday' : ''}${t.date === today ? ' is-today' : ''}${on ? ' selected' : ''}"><td class="selc">${byDate ? `<span class="drag-h" draggable="true" title="Drag onto another day to move it" aria-hidden="true">⠿</span>` : ''}<input type="checkbox" class="sel" data-act="sel" data-id="${esc(t.id)}" ${on ? 'checked' : ''} aria-label="Select this record"></td>${cells(state, t, { who })}${extra.map((c) => `<td class="c-extra">${c.cell(t)}</td>`).join('')}
+    return `<tr data-id="${esc(t.id)}" data-date="${esc(t.date)}" class="t-${t.type}${isLoan ? ' is-loan' : ''}${newDay ? ' newday' : ''}${t.date === today ? ' is-today' : ''}${on ? ' selected' : ''}"><td class="selc">${byDate ? `<span class="drag-h" draggable="true" title="Drag onto another day to move it (ticked rows move together)" aria-hidden="true">⠿</span>` : ''}<input type="checkbox" class="sel" data-act="sel" data-id="${esc(t.id)}" ${on ? 'checked' : ''} aria-label="Select this record"></td>${cells(state, t, { who })}${extra.map((c) => `<td class="c-extra">${c.cell(t)}</td>`).join('')}
       <td class="c-del"><button type="button" class="row-del" data-act="row-del" data-id="${esc(t.id)}" aria-label="Delete this record" title="Delete">×</button></td></tr>`;
-  }).join('') + (byDate && month ? missing(prevDate ?? (desc ? '9999' : '0000'), desc ? '0000' : '9999').sort((a, b) => (desc ? b.localeCompare(a) : a.localeCompare(b))).map(emptyHead).join('') : '');
+  };
+  // A week's line after its days: what it cost against a usual week.
+  const weekRow = (anyDay) => {
+    const w = weekTotals(state, anyDay);
+    const part = w.to > today ? ' so far' : '';
+    const vs = w.usual > 0 ? ` · a usual week ${fmt(w.usual)}${w.change != null && !part ? ` <b class="${w.change > 0.1 ? 'bad' : w.change < -0.1 ? 'good' : ''}">${w.change > 0 ? '+' : ''}${Math.round(w.change * 100)}%</b>` : ''}` : '';
+    return `<tr class="week-row"><td colspan="${span}"><span>Week ${Number(w.from.slice(8))} ${MONTHS[Number(w.from.slice(5, 7)) - 1].slice(0, 3)} – ${Number(w.to.slice(8))} ${MONTHS[Number(w.to.slice(5, 7)) - 1].slice(0, 3)}</span><span>spent <b>${fmt(w.spent)}</b>${part}${vs}</span></td></tr>`;
+  };
+  let body;
+  if (byDate && month) {
+    const desc = sort.dir < 0;
+    const byDay = new Map();
+    for (const t of rows) { if (!byDay.has(t.date)) byDay.set(t.date, []); byDay.get(t.date).push(t); }
+    const dates = [...new Set([...allDays, ...byDay.keys()])].sort((a, b) => (desc ? b.localeCompare(a) : a.localeCompare(b)));
+    const out = [];
+    let wk = null;
+    let wkDay = null;
+    for (const d of dates) {
+      const w = weekStart(d);
+      if (wk && w !== wk) out.push(weekRow(wkDay));
+      wk = w; wkDay = d;
+      const list = byDay.get(d) || [];
+      out.push(list.length ? dayRow(d, perDay[d], today, fmt, years, span) : emptyHead(d));
+      list.forEach((t, i) => out.push(rowHTML(t, i === 0)));
+    }
+    if (wk) out.push(weekRow(wkDay));
+    body = out.join('');
+  } else {
+    let prevDate = null;
+    body = rows.map((t) => {
+      const newDay = t.date !== prevDate;
+      prevDate = t.date;
+      const head = byDate && newDay ? dayRow(t.date, perDay[t.date], today, fmt, years, span) : '';
+      return head + rowHTML(t, newDay);
+    }).join('');
+  }
   const income = list.filter((t) => countsAsIncome(t)).reduce((a, t) => a + B(t), 0);
   const expense = list.filter((t) => countsAsSpending(t)).reduce((a, t) => a + signed(t, B(t)), 0);
   const loanOut = list.filter((t) => t.type === 'expense' && t.loan).reduce((a, t) => a + B(t), 0);
