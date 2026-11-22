@@ -6,6 +6,7 @@
 import { isNewerVersion } from './version.js';
 
 export const NOTES = [
+  { v: '1.117.0', items: ['Plan → Debts (only if you need it: open it from Plan → Planned): a bank loan or credit card with its interest rate and monthly payment shows what you owe, the month it\'s paid off, the interest still to pay and how much sooner you\'d finish paying a bit more. The monthly payment becomes a repeating bill, so Safe to spend keeps it back.'] },
   { v: '1.116.0', items: ['Always-on bot: under each saved record (typed, or from your phone) there are now 🏷 Category and 💳 Account buttons next to Undo. Pick the right one and the record changes everywhere; the next payment at the same shop gets that category.'] },
   { v: '1.115.0', items: ['New record: the Add button stays at the bottom of the form, always in view (desktop and phone).', 'Log → Sheet: plain English (Spent, Earned, Day net, English months and days) and every column fits on screen.', 'Home says things once: late bills only in To confirm, the emergency fund only once.', 'Screen tips look like tips again.'] },
   { v: '1.114.0', items: ['Planned big expenses: once paid (found in your records by name and amount, or press Paid), the money is no longer kept back from Safe to spend.', 'Planned expenses and closed months added on two devices before they sync are both kept.', 'A few settings (work hour, wallpaper) and changes from Google Drive now reach your other devices right away.', '"Money runs low" no longer counts a subscription you stopped paying long ago, or a future move into savings.'] },

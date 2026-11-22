@@ -37,6 +37,7 @@ export function tab() {
         <td><button type="button" class="btn primary sm" data-pl-act="add" data-testid="plan-add">Add</button></td></tr>
     </tbody></table></div>
     <p class="muted small" style="margin-bottom:0">When the month comes, log the payment as usual: it's found by its name and amount (or press Paid). "It stays in my spending money": Safe to spend keeps what should be put aside by now out of what you can spend today.</p>
+    ${(ctx.state.settings.debts || []).length ? '' : '<p class="muted small" style="margin:6px 0 0">Paying off a bank loan or credit card? <button type="button" class="linkish" data-act="plan-tab" data-tab="debts" data-testid="debts-open">Add it here</button> to see when it\'s paid off.</p>'}
   </section>`;
 }
 

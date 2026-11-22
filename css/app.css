@@ -6522,3 +6522,8 @@ tr.week-row b.bad { color: var(--expense); } tr.week-row b.good { color: var(--i
 .tip-card .tip-body span { color: var(--muted); }
 .tip-card .tip-x { flex: none; min-height: 36px; padding: 6px 12px; border-radius: 10px; border: 1px solid var(--line); background: transparent; color: var(--text); cursor: pointer; font: inherit; }
 .tip-card .tip-x:hover { background: var(--surface-3); }
+
+/* Plan → Debts (js/screens/debtsui.js) */
+.debt-table td { white-space: normal; vertical-align: top; overflow-wrap: anywhere; }
+.debt-table .st-new td > .st-in { display: block; width: 100%; box-sizing: border-box; }
+.debt-table .st-new td > .st-in + .st-in { margin-top: 6px; }

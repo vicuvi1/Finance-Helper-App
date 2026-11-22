@@ -169,6 +169,21 @@ test('Plan → Planned: add a big expense, it is spread over the months', async 
   assert.match(await page.textContent('[data-testid="plan-row"]'), /a month/);
   const saved = await page.evaluate(() => JSON.parse(globalThis.__fhStore.getItem('finance-helper.state')).settings.planned);
   assert.equal(saved[0].amount, 360000);
+  // Debts: hidden until you add one from here.
+  assert.equal(await page.$('[data-testid="plan-tab-debts"]'), null);
+  await page.click('[data-testid="debts-open"]');
+  await page.waitForSelector('[data-testid="debts-card"]');
+  await page.fill('[data-debt="name"]', 'Made-up loan');
+  await page.fill('[data-debt="balance"]', '50000');
+  await page.fill('[data-debt="payment"]', '2000');
+  await page.fill('[data-debt="rate"]', '18');
+  await page.click('[data-testid="debt-add"]');
+  await page.waitForSelector('[data-testid="debt-row"]');
+  assert.match(await page.textContent('[data-testid="debt-row"]'), /payments left/);
+  await page.waitForSelector('[data-testid="plan-tab-debts"]');
+  const st = await page.evaluate(() => JSON.parse(globalThis.__fhStore.getItem('finance-helper.state')));
+  assert.equal(st.settings.debts[0].balance, 5000000);
+  assert.ok(st.recurring.some((r) => r.debtId === st.settings.debts[0].id && r.amount === 200000));
   assert.deepEqual(errors, []);
   await context.close();
 });

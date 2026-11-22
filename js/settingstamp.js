@@ -15,7 +15,7 @@
 /** Device-only settings: never travel. */
 export const LOCAL_SETTINGS = ['theme', 'themeInLife', 'themeMotion', 'logView'];
 /** Settings lists merged item by item (id + updatedAt, deletions in state.deleted). */
-export const BY_ID = ['wishlist', 'savedViews', 'customFields', 'realityHistory', 'planned'];
+export const BY_ID = ['wishlist', 'savedViews', 'customFields', 'realityHistory', 'planned', 'debts'];
 /** Maps of key → time merged key by key: the later time wins (a negative time = undone at that time). */
 export const BY_KEY_TIME = ['closedMonths'];
 /** "Last done on" days: the later day wins, whoever saved last. */
