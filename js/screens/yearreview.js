@@ -8,6 +8,7 @@ import { yearReview, taxSummary } from '../yearreview.js';
 import { workbook } from '../xlsx.js';
 import { workText } from '../workhours.js';
 import * as YearSummary from './yearsummary.js';
+import * as YearMonths from './year.js';
 import * as Tips from '../tips.js';
 
 let year = null;
@@ -58,7 +59,8 @@ export function view() {
     ${tile('📈', 'Net worth', `${nw >= 0 ? '+' : '−'}${money(Math.abs(Math.round(nw / 100) * 100))}`, `${money(Math.round(r.netWorth.start / 100) * 100)} → ${money(Math.round(r.netWorth.end / 100) * 100)}`)}
     ${r.goalsDone.length ? tile('🎯', 'Goals reached', String(r.goalsDone.length), esc(r.goalsDone.join(', '))) : ''}
   </div>
-  ${YearSummary.card(y, today)}`}
+  ${YearSummary.card(y, today)}
+  ${YearMonths.card(y, today)}`}
   <section class="card yr-tax"><h2>Income for taxes · ${y} <button class="btn right" data-act="yr-tax-export" ${t.rows.length ? '' : 'disabled'}>Export for taxes (.xlsx)</button></h2>
     <div class="yr-tax-total"><span class="fig">${money(t.total)}</span><span class="muted">${t.rows.length} income record${t.rows.length === 1 ? '' : 's'} in ${esc(base)}, at the rate of each day</span></div>
     ${t.rows.length ? `<div class="yr-tax-grid">

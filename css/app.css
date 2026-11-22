@@ -6567,3 +6567,13 @@ tr.week-row b.bad { color: var(--expense); } tr.week-row b.good { color: var(--i
 .ci-tip { padding: 8px 10px; border-radius: 10px; background: var(--surface-3); }
 .ci-body .btns { justify-content: flex-start; }
 .ci-body .btns .btn { flex: 0 0 auto; width: auto; }
+
+/* Reports → Year in review: month by month (js/screens/year.js) */
+.yr-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 14px; margin-bottom: 14px; }
+.yr-grid > .card { margin: 0; min-width: 0; }
+.yr-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.yr-table th, .yr-table td { padding: 7px 8px; border-bottom: 1px solid var(--line); text-align: left; }
+.yr-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+.yr-table tr.dim td { opacity: 0.45; }
+.yr-table tfoot td { border-bottom: 0; }
+@media (max-width: 600px) { .yr-grid { grid-template-columns: 1fr; } }
