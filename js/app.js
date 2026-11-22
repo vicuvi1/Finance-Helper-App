@@ -2106,6 +2106,9 @@ function openTxSheet(existing = null, preset = {}) {
   // You picked the account yourself: a category no longer moves it.
   let accTouched = !!existing || !!preset.account;
   let addingCat = false;
+  // A short form: the extras (split, who, lent, repeat, "doesn't count", your own fields) fold under "More".
+  let moreOpen = null;
+  let catsAll = false;
   // Subcategory: picked by you (or confirmed), else a guess from the note.
   let subTouched = !!existing?.sub;
   let subGuess = null;
@@ -2229,12 +2232,22 @@ function openTxSheet(existing = null, preset = {}) {
       <label class="field"><span>${isT ? 'Note (optional)' : 'What for?'}</span>
         <input id="tx-note" type="text" list="note-list" autocomplete="off" value="${esc(draft.note)}" placeholder="${draft.type === 'income' ? 'e.g. salary, project for a client' : isT ? 'e.g. to the safe' : 'e.g. groceries, taxi, rent'}"></label>
       <datalist id="note-list">${M.noteSuggestions(state, draft.type).map((n) => `<option value="${esc(n)}">`).join('')}</datalist>
-      ${RecordX.tagRow(draft)}
-      ${isT ? '' : RecordX.splitHTML(draft, { cats: categoryOrder(catType()), cur, total: evalAmount(amountText) || 0, entryOn: entryOn() })}
-      ${isT || RecordX.hidesCategory(draft) ? '' : `<div class="cats" role="group" aria-label="Category">${categoryOrder(catType()).map((c) => `<button type="button" class="cat" data-cat="${esc(c.id)}" aria-pressed="${draft.category === c.id}">${catChipIcon(c)}<span>${esc(c.name)}</span></button>`).join('')}
+      ${isT || RecordX.hidesCategory(draft) ? '' : `<div class="cats" role="group" aria-label="Category">${categoryOrder(catType()).map((c, i) => `<button type="button" class="cat${!catsAll && i >= 8 && draft.category !== c.id ? ' cat-extra' : ''}" data-cat="${esc(c.id)}" aria-pressed="${draft.category === c.id}">${catChipIcon(c)}<span>${esc(c.name)}</span></button>`).join('')}
+        ${!catsAll && categoryOrder(catType()).length > 8 ? `<button type="button" class="cat cat-more" data-act="cats-all" data-testid="cats-all">More…</button>` : ''}
         ${addingCat ? `<span class="cat-new"><input id="new-cat" type="text" placeholder="New category" aria-label="New category name"><button type="button" class="btn primary" data-act="cat-create">Add</button></span>` : '<button type="button" class="cat cat-add" data-act="cat-new">+ New</button>'}</div>
         <div id="sub-row-wrap">${subRow()}</div>
         <div id="src-row-wrap">${srcShown() ? IncomeSources.pickerHTML(state, { selected: draft.incomeSource, adding: addingSrc }) : ''}</div>`}
+      <div class="row2">
+        ${isT ? accSelect('from', 'From') + accSelect('to', 'To') : accSelect('account', draft.type === 'income' ? 'Into' : 'Paid from')}
+      </div>
+      <label class="field"><span>Date</span><input id="tx-date" type="date" value="${esc(draft.date)}"></label>
+      ${dayChips(draft.date)}
+      ${(() => {
+        const set = !!(draft.personName || draft.loan || draft.refund || draft.notIncome || draft.notSpending || draft.repeat || draft.splitOn);
+        const open = moreOpen ?? set;
+        return `<details class="tx-more"${open ? ' open' : ''} data-testid="tx-more"><summary>More${set ? ' ·  in use' : ''}: ${isT ? 'your own fields' : 'split, who, lent, repeat, doesn\'t count'}</summary>
+      ${RecordX.tagRow(draft)}
+      ${isT ? '' : RecordX.splitHTML(draft, { cats: categoryOrder(catType()), cur, total: evalAmount(amountText) || 0, entryOn: entryOn() })}
       ${isT ? '' : `<div class="row2">
         <label class="field"><span>${draft.type === 'income' ? 'From who? (optional)' : 'To who? (optional)'}</span><input id="tx-person" type="text" list="people-list" autocomplete="off" value="${esc(draft.personName)}" placeholder="Name"></label>
         <label class="field check"><input id="tx-loan" type="checkbox" ${draft.loan ? 'checked' : ''}><span>${draft.type === 'income' ? 'Borrowed: I pay it back' : 'Lent: they pay it back'}</span></label>
@@ -2242,15 +2255,11 @@ function openTxSheet(existing = null, preset = {}) {
       ${draft.type === 'income' ? `<label class="field check"><input id="tx-refund" data-testid="tx-refund" type="checkbox" ${draft.refund ? 'checked' : ''}><span>This is a refund: money back for something I bought. It lowers that category's spending and is not income.</span></label>` : ''}
       ${draft.type === 'income' && !draft.refund && !draft.loan ? `<label class="field check"><input id="tx-notincome" data-testid="tx-notincome" type="checkbox" ${draft.notIncome ? 'checked' : ''}><span>Doesn't count as income: money I already had. The balance still changes, but it is left out of Earned and savings.</span></label>` : ''}
       ${draft.type === 'expense' && !draft.loan ? `<label class="field check"><input id="tx-notspending" data-testid="tx-notspending" type="checkbox" ${draft.notSpending ? 'checked' : ''}><span>Doesn't count as spending: money that left but was not really spent. The balance still changes, but it is left out of Spent.</span></label>` : ''}`}
-      <div class="row2">
-        ${isT ? accSelect('from', 'From') + accSelect('to', 'To') : accSelect('account', draft.type === 'income' ? 'Into' : 'Paid from')}
-      </div>
-      ${!existing && !isT && !draft.fromRule ? `<div class="row2"><label class="field"><span>Date</span><input id="tx-date" type="date" value="${esc(draft.date)}"></label>
-        <label class="field"><span>Repeat</span><select id="tx-repeat"><option value="">No</option>${FREQS.filter((f) => f.id !== 'once' && f.id !== 'custom').map((f) => `<option value="${f.id}" ${draft.repeat === f.id ? 'selected' : ''}>${f.label}</option>`).join('')}</select></label></div>`
-    : `<label class="field"><span>Date</span><input id="tx-date" type="date" value="${esc(draft.date)}"></label>`}
-      ${dayChips(draft.date)}
+      ${!existing && !isT && !draft.fromRule ? `<label class="field"><span>Repeat</span><select id="tx-repeat"><option value="">No</option>${FREQS.filter((f) => f.id !== 'once' && f.id !== 'custom').map((f) => `<option value="${f.id}" ${draft.repeat === f.id ? 'selected' : ''}>${f.label}</option>`).join('')}</select></label>` : ''}
       ${RecordX.fieldsHTML(draft)}
       ${existing ? Taxes.sheetRow(existing.id) : ''}
+      </details>`;
+      })()}
       <div class="btns">
         ${existing ? '<button type="button" class="btn danger" data-act="tx-delete">Delete</button>' : ''}
         ${existing && draft.type === 'income' && !existing.loan && !draft.refund ? '<button type="button" class="btn" data-act="tx-split">Divide into jars</button>' : ''}
@@ -2353,6 +2362,7 @@ function openTxSheet(existing = null, preset = {}) {
 
   const paint = (sheet, focus = true) => {
     sheet.innerHTML = `<div class="grab"></div>${html()}`;
+    sheet.querySelector('.tx-more')?.addEventListener('toggle', (e) => { moreOpen = e.target.open; });
     const amount = sheet.querySelector('#tx-amount');
     amount.addEventListener('input', () => { if (!readSymbol(sheet)) updateHint(sheet); });
     sheet.querySelector('#tx-rate')?.addEventListener('input', () => updateHint(sheet));
@@ -2569,6 +2579,12 @@ function openTxSheet(existing = null, preset = {}) {
         } else if (r.error === 'exists') toast(`"${r.source.name}" is archived. Bring it back in Settings → Income sources.`);
         else toast('Give the source a name');
         paintSrc(sheet);
+        return;
+      }
+      if (e.target.closest('[data-act="cats-all"]')) {
+        readInputs(sheet);
+        catsAll = true;
+        paint(sheet, false);
         return;
       }
       if (e.target.closest('[data-act="cat-new"]')) {

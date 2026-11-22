@@ -6537,3 +6537,11 @@ tr.week-row b.bad { color: var(--expense); } tr.week-row b.good { color: var(--i
 .hp-row { display: flex; gap: 10px; align-items: center; padding: 6px 0; cursor: pointer; }
 .hp-row input { width: 18px; height: 18px; flex: none; }
 .home-pick-link { text-align: center; margin: 18px 0 8px; font-size: 13px; }
+
+/* New record: a short form (extras under "More", 8 categories then "More…") */
+.cats .cat-extra { display: none; }
+.cats .cat-more { opacity: 0.85; }
+.tx-more { margin: 12px 0 4px; border-radius: 12px; background: var(--surface-2); padding: 0 12px; }
+.tx-more > summary { cursor: pointer; padding: 11px 0; font-size: 13px; color: var(--muted); list-style-position: inside; }
+.tx-more[open] { padding-bottom: 10px; }
+.tx-more[open] > summary { color: var(--text); }

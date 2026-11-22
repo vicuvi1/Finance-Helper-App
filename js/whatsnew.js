@@ -6,6 +6,7 @@
 import { isNewerVersion } from './version.js';
 
 export const NOTES = [
+  { v: '1.120.0', items: ['A shorter New record: amount, what for, your 8 most used categories (More… for the rest), the card and the day. Split, who, lent, repeat, "doesn\'t count" and your own fields are under More (open by itself when one is in use). The whole form fits on one screen.'] },
   { v: '1.119.0', items: ['Choose what Home shows: Settings → General → Show on Home (or the link at the bottom of Home). Tick the cards you want; "Calm Home" keeps only the essentials (Safe to spend, Do this next, your month, emergency fund, recent records, what to confirm). Same Home on every device.'] },
   { v: '1.118.0', items: ['Finance Helper for Android: a real phone app (download from Settings → Cloud sync → 📱 On your phone). It records your bank\'s payments by itself from its notifications (you tick which bank apps), keeps them if you\'re offline, has a Safe to spend widget with ＋, and Add expense / Add income when you hold its icon.'] },
   { v: '1.117.0', items: ['Plan → Debts (only if you need it: open it from Plan → Planned): a bank loan or credit card with its interest rate and monthly payment shows what you owe, the month it\'s paid off, the interest still to pay and how much sooner you\'d finish paying a bit more. The monthly payment becomes a repeating bill, so Safe to spend keeps it back.'] },
