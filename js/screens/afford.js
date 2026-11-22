@@ -28,7 +28,7 @@ function resultHTML(r, cur) {
   const goals = r.goals.length
     ? `<h4 class="mc-h">Your goals</h4><ul class="af-goals">${r.goals.map((g) => `<li><span>${esc(g.emoji)} ${esc(g.name)}</span><b>${g.weeks ? weeksText(g.weeks) : g.remaining > 0 ? 'no pace yet' : 'already reached'}</b></li>`).join('')}</ul>`
     : '';
-  return `<p class="af-verdict tone-${r.tone}" data-testid="afford-verdict" role="status">${esc(r.verdict)}</p>
+  return `<p class="af-verdict tone-${r.tone}" data-testid="afford-verdict" role="status">${esc(r.verdict)}</p>${r.when ? `<p class="af-when" data-testid="afford-when">🗓️ ${esc(r.when.text)}</p>` : ''}
     <div class="af-rows">
       <div class="split-row"><span>Safe to spend ${day}</span><b data-testid="afford-safe">${f(r.before.leftToday)} → ${f(r.after.leftToday)}</b></div>
       <div class="split-row"><span>Days this month the money runs short</span><b data-testid="afford-short">${r.tightDays ? `${r.tightDays}${r.tightUntil ? ` (until ${Number(r.tightUntil.slice(8))} ${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][Number(r.tightUntil.slice(5, 7)) - 1]})` : ''}` : 'none'}</b></div>

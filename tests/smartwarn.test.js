@@ -55,3 +55,14 @@ test('they show in "Do this next" with a button that does something', () => {
   assert.equal(steps[0].data.id, b.id);
   assert.ok(nextSteps(s, TODAY, { demo: true }).some((x) => x.id === `dup:${b.id}`));
 });
+
+test('the lowest point ahead: money runs low before the next income', async () => {
+  const { lowestPoint } = await import('../js/smartwarn.js');
+  const s = normalizeState({ tx: [{ id: 'i', type: 'income', amount: 100000, currency: 'MDL', account: 'cash', category: 'other-in', date: '2026-11-01', createdAt: 1, updatedAt: 1 }],
+    recurring: [{ id: 'rent', type: 'expense', note: 'made-up rent', amount: 400000, currency: 'MDL', account: 'cash', every: 'month', start: '2026-11-28', lastDone: '2026-11-21' }] });
+  const low = lowestPoint(s, '2026-11-21');
+  assert.ok(low);
+  assert.equal(low.date, '2026-11-28');
+  assert.ok(low.left < 0);
+  assert.ok(smartSteps(s, '2026-11-21').some((x) => x.id === 'low:2026-11-28' && x.go === 'calendar'));
+});

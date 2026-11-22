@@ -6,6 +6,7 @@
 import { isNewerVersion } from './version.js';
 
 export const NOTES = [
+  { v: '1.102.0', items: ['"Money runs low around 28 Nov": a warning in "Do this next" (and the bot\'s morning message) when bills would take your cards and cash under the money you want to keep.', 'Can I afford it? now says when, if not this month: "In about 4 months (March) if you keep saving like the last 3 months".'] },
   { v: '1.101.0', items: ['Plan → 🗓️ Planned: big expenses coming (insurance, a holiday) spread over the months until then; Safe to spend keeps that money aside.'] },
   { v: '1.100.0', items: ['Plan → Subscriptions → 📅 Add to Google Calendar: every bill and subscription on its day, with a reminder the evening before.'] },
   { v: '1.99.0', items: ['Settings → Data & backups → Cloud sync: Change PIN, and Devices (sign out one you no longer use).', 'The bot\'s morning message says when it\'s a good day to change dollars (you hold USD and the rate is high).'] },

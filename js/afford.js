@@ -3,11 +3,11 @@
 // short, how many weeks later each goal is reached at its current pace, and
 // one plain verdict. Pure and read only; js/screens/afford.js shows it.
 
-import { goalStatus, isBillCategory, isWorkCost } from './model.js';
+import { goalStatus, isBillCategory, isWorkCost, personalMonth } from './model.js';
 import { safeToSpend, shortDay, limitStatus } from './safespend.js';
 import { spendingIds } from './forecast.js';
 import { moneyLine, floorOf } from './moneycal.js';
-import { addDays, daysInMonth, monthKey } from './dates.js';
+import { addDays, daysInMonth, monthKey, addMonths, monthLabel } from './dates.js';
 
 const pad = (n) => String(n).padStart(2, '0');
 
@@ -62,5 +62,19 @@ export function affordCheck(state, today, { price, date = today }) {
     return { id: g.id, name: g.name || 'Goal', emoji: g.emoji || '🎯', weeks, pace: st.pace, remaining: st.remaining };
   });
 
-  return { price, date: day, before, after, tightDays: tight.length, tightUntil: recover, endLeft, overLimit, verdict, tone, goals };
+  // Not this month: when, if you keep what you kept in the last 3 months.
+  let when = null;
+  if (tone === 'bad') {
+    const key = monthKey(today);
+    const kept = [1, 2, 3].map((i) => personalMonth(state, addMonths(key, -i)).kept).filter((k) => k > 0);
+    const perMonth = kept.length ? Math.round(kept.reduce((a, b) => a + b, 0) / 3) : 0;
+    const short = Math.max(0, price - Math.max(0, before.pool));
+    if (perMonth > 0 && short > 0) {
+      const months = Math.max(1, Math.ceil(short / perMonth));
+      if (months <= 36) when = { months, month: addMonths(key, months), perMonth, text: `In about ${months} month${months === 1 ? '' : 's'} (${monthLabel(addMonths(key, months))}) if you keep saving like the last 3 months.` };
+    }
+    if (!when) when = { months: null, text: 'Not soon at your current pace: you kept little or nothing in the last 3 months.' };
+  }
+
+  return { price, date: day, before, after, tightDays: tight.length, tightUntil: recover, endLeft, overLimit, verdict, tone, goals, when };
 }

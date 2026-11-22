@@ -6439,3 +6439,4 @@ html[data-in-life] .lt-eye svg { width: 18px; height: 18px; fill: none; stroke: 
 .hb-bar { height: 8px; border-radius: 99px; background: color-mix(in srgb, var(--text) 9%, transparent); overflow: hidden; }
 .hb-bar i { display: block; height: 100%; background: var(--gold); border-radius: inherit; }
 .hb-time b { text-align: right; }
+.af-when { margin: -4px 0 12px; font-size: 14px; color: var(--muted); }

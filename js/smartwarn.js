@@ -12,6 +12,8 @@ import { countsAsSpending, signed } from './catshare.js';
 import { B, category, isBillCategory } from './model.js';
 import { dueItems } from './recurring.js';
 import { isSubscription } from './subtable.js';
+import { moneyLine, floorOf } from './moneycal.js';
+import { shortDay } from './safespend.js';
 
 const fold = (s) => String(s ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
 
@@ -96,6 +98,20 @@ export function staleSubscriptions(state, today) {
   return out;
 }
 
+/**
+ * The lowest point of your money in the next 30 days (cards and cash, minus bills,
+ * plus income expected): when it goes under the money you want to keep (settings.moneyFloor,
+ * default 0), {date, left, floor, bill} — else null.
+ */
+export function lowestPoint(state, today, days = 30) {
+  const line = moneyLine(state, today, addDays(today, days));
+  const floor = floorOf(state);
+  let low = null;
+  for (const [date, v] of line) if (date > today && (!low || v.left < low.left)) low = { date, left: v.left, out: v.out };
+  if (!low || low.left >= floor) return null;
+  return { ...low, floor };
+}
+
 /** All of them as Home steps ({id, level, icon, title, text, btn, act|go, data}), most useful first. */
 export function smartSteps(state, today) {
   const cur = state.settings?.currency || 'MDL';
@@ -104,6 +120,8 @@ export function smartSteps(state, today) {
   for (const d of duplicates(state, today).slice(0, 2)) {
     steps.push({ id: `dup:${d.later.id}`, level: 'warn', icon: '👯', title: `Logged twice? ${formatMoney(d.a.amount, d.a.currency)}${d.a.note ? ` · ${d.a.note}` : ''}`, text: `Two records on the same day with the same amount${d.a.note ? ' and note' : ''}. Open the newer one to delete it if it's a repeat.`, btn: 'Open it', act: 'edit', data: { id: d.later.id } });
   }
+  const low = lowestPoint(state, today);
+  if (low) steps.push({ id: `low:${low.date}`, level: 'warn', icon: '📉', title: `Money runs low around ${shortDay(low.date)}`, text: `After the bills due by then, your cards and cash would be at about ${fmt(low.left)}${low.floor ? ` (you want to keep ${fmt(low.floor)})` : ''}. Move money in or wait with bigger buys.`, btn: 'See the calendar', go: 'calendar' });
   const pace = categoryPace(state, today)[0];
   if (pace) steps.push({ id: `catpace:${pace.cat}:${monthKey(today)}`, level: 'warn', icon: '📈', title: `${pace.name}: ${pace.pct}% more than usual`, text: `${fmt(pace.now)} so far; by this day of a usual month it's about ${fmt(pace.byToday)}. ${pace.daysLeft} day${pace.daysLeft === 1 ? '' : 's'} left.`, btn: 'See it', go: 'reports' });
   for (const p of priceRises(state, today).slice(0, 1)) {
