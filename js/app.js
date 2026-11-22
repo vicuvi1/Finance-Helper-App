@@ -512,6 +512,11 @@ function renderSidebar() {
   const trendDisplay = isMasked ? '••••' : `${netSign}${money(Math.round(netAbs / 100) * 100, { compact: true })}`;
   const trendCls = s.net >= 0 ? 'pos' : 'neg';
   const savingsRate = s.income > 0 ? (s.net > 0 ? Math.round((s.net / s.income) * 100) : 0) : null;
+  // About the same in dollars and euros (today's rates), in small print under the total.
+  const fxLine = ['USD', 'EUR'].filter((c) => c !== state.settings.currency).map((c) => {
+    const v = convert(shown, state.settings.currency, c, M.knownRates(state));
+    return v == null ? null : isMasked ? `•••• ${c}` : formatMoney(Math.round(v / 1000) * 1000, c);
+  }).filter(Boolean).join(' · ');
 
   top.innerHTML = `<div class="sc-body" role="button" tabindex="0" data-go="accounts" title="Open Accounts &amp; Net Worth">
     <div class="sc-head">
@@ -526,6 +531,7 @@ function renderSidebar() {
         ${s.net >= 0 ? '▲' : '▼'} ${trendDisplay}
       </span>
     </div>
+    ${fxLine ? `<div class="sc-fx" data-testid="sidebar-fx" title="All your money in dollars and euros at today's rates">≈ ${fxLine}</div>` : ''}
     ${sparkline(series)}
     <div class="sc-row">
       <div class="sc-stat">

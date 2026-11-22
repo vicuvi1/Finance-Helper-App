@@ -6593,3 +6593,6 @@ tr.week-row b.bad { color: var(--expense); } tr.week-row b.good { color: var(--i
 .bk-match { margin: 6px 0; }
 .bk-missing summary { cursor: pointer; list-style: none; }
 .bk-missing .list { margin: 6px 0; }
+
+/* Sidebar "All my money": about the same in USD and EUR */
+.sc-fx { margin: 2px 0 6px; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; letter-spacing: 0.01em; }
