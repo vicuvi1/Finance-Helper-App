@@ -70,7 +70,45 @@ export const HELP = [
   '/today · /month · /balance · /last · /undo',
 ].join('\n')
 
-const undoButton = (id) => ({ inline_keyboard: [[{ text: '↩️ Undo', callback_data: `undo:${id}` }]] })
+// Under each saved record: Undo, and change its category or account (the next record from the
+// same shop then gets the category you picked: the app learns from your records).
+export const recordButtons = (id) => ({ inline_keyboard: [[{ text: '↩️ Undo', callback_data: `undo:${id}` }, { text: '🏷 Category', callback_data: `rc:${id}` }, { text: '💳 Account', callback_data: `ra:${id}` }]] })
+const undoButton = recordButtons
+
+/** Category choices for a record: the 8 you use most for that kind, two a row (callback sc:<id>:<index>). */
+export function categoryKeyboard(state, t) {
+  const kind = t.type === 'income' ? 'income' : 'expense'
+  const used = {}
+  for (const x of state.tx) if (x.type === t.type) used[x.category] = (used[x.category] || 0) + 1
+  const all = state.settings.categories
+  const cats = all.map((c, i) => ({ c, i })).filter(({ c }) => !c.archived && (c.type || 'expense') === kind && c.id !== t.category)
+    .sort((a, b) => (used[b.c.id] || 0) - (used[a.c.id] || 0)).slice(0, 8)
+  const rows = []
+  for (let i = 0; i < cats.length; i += 2) rows.push(cats.slice(i, i + 2).map(({ c, i: n }) => ({ text: `${c.emoji || ''} ${c.name}`.trim(), callback_data: `sc:${t.id}:${n}` })))
+  rows.push([{ text: '‹ Back', callback_data: `rb:${t.id}` }])
+  return { inline_keyboard: rows }
+}
+
+/** Account choices: active accounts in the record's currency (callback sa:<id>:<index>). */
+export function accountKeyboard(state, t) {
+  const accs = state.settings.accounts.map((a, i) => ({ a, i })).filter(({ a }) => !a.archived && a.id !== t.account && (a.currency || state.settings.currency) === t.currency).slice(0, 10)
+  const rows = []
+  for (let i = 0; i < accs.length; i += 2) rows.push(accs.slice(i, i + 2).map(({ a, i: n }) => ({ text: a.name, callback_data: `sa:${t.id}:${n}` })))
+  rows.push([{ text: '‹ Back', callback_data: `rb:${t.id}` }])
+  return { inline_keyboard: rows }
+}
+
+/** Changes one record (category or account), like editing it in the app. Returns {s, t} or null. */
+export async function changeRecord(cfg, id, patch, now = Date.now(), fetchImpl = fetch) {
+  const cur = await readValue(cfg, fetchImpl)
+  const s = state(cur.value)
+  const t = s.tx.find((x) => x.id === id)
+  if (!t) return null
+  Object.assign(t, patch, { updatedAt: now })
+  if ('category' in patch) delete t.sub
+  await pushCopy(cfg, s, { edited: true, editedAt: now }, now, fetchImpl)
+  return { s, t }
+}
 
 /** Removes one record by id (a deletion marker, like deleting it in the app). Returns the record or null. */
 export async function removeRecord(cfg, id, now = Date.now(), fetchImpl = fetch) {
@@ -97,8 +135,26 @@ export async function handleUpdate(cfg, bot, update, { now = Date.now(), fetchIm
   const cq = update.callback_query
   if (cq) {
     if (String(cq.message?.chat?.id ?? cq.from?.id) !== bot.chat) return calls
-    const id = /^undo:((?:tg-\d+)|(?:ph-[a-z0-9]+))$/.exec(cq.data || '')?.[1]
-    if (!id) { await call('answerCallbackQuery', { callback_query_id: cq.id }); return calls }
+    const m = /^(undo|rc|ra|rb|sc|sa):((?:tg-\d+)|(?:ph-[a-z0-9]+))(?::(\d+))?$/.exec(cq.data || '')
+    if (!m) { await call('answerCallbackQuery', { callback_query_id: cq.id }); return calls }
+    const [, op, id, idx] = m
+    const where = cq.message ? { chat_id: cq.message.chat.id, message_id: cq.message.message_id } : null
+    if (op !== 'undo') {
+      const today = moneyDay(now)
+      if (op === 'rc' || op === 'ra' || op === 'rb') {
+        const s = state((await readValue(cfg, fetchImpl)).value)
+        const t = s.tx.find((x) => x.id === id)
+        await call('answerCallbackQuery', { callback_query_id: cq.id, ...(t ? {} : { text: 'That record was removed' }) })
+        if (t && where) await call('editMessageReplyMarkup', { ...where, reply_markup: op === 'rc' ? categoryKeyboard(s, t) : op === 'ra' ? accountKeyboard(s, t) : recordButtons(id) })
+        return calls
+      }
+      const cur = state((await readValue(cfg, fetchImpl)).value)
+      const pick = op === 'sc' ? cur.settings.categories[Number(idx)] : cur.settings.accounts[Number(idx)]
+      const r = pick ? await changeRecord(cfg, id, op === 'sc' ? { category: pick.id } : { account: pick.id }, now, fetchImpl) : null
+      await call('answerCallbackQuery', { callback_query_id: cq.id, text: r ? `Changed to ${pick.name}` : 'That record was removed' })
+      if (r && where) await call('editMessageText', { ...where, parse_mode: 'HTML', disable_web_page_preview: true, text: loggedText(r.s, r.t, today), reply_markup: recordButtons(id) })
+      return calls
+    }
     const t = await removeRecord(cfg, id, now, fetchImpl)
     await call('answerCallbackQuery', { callback_query_id: cq.id, text: t ? 'Removed' : 'Already removed' })
     if (t && cq.message) await call('editMessageText', { chat_id: cq.message.chat.id, message_id: cq.message.message_id, parse_mode: 'HTML', text: `↩️ <s>${esc(t.note || '')} ${(t.amount / 100).toString().replace('.', ',')} ${esc(t.currency)}</s> removed` })

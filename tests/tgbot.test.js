@@ -116,6 +116,31 @@ test('"yesterday" goes on yesterday; Undo removes it everywhere', async () => {
   assert.ok(web.state.deleted[t.id], 'removed with a deletion marker, so no device brings it back');
 });
 
+test('a saved record can change its category and account from the buttons', async () => {
+  const m = message('77 made-up lunch');
+  sent.length = 0;
+  await post('/api/telegram', m, hookHeaders());
+  const id = `tg-${m.update_id}`;
+  const btns = sent.find((x) => x.method === 'sendMessage').p.reply_markup.inline_keyboard[0].map((b) => b.callback_data);
+  assert.deepEqual(btns, [`undo:${id}`, `rc:${id}`, `ra:${id}`]);
+  const cq = (data) => ({ update_id: ++uid, callback_query: { id: `cq${uid}`, data, from: { id: Number(CHAT) }, message: { message_id: 9, chat: { id: Number(CHAT) } } } });
+  sent.length = 0;
+  await post('/api/telegram', cq(`rc:${id}`), hookHeaders());
+  const kb = sent.find((x) => x.method === 'editMessageReplyMarkup').p.reply_markup.inline_keyboard;
+  const pick = kb[0][0];
+  assert.match(pick.callback_data, new RegExp(`^sc:${id}:\\d+$`));
+  sent.length = 0;
+  await post('/api/telegram', cq(pick.callback_data), hookHeaders());
+  assert.match(sent.find((x) => x.method === 'answerCallbackQuery').p.text, /^Changed to /);
+  assert.ok(sent.find((x) => x.method === 'editMessageText'));
+  const web = app();
+  await web.cloud.signIn(PIN);
+  await web.cloud.sync();
+  const t = web.state.tx.find((x) => x.id === id);
+  const idx = Number(pick.callback_data.split(':').pop());
+  assert.equal(t.category, web.state.settings.categories[idx].id);
+});
+
 test('commands answer from the synced copy; a message without an amount gets help', async () => {
   sent.length = 0;
   await post('/api/telegram', message('/balance'), hookHeaders());

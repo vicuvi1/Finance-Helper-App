@@ -13,7 +13,7 @@ import { paymentRecord } from '../js/phonepay.js'
 import { formatMoney } from '../js/money.js'
 import { safeLine } from '../js/safespend.js'
 import { loggedText } from '../js/telegram.js'
-import { botConfig, moneyDay, tg } from './_tgbot.mjs'
+import { botConfig, moneyDay, recordButtons, tg } from './_tgbot.mjs'
 
 const T = 'CREATE TABLE IF NOT EXISTS sys_capture (id INTEGER PRIMARY KEY CHECK (id = 1), secret TEXT NOT NULL)'
 
@@ -82,7 +82,7 @@ export default async function handler(req, res) {
     try { safe = safeLine(state, today, fmt).replace(/<[^>]+>/g, '') } catch { /* not critical */ }
     const bot = botConfig()
     if (bot.token && bot.chat) {
-      await tg(bot, 'sendMessage', { chat_id: bot.chat, parse_mode: 'HTML', disable_web_page_preview: true, text: `📱 From your phone\n${loggedText(state, r.tx, today)}`, reply_markup: { inline_keyboard: [[{ text: '↩️ Undo', callback_data: `undo:${r.tx.id}` }]] } }).catch(() => null)
+      await tg(bot, 'sendMessage', { chat_id: bot.chat, parse_mode: 'HTML', disable_web_page_preview: true, text: `📱 From your phone\n${loggedText(state, r.tx, today)}`, reply_markup: recordButtons(r.tx.id) }).catch(() => null)
     }
     return send(res, 200, { ok: true, saved: true, id: r.tx.id, text: safe ? `${line}\n${safe}` : line })
   } catch (e) {
