@@ -10,6 +10,7 @@ import { startDevServer } from '../e2e/devserver.mjs';
 import { createCloud } from '../js/cloud.js';
 import { normalizeState, SCHEMA_VERSION } from '../js/model.js';
 import { manifestOf } from '../js/parts.js';
+import { readFileSync } from 'node:fs';
 
 const SETUP = 'test-setup-key';
 let turso;
@@ -236,4 +237,12 @@ test('a record added (in place, as the app does) while a sync is sending is neve
   await other.cloud.signIn('8642');
   await other.cloud.sync();
   assert.ok(other.state.tx.some((t) => t.id === 'ip-late'), 'the server got it on the next round');
+});
+
+test('changes saved outside the record sheet still tell the sync (a quiet sync only reads when nothing was flagged)', () => {
+  // e2e/cloud.e2e.mjs checks the real thing in a browser; this keeps the two calls from being dropped.
+  const src = readFileSync(new URL('../js/app.js', import.meta.url), 'utf8');
+  const body = (name) => { const i = src.indexOf(`function ${name}(`); return src.slice(i, src.indexOf('\n}\n', i)); };
+  assert.match(body('onCellChange'), /M\.touch\(t\);\s*persist\(\);\s*Sync\.changed\(\)/, 'a cell edited in the Log table');
+  assert.match(body('autoPay'), /state\.tx\.push\(tx\);\s*persist\([^)]*\);\s*Sync\.changed\(\)/, 'the automatic salary on pay day');
 });
