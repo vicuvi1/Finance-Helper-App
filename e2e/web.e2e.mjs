@@ -208,6 +208,32 @@ test('Budgets that set themselves: one tap turns it on', async () => {
   await context.close();
 });
 
+test('Sunday check-in: four steps, file an "Other" record, mark the week done', async () => {
+  const { page, errors, context } = await openPage(browser, server.url);
+  await page.goto(server.url);
+  await page.waitForSelector('#app header.top');
+  await page.evaluate(() => {
+    const st = JSON.parse(globalThis.__fhStore.getItem('finance-helper.state'));
+    const acc = st.settings.accounts.find((a) => !a.archived).id;
+    const d = new Date().toISOString().slice(0, 10);
+    st.tx.push({ id: 'ci-other1', date: d, type: 'expense', amount: 3000, currency: st.settings.currency || 'MDL', account: acc, category: 'other', note: 'Made-up kiosk', createdAt: Date.now(), updatedAt: Date.now() });
+    globalThis.__fhStore.setItem('finance-helper.state', JSON.stringify(st));
+  });
+  await page.reload();
+  await page.waitForSelector('#app header.top');
+  // Open it the way the "Do this next" step does (that step shows only Saturday to Monday).
+  await page.evaluate(() => { const b = document.createElement('button'); b.dataset.act = 'checkin-open'; document.getElementById('app').append(b); b.click(); });
+  await page.waitForSelector('[data-testid="checkin"]');
+  assert.equal(await page.$$eval('.ci-step', (x) => x.length), 4);
+  const cat = await page.$eval('.ci-other select option:nth-child(2)', (o) => o.value);
+  await page.selectOption('.ci-other select', cat);
+  await page.waitForFunction((c) => JSON.parse(globalThis.__fhStore.getItem('finance-helper.state')).tx.find((t) => t.id === 'ci-other1').category === c, cat);
+  await page.click('[data-testid="checkin-done"]');
+  await page.waitForFunction(() => Object.keys(JSON.parse(globalThis.__fhStore.getItem('finance-helper.state')).settings.checkins || {}).length === 1);
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
 test('Plan → Planned: add a big expense, it is spread over the months', async () => {
   const { page, errors, context } = await openPage(browser, server.url);
   await page.goto(`${server.url}#plan`);

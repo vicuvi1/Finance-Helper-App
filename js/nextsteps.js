@@ -18,6 +18,7 @@ import { smartSteps } from './smartwarn.js';
 import { monthToClose } from './closemonth.js';
 import { toCheck } from './tocheck.js';
 import { budgetAutoOn } from './budgetauto.js';
+import { isDue as checkinDue, checkinData } from './checkin.js';
 import { suggestBudgets } from './budgetsuggest.js';
 
 const pctOf = (a, b) => (b > 0 ? Math.round((a / b) * 100) : 0);
@@ -105,6 +106,12 @@ export function nextSteps(state, today, { hidden = {}, max = 3, demo = false } =
   // 2c. Payments that came in by themselves (phone): one look, right category and card?
   const check = toCheck(state);
   if (check.length) add({ id: `tocheck:${check.length}`, level: 'do', icon: '📲', title: `${check.length} payment${check.length === 1 ? '' : 's'} to check`, text: `Recorded by themselves from your phone${check[0].note ? ` (latest: ${check[0].note})` : ''}. Right category and card? One tap each.`, btn: 'Check', act: 'tocheck-open' });
+
+  // 2e. The 10-minute Sunday check-in (Saturday to Monday, until done).
+  if (checkinDue(state, today)) {
+    const d = checkinData(state, today);
+    add({ id: `checkin:${d.week}`, level: 'nice', icon: '☕', title: 'Your 10-minute week check-in', text: d.todo ? `Your week in one number, then ${d.todo} thing${d.todo === 1 ? '' : 's'} to tidy and what's coming next week.` : 'Your week in one number, and what\'s coming next week. Nothing to tidy.', btn: 'Start', act: 'checkin-open' });
+  }
 
   // 2d. Budgets that set themselves: what changed this month (once), or the offer to turn it on.
   const ba = state.settings.budgetAutoLast;

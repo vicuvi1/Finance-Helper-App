@@ -6552,3 +6552,18 @@ tr.week-row b.bad { color: var(--expense); } tr.week-row b.good { color: var(--i
 .tc-top { display: flex; justify-content: space-between; gap: 10px; }
 .tc-edit { display: flex; gap: 8px; align-items: center; margin-top: 8px; flex-wrap: wrap; }
 .tc-edit select { flex: 1 1 140px; min-width: 0; }
+
+/* Sunday check-in (js/screens/checkin.js) */
+.ci-list { display: grid; gap: 10px; margin-bottom: 8px; }
+.ci-step { display: grid; grid-template-columns: 30px 1fr; gap: 12px; padding: 12px; border-radius: 14px; background: var(--surface-2); }
+.ci-n { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font-weight: 650; background: var(--surface-3); }
+.ci-step.done .ci-n { background: var(--gold); color: var(--bg); }
+.ci-body p { margin: 6px 0 0; }
+.ci-body .btns { margin-top: 8px; }
+.ci-other { display: flex; justify-content: space-between; gap: 10px; align-items: center; padding: 8px 0; border-top: 1px solid var(--line); }
+.ci-other span { display: flex; flex-direction: column; min-width: 0; }
+.ci-other select { max-width: 50%; }
+.ci-other.filed { opacity: 0.55; }
+.ci-tip { padding: 8px 10px; border-radius: 10px; background: var(--surface-3); }
+.ci-body .btns { justify-content: flex-start; }
+.ci-body .btns .btn { flex: 0 0 auto; width: auto; }
