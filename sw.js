@@ -99,6 +99,7 @@ const SHELL = [
   './js/screens/year.js',
   './js/shopnames.js',
   './js/screens/shopnames.js',
+  './js/freedom.js',
   './js/wishlist.js',
   './js/screens/calendar.js',
   './js/screens/afford.js',

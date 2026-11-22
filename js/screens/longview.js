@@ -11,6 +11,7 @@ import { todayISO, monthLabel, dayLabel } from '../dates.js';
 import { lineChart } from '../charts.js';
 import { netWorthHistory, contributions, savingsRates, yearOverYear, runway, booksIn, monthsText, viewCurrencies, rateBook } from '../longview.js';
 import { withArchive } from '../archive.js';
+import { freedom } from '../freedom.js';
 import * as Tips from '../tips.js';
 
 const lv = { book: 'all', cur: null, nw: 'months', pick: null, showAll: false, yoy: 'soFar', year: null };
@@ -58,6 +59,7 @@ export function view() {
   ${metrics(nw, sr, yy, rw)}
   ${netWorthCard(nw)}
   <div class="lv-two">${savingsCard(sr)}${runwayCard(rw)}</div>
+  ${freedomCard(freedom(state, today, { book, cur }), today)}
   ${yoyCard(yy, today)}`}`;
 }
 
@@ -150,6 +152,25 @@ function runwayCard(rw) {
   </section>`;
 }
 
+// ---------- Freedom number (js/freedom.js) ----------
+
+function freedomCard(f, today) {
+  if (!f.monthly) return '';
+  const when = (w) => (!w ? '–' : w.reached ? `✓ You're there` : w.noData ? 'After a full month of records' : w.never ? 'Not while you spend all you earn' : `${esc(monthLabel(w.month))} <span class="muted small">(${w.months} month${w.months === 1 ? '' : 's'})</span>`);
+  const fi = f.fi;
+  const years = fi.years == null ? 'more than 100 years' : fi.years < 1 ? 'less than a year' : `about ${String(fi.years).replace('.', ',')} years`;
+  return `<section class="card lv-free" data-testid="lv-freedom">
+    <h2>Freedom number</h2>
+    <p class="lv-lead">You could live <b>${f.months == null ? '–' : monthsText(Math.min(f.months, 600))} months</b> on your money, spending like the last 6 months (${tot(f.monthly)} a month).</p>
+    <div class="table-wrap"><table class="lv-table"><tbody>
+      <tr><td>6 months of living</td><td class="num">${tot(6 * f.monthly)}</td><td class="num">${when(f.six)}</td></tr>
+      <tr><td>12 months of living</td><td class="num">${tot(12 * f.monthly)}</td><td class="num">${when(f.twelve)}</td></tr>
+      <tr><td>Free: your money pays your spending for good <span class="muted small">(25 × a year)</span></td><td class="num">${tot(fi.goal)}</td><td class="num">${f.kept > 0 ? `${years} <span class="muted small">· ${Math.round(fi.share * 100)}% there</span>` : `<span class="muted small">${Math.round(fi.share * 100)}% there</span>`}</td></tr>
+    </tbody></table></div>
+    <p class="muted small lv-note">${f.kept == null ? 'When you\'ll get there shows after a full month of records.' : `At what you keep a month now (${tot(Math.max(0, f.kept))}, the last 6 months).`} "Free" counts a yearly return of <label class="lv-ret"><input type="number" min="0" max="15" step="0.5" value="${fi.yearly}" data-fi-return aria-label="Yearly return above inflation, %">%</label> above inflation on what you've saved; change it if you invest differently. A guide, not a promise.</p>
+  </section>`;
+}
+
 // ---------- This year against last year ----------
 
 function yoyCard(yy, today) {
@@ -185,4 +206,14 @@ export function onClick(act, el) {
     return true;
   }
   return false;
+}
+
+/** The yearly return used by the freedom number (synced). */
+export function onChange(el) {
+  if (!el?.matches?.('[data-fi-return]')) return false;
+  const v = Math.max(0, Math.min(15, Number(String(el.value).replace(',', '.')) || 0));
+  ctx.state.settings.fiReturn = v;
+  ctx.state.settings.updatedAt = Date.now();
+  ctx.commit();
+  return true;
 }

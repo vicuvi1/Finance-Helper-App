@@ -6585,3 +6585,6 @@ tr.week-row b.bad { color: var(--expense); } tr.week-row b.good { color: var(--i
 .sn-head input[type="checkbox"] { width: 18px; height: 18px; flex: none; }
 .sn-name { flex: 1; min-width: 0; }
 .sn-row .linkish { justify-self: start; }
+
+/* Long view → Freedom number (js/freedom.js) */
+.lv-free .lv-ret input { width: 56px; padding: 2px 6px; margin: 0 2px; }

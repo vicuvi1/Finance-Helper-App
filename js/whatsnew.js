@@ -6,6 +6,7 @@
 import { isNewerVersion } from './version.js';
 
 export const NOTES = [
+  { v: '1.126.0', items: ['Freedom number in Reports → Long view: how many months you could live on your money, when you reach 6 and 12 months at the pace you save now, and how far you are from "free" (money that pays your yearly spending for good), with a yearly return you can change.'] },
   { v: '1.125.0', items: ['One name for each shop: "LINELLA SRL 123" and "Linella" become one, so reports and categories group them. New payments from your phone or a bank statement get the spelling you already use; for older records, Do this next offers the shops written different ways (tick, rename if you like, Tidy; Undo works). Your own notes like "bus 3" are never changed.'] },
   { v: '1.124.0', items: ['Your year on one page: Reports → 📅 Year opens Year in review, which now also has the year month by month (earned, spent, kept, % saved and net worth at each month\'s end, with the year\'s totals) and a net worth line, next to the best month, top categories and last-year comparison already there.'] },
   { v: '1.123.0', items: ['A 10-minute week check-in, offered in Do this next from Saturday to Monday: your week in one number (against a usual week, and where most went), the payments and bills to confirm, a category for anything in "Other" right there, and next week\'s safe amount a day, bills and one tip. "Done for this week" and it waits until next weekend.'] },

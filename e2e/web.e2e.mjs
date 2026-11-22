@@ -276,6 +276,27 @@ test('One name for each shop: tidy a shop written two ways', async () => {
   await context.close();
 });
 
+test('Freedom number in Long view; the return can be changed', async () => {
+  const { page, errors, context } = await openPage(browser, server.url);
+  await page.goto(server.url);
+  await page.waitForSelector('#app header.top');
+  await page.evaluate(() => {
+    const st = JSON.parse(globalThis.__fhStore.getItem('finance-helper.state'));
+    const acc = st.settings.accounts.find((a) => !a.archived && a.kind !== 'crypto').id;
+    const d = new Date().toISOString().slice(0, 10);
+    st.tx.push({ id: 'fr-1', date: d, type: 'expense', amount: 50000, currency: st.settings.currency || 'MDL', account: acc, category: 'other', note: 'Made-up rent', createdAt: Date.now(), updatedAt: Date.now() });
+    globalThis.__fhStore.setItem('finance-helper.state', JSON.stringify(st));
+  });
+  await page.goto(`${server.url}#longview`);
+  await page.reload();
+  await page.waitForSelector('[data-testid="lv-freedom"]');
+  await page.fill('[data-fi-return]', '3');
+  await page.dispatchEvent('[data-fi-return]', 'change');
+  await page.waitForFunction(() => JSON.parse(globalThis.__fhStore.getItem('finance-helper.state')).settings.fiReturn === 3);
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
 test('Plan → Planned: add a big expense, it is spread over the months', async () => {
   const { page, errors, context } = await openPage(browser, server.url);
   await page.goto(`${server.url}#plan`);
