@@ -18,6 +18,7 @@ import { isMoneyHidden } from './money.js';
 import { updateStatus, onUpdateChange, watchServiceWorker, webUpdateWaiting } from './screens/updates.js';
 import { APP_VERSION } from './version.js';
 import { notesSince, shouldShow, NOTES } from './whatsnew.js';
+import { trayLine } from './trayline.js';
 
 const isDesktop = () => typeof window !== 'undefined' && !!window.desktop?.isDesktop;
 const isWeb = () => !isDesktop() && typeof location !== 'undefined' && /^https?:$/.test(location.protocol);
@@ -90,7 +91,7 @@ export function cloudCard() {
       <div class="set-sb-content"><b>${cfg.signedIn ? 'Signed in' : 'Signed out'}</b><p class="muted small" style="margin:2px 0 0" data-testid="cloud-status">${line}</p>${st.note && st.state === 'ok' ? `<p class="muted small" style="margin:4px 0 0">${esc(st.note)}</p>` : ''}</div></div>
     ${isDesktop() ? `<label class="field" style="margin-top:12px"><span>Server address</span><input id="cloud-url" type="url" value="${esc(baseUrl())}" placeholder="${DEFAULT_URL}" data-testid="cloud-url"></label>` : ''}
     ${cfg.signedIn
-      ? `<div class="btns" style="margin-top:12px"><button class="btn primary" data-act="cloud-sync" data-testid="cloud-sync">Sync now</button><button class="btn" data-act="cloud-pin" data-testid="cloud-pin-change">Change PIN</button><button class="btn" data-act="cloud-devices" data-testid="cloud-devices">Devices</button><button class="btn" data-act="cloud-signout">Sign out</button></div>`
+      ? `<div class="btns" style="margin-top:12px"><button class="btn primary" data-act="cloud-sync" data-testid="cloud-sync">Sync now</button><button class="btn" data-act="cloud-pin" data-testid="cloud-pin-change">Change PIN</button><button class="btn" data-act="cloud-devices" data-testid="cloud-devices">Devices</button><button class="btn" data-act="phone-guide" data-testid="phone-guide">📱 On your phone</button><button class="btn" data-act="cloud-signout">Sign out</button></div>`
       : `<div class="btns" style="margin-top:12px"><button class="btn primary" data-act="cloud-signin" data-testid="cloud-signin">Sign in</button></div>`}
     <p class="muted small" style="margin-bottom:0">Each record's newest edit wins and nothing is deleted by syncing. Your data stays on this device too and works offline.</p>
   </section>`;
@@ -343,6 +344,25 @@ async function openDevices() {
     <div class="btns"><button type="button" class="btn" data-close>Close</button></div>`);
 }
 
+// ---------- On your phone ----------
+
+/** The web address to open on the phone: this site on the web, the server on the desktop. */
+const phoneLink = () => (isWeb() ? location.origin : baseUrl());
+
+function openPhoneGuide() {
+  const link = phoneLink();
+  if (document.querySelector('.sheet')) ctx.closeSheet();
+  ctx.openSheet(`<h3>Money on your phone <button type="button" class="icon-btn" data-close aria-label="Close">✕</button></h3>
+    <p class="muted" style="margin-top:0">The same app, with the same records: open this address on your phone, sign in with your PIN once, and add it to the home screen. It opens full screen, works offline and syncs with this ${isDesktop() ? 'computer' : 'device'}.</p>
+    <div class="phone-link" data-testid="phone-link"><code>${esc(link)}</code><button type="button" class="btn sm" data-act="phone-copy">Copy</button></div>
+    <div class="phone-steps">
+      <div><b>Android (Chrome)</b><ol><li>Open the address.</li><li>Tap ⋮ (top right) → <b>Install app</b> or <b>Add to Home screen</b>.</li></ol></div>
+      <div><b>iPhone (Safari)</b><ol><li>Open the address in Safari.</li><li>Tap the Share button □↑ → <b>Add to Home Screen</b>.</li></ol></div>
+    </div>
+    <p class="muted small">Press and hold the icon on the home screen for <b>Add expense</b>, <b>Add income</b> and <b>Plan</b> straight away.</p>
+    <div class="btns"><button type="button" class="btn" data-close>Close</button></div>`);
+}
+
 // ---------- Sign in ----------
 
 export function openSignIn({ first = false, keep = false } = {}) {
@@ -472,6 +492,12 @@ export function onClick(act, el) {
   if (act === 'cloud-signin') { openSignIn(); return true; }
   if (act === 'cloud-pin') { openChangePin(); return true; }
   if (act === 'cloud-devices') { openDevices(); return true; }
+  if (act === 'phone-guide') { openPhoneGuide(); return true; }
+  if (act === 'phone-copy') {
+    const link = phoneLink();
+    (navigator.clipboard?.writeText(link) || Promise.reject()).then(() => ctx.toast('Link copied. Send it to your phone.'), () => ctx.toast(link));
+    return true;
+  }
   if (act === 'cloud-revoke') {
     const sid = el?.dataset.sid;
     cloud.revokeDevice(sid).then(() => { ctx.toast('Signed out. That device asks for the PIN next time.'); openDevices(); }, (e) => ctx.toast(e.message));
@@ -509,6 +535,12 @@ export function onClick(act, el) {
 
 // ---------- Start ----------
 
+/** Desktop: the tray icon's "Safe to spend today" (hover the icon by the clock). */
+function updateTray() {
+  if (!window.desktop?.tray || ctx.DEMO) return;
+  try { window.desktop.tray(trayLine(ctx.state, todayISO(), { hidden: isMoneyHidden() })).catch(() => {}); } catch { /* not critical */ }
+}
+
 function notifyNow() {
   if (ctx.DEMO || ctx.state._sealed) return;
   runNotices(ctx.state, todayISO(), { hidden: isMoneyHidden() }).catch(() => {});
@@ -534,6 +566,7 @@ export function init() {
     },
   });
   cloud.subscribe(() => refreshCard());
+  if (window.desktop?.tray) { setTimeout(updateTray, 3000); setInterval(updateTray, 60000); }
   // "Backup before a risky step" (js/dupes.js): the desktop's own backup folder.
   if (isDesktop()) globalThis.__fhBackupBefore = () => ctx.backupNow?.();
   // Every change you make (js/screens/sync.js changed() calls this): sent a few seconds later, many changes as one.
@@ -543,7 +576,7 @@ export function init() {
     cloud.changed();
     if (cloud.config.signedIn) soon();
     clearTimeout(noteTimer);
-    noteTimer = setTimeout(notifyNow, 5000);
+    noteTimer = setTimeout(() => { notifyNow(); updateTray(); }, 5000);
   };
   document.addEventListener('click', (e) => {
     if (!e.target.closest?.('.fh-ver')) return;

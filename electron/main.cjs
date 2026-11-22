@@ -388,18 +388,33 @@ const prefsFile = () => path.join(app.getPath('userData'), 'prefs.json');
 function prefs() {
   try { return { background: true, atLogin: false, ...JSON.parse(fs.readFileSync(prefsFile(), 'utf8')) }; } catch { return { background: true, atLogin: false }; }
 }
-function makeTray() {
-  if (tray) return;
-  tray = new Tray(nativeImage.createFromPath(path.join(ROOT, 'icons', 'icon-192.png')).resize({ width: 16, height: 16 }));
-  tray.setToolTip('Finance Helper');
-  tray.setContextMenu(Menu.buildFromTemplate([
+// The tray's first line comes from the page ("Safe to spend today: 412 MDL"),
+// sent once a minute and after each change (js/trayline.js).
+let trayInfo = { tip: 'Finance Helper', line: '' };
+function trayMenu() {
+  return Menu.buildFromTemplate([
+    ...(trayInfo.line ? [{ label: trayInfo.line, enabled: false }, { type: 'separator' }] : []),
     { label: 'Open Finance Helper', click: () => showWindow() },
     { label: 'New record', click: () => quickAdd() },
     { type: 'separator' },
     { label: 'Quit', click: () => { quitting = true; app.quit(); } },
-  ]));
+  ]);
+}
+function makeTray() {
+  if (tray) return;
+  tray = new Tray(nativeImage.createFromPath(path.join(ROOT, 'icons', 'icon-192.png')).resize({ width: 16, height: 16 }));
+  tray.setToolTip(trayInfo.tip);
+  tray.setContextMenu(trayMenu());
   tray.on('click', () => showWindow());
 }
+ipcMain.handle('tray-status', (_e, info) => {
+  const tip = String(info?.tip || 'Finance Helper').slice(0, 120);
+  const line = String(info?.line || '').slice(0, 80);
+  if (tip === trayInfo.tip && line === trayInfo.line) return true;
+  trayInfo = { tip, line };
+  if (tray) { tray.setToolTip(tip); tray.setContextMenu(trayMenu()); }
+  return true;
+});
 function savePrefs(next) {
   const p = { ...prefs(), ...next };
   try { fs.writeFileSync(prefsFile(), JSON.stringify(p)); } catch { /* not critical */ }

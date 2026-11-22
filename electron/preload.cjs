@@ -45,6 +45,7 @@ contextBridge.exposeInMainWorld('desktop', {
     openFolder: () => ipcRenderer.invoke('backup-folder'),
   },
   hotkey: () => ipcRenderer.invoke('hotkey-status'),
+  tray: (info) => ipcRenderer.invoke('tray-status', info),
   background: {
     get: () => ipcRenderer.invoke('bg-get'),
     set: (p) => ipcRenderer.invoke('bg-set', p),

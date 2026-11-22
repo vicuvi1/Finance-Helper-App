@@ -6491,3 +6491,10 @@ tr.week-row b.bad { color: var(--expense); } tr.week-row b.good { color: var(--i
 .bp-why { display: block; font-size: 11.5px; color: var(--gold); }
 .bp-likely { opacity: 0.75; }
 .bp-q { display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; background: var(--gold-soft); color: var(--gold); font-weight: 700; font-size: 12px; }
+
+/* Money on your phone (js/standalone.js openPhoneGuide) */
+.phone-link{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:12px;background:var(--surface-2, rgba(127,127,127,.08));margin:8px 0 12px}
+.phone-link code{flex:1;min-width:0;overflow-wrap:anywhere;font-size:14px}
+.phone-steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.phone-steps ol{margin:6px 0 0;padding-left:20px}
+.phone-steps li{margin:3px 0}
