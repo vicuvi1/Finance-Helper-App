@@ -129,5 +129,5 @@ export function paymentRecord(state, input, { now = Date.now(), today }) {
   const text = `${p.kind === 'income' ? '+' : ''}${(p.amount / 100).toFixed(2)} ${p.currency || ''} ${what}`.replace(/\s+/g, ' ');
   const r = parseQuick(state, text, { today, accountId: accountFor(state, p) });
   if (!r.ok) return { ok: false, why: r.missing || 'Could not read it.', p };
-  return { ok: true, p, tx: { id, createdAt: now, updatedAt: now, ...r.tx, note: what, source: 'phone' } };
+  return { ok: true, p, tx: { id, createdAt: now, updatedAt: now, ...r.tx, note: what, source: 'phone', review: true } };
 }

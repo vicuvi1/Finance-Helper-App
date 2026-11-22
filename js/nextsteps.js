@@ -16,6 +16,7 @@ import { monthKey, addMonths, daysBetween, monthLabel, DOW_LONG, dowIndex } from
 import { formatMoney } from './money.js';
 import { smartSteps } from './smartwarn.js';
 import { monthToClose } from './closemonth.js';
+import { toCheck } from './tocheck.js';
 
 const pctOf = (a, b) => (b > 0 ? Math.round((a / b) * 100) : 0);
 
@@ -98,6 +99,10 @@ export function nextSteps(state, today, { hidden = {}, max = 3, demo = false } =
       text: `Client money comes in lumps. Keep it${biz ? ` in ${biz.name}` : ' in one account'} and move yourself a fixed salary: every month looks the same, and you see how long you'd be fine without clients.`,
       btn: 'Set it up', act: 'pay-setup' });
   }
+
+  // 2c. Payments that came in by themselves (phone): one look, right category and card?
+  const check = toCheck(state);
+  if (check.length) add({ id: `tocheck:${check.length}`, level: 'do', icon: '📲', title: `${check.length} payment${check.length === 1 ? '' : 's'} to check`, text: `Recorded by themselves from your phone${check[0].note ? ` (latest: ${check[0].note})` : ''}. Right category and card? One tap each.`, btn: 'Check', act: 'tocheck-open' });
 
   // 3. A client is late paying.
   for (const inv of (state.invoices || []).filter((i) => invoiceStatus(i, today) === 'overdue').slice(0, 1)) {

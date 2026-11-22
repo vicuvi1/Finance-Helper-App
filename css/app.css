@@ -6545,3 +6545,10 @@ tr.week-row b.bad { color: var(--expense); } tr.week-row b.good { color: var(--i
 .tx-more > summary { cursor: pointer; padding: 11px 0; font-size: 13px; color: var(--muted); list-style-position: inside; }
 .tx-more[open] { padding-bottom: 10px; }
 .tx-more[open] > summary { color: var(--text); }
+
+/* To check (js/screens/tocheck.js) */
+.tc-list { display: grid; gap: 8px; margin-bottom: 8px; }
+.tc-row { padding: 10px 12px; border-radius: 12px; background: var(--surface-2); }
+.tc-top { display: flex; justify-content: space-between; gap: 10px; }
+.tc-edit { display: flex; gap: 8px; align-items: center; margin-top: 8px; flex-wrap: wrap; }
+.tc-edit select { flex: 1 1 140px; min-width: 0; }

@@ -175,6 +175,27 @@ test('Show on Home: Calm Home hides the extras, a card can come back', async () 
   await context.close();
 });
 
+test('To check: a payment recorded by the phone is checked with one tap', async () => {
+  const { page, errors, context } = await openPage(browser, server.url);
+  await page.goto(server.url);
+  await page.waitForSelector('#app header.top');
+  await page.evaluate(() => {
+    const st = JSON.parse(globalThis.__fhStore.getItem('finance-helper.state'));
+    const acc = st.settings.accounts.find((a) => !a.archived).id;
+    const d = new Date().toISOString().slice(0, 10);
+    st.tx.push({ id: 'ph-madeup1', date: d, type: 'expense', amount: 4500, currency: st.settings.currency || 'MDL', account: acc, category: 'other', note: 'Made-up Cafe', source: 'phone', review: true, createdAt: Date.now(), updatedAt: Date.now() });
+    globalThis.__fhStore.setItem('finance-helper.state', JSON.stringify(st));
+  });
+  await page.reload();
+  await page.waitForSelector('[data-act="tocheck-open"]');
+  await page.click('[data-act="tocheck-open"]');
+  await page.waitForSelector('[data-testid="tc-row"]');
+  await page.click('[data-testid="tc-ok"]');
+  await page.waitForFunction(() => !JSON.parse(globalThis.__fhStore.getItem('finance-helper.state')).tx.find((t) => t.id === 'ph-madeup1').review);
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
 test('Plan → Planned: add a big expense, it is spread over the months', async () => {
   const { page, errors, context } = await openPage(browser, server.url);
   await page.goto(`${server.url}#plan`);

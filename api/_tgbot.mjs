@@ -106,6 +106,7 @@ export async function changeRecord(cfg, id, patch, now = Date.now(), fetchImpl =
   if (!t) return null
   Object.assign(t, patch, { updatedAt: now })
   if ('category' in patch) delete t.sub
+  delete t.review // fixed from the bot: checked
   await pushCopy(cfg, s, { edited: true, editedAt: now }, now, fetchImpl)
   return { s, t }
 }

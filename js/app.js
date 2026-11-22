@@ -31,6 +31,7 @@ import * as Standalone from './standalone.js'; // standalone app: cloud sync, Li
 import * as Binance from './screens/binance.js';
 import * as Sync from './screens/sync.js';
 import * as HomeCards from './homecards.js';
+import * as ToCheck from './screens/tocheck.js';
 import * as SelfCheck from './screens/selfcheck.js';
 import * as Backups from './screens/backups.js';
 import * as Tidy from './screens/moneytidy.js';
@@ -3610,6 +3611,7 @@ document.addEventListener('click', (e) => {
   else if (act === 'pay-setup') openPaySheet();
   else if (act === 'limit-setup') openLimitSheet();
   else if (act === 'spend-setup') openSpendSheet();
+  else if (act === 'tocheck-open') ToCheck.open();
   else if (act === 'recap-open') openRecap(el.dataset.key || addMonths(monthKey(todayISO()), -1));
   else if (act === 'step-later') {
     const today = todayISO();
