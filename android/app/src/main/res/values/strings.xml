@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="app_name">Finance Helper</string>
+  <string name="listener_name">Finance Helper: record bank payments</string>
+  <string name="widget_name">Safe to spend today</string>
+  <string name="add_expense">Add expense</string>
+  <string name="add_income">Add income</string>
+</resources>

@@ -188,6 +188,13 @@ Rules that keep three agents from tripping over each other:
   getUpdates. The app long-polls `POST /api {a:'pull', wait:25}` (Bearer key) and gets each message
   within a second, acks it, and sends a `snapshot` (today/balance/month/last/safe texts) so the
   server can answer while the PC is off. Tests: `tests/botserver.test.js`.
+- Android app (`android/`, Java, no libraries): a WebView of the live site + `BankListener`
+  (NotificationListenerService: payment-looking notifications from the bank apps you tick go to
+  `api/capture.mjs`; offline ones wait in a queue) + `SafeWidget` (Safe to spend, `?q=safe`) +
+  `window.FHAndroid` bridge used by the web app's "Record payments automatically" sheet. Version =
+  package.json. CI (`desktop.yml` job `android`) builds it and adds `finance-helper.apk` to each
+  release; signed with secrets FH_KEYSTORE_B64 / FH_KEYSTORE_PASSWORD (never commit a keystore).
+  Local build: Android SDK in `/opt/android-sdk`, `cd android && gradle assembleRelease`.
 - Calculator: math in `js/calc.js` (pure, no eval), floating panel `js/screens/calc.js`
   (position, open state and tape in localStorage: device-only, never synced).
 - End-to-end: `npm run e2e` (`e2e/*.e2e.mjs`, Playwright; on Linux `xvfb-run -a npm run e2e`

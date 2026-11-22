@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <color name="bg">#0B0D12</color>
+  <color name="card">#161A22</color>
+  <color name="gold">#D9B66C</color>
+  <color name="text">#F2EEE6</color>
+  <color name="muted">#8B93A3</color>
+  <style name="Theme" parent="android:Theme.DeviceDefault.NoActionBar">
+    <item name="android:windowBackground">@color/bg</item>
+    <item name="android:statusBarColor">@color/bg</item>
+    <item name="android:navigationBarColor">@color/bg</item>
+  </style>
+</resources>

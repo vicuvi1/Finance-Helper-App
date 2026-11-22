@@ -373,6 +373,25 @@ async function openSheetFeed(reset = false) {
 
 // ---------- Payments recorded by themselves from the phone ----------
 
+/** The Android app, attached to every release by CI (.github/workflows/desktop.yml). */
+export const ANDROID_APK = 'https://github.com/vicuvi1/Finance-Helper-App/releases/latest/download/finance-helper.apk';
+
+/** In the Android app: allow reading notifications, then pick the bank apps (window.FHAndroid, android/). */
+function paintAndroid(sheet) {
+  const box = sheet.querySelector('#pp-android-body');
+  if (!box || !window.FHAndroid) return;
+  let st = {};
+  try { st = JSON.parse(window.FHAndroid.status() || '{}'); } catch { /* older app */ }
+  const apps = (st.apps || []).sort((a, b) => (b.seen || 0) - (a.seen || 0));
+  box.innerHTML = `${st.listener
+    ? '<p style="margin:0 0 8px">✓ <b>Step 1 done:</b> the app can read notifications.</p>'
+    : '<p style="margin:0 0 8px"><b>Step 1:</b> let the app read notifications (Android asks once). It sends only your bank apps\' payments to your server.</p><button type="button" class="btn primary sm" data-pp-android="allow">Allow reading notifications</button>'}
+    <p style="margin:12px 0 6px"><b>Step 2:</b> your bank apps. ${apps.length ? 'Tick the ones whose payments to record:' : 'Pay once with your card (or wait for your bank\'s next notification): the bank app shows up here.'}</p>
+    ${apps.map((a) => `<label class="pp-app"><input type="checkbox" data-pp-app="${esc(a.pkg)}" ${a.on ? 'checked' : ''}><span><b>${esc(a.label)}</b><small>${esc(a.example)}</small></span></label>`).join('')}
+    ${st.queued ? `<p style="margin:8px 0 0">${st.queued} payment${st.queued === 1 ? '' : 's'} waiting to be sent (no internet).</p>` : ''}
+    <p style="margin:10px 0 0">Add the <b>Safe to spend today</b> widget: press and hold the home screen → Widgets → Finance Helper.</p>`;
+}
+
 async function openPhonePay(reset = false) {
   let url;
   try { url = (await cloud.api('/api/capture', { op: reset ? 'reset' : 'link' })).url; } catch (e) { ctx.toast(e.message); return; }
@@ -385,13 +404,15 @@ async function openPhonePay(reset = false) {
     <p class="muted" style="margin-top:0">Each time you pay, your phone sends the payment to your server and it's recorded by itself: the amount, the shop and the card. The apps get it within a minute, and the Telegram bot (if it's on) tells you, with Undo. The same payment sent twice is recorded once.</p>
     <p class="small" style="margin:10px 0 4px"><b>Your private link</b> (anyone with it can add records: keep it to yourself)</p>
     <div class="phone-link" data-testid="pp-link"><code>${esc(url)}</code><button type="button" class="btn sm" data-act="copy-text" data-text="${esc(url)}">Copy</button></div>
-    <details class="pp-how" open><summary><b>iPhone</b> (Apple Pay)</summary><ol>
+    ${window.FHAndroid ? `<div class="pp-how" data-testid="pp-android"><b>This phone</b><div id="pp-android-body" class="muted small" style="margin-top:6px">Checking…</div></div>` : ''}
+    <details class="pp-how"${window.FHAndroid ? '' : ' open'}><summary><b>iPhone</b> (Apple Pay)</summary><ol>
       <li>Open <b>Shortcuts</b> → <b>Automation</b> → <b>＋</b> → <b>Wallet</b>.</li>
       <li>Choose your cards, pick <b>Run Immediately</b>, then <b>Next</b> → <b>New Blank Automation</b>.</li>
       <li>Add the action <b>Get Contents of URL</b>. Paste the link. Tap ▸: Method <b>POST</b>, Request Body <b>JSON</b>, and add 3 text fields:
         <code>amount</code> = Shortcut Input › <b>Amount</b>, <code>merchant</code> = <b>Merchant</b>, <code>card</code> = <b>Card</b> (or Name).</li>
       <li>Optional: add <b>Get Dictionary Value</b> “text” and <b>Show Notification</b> to see what was saved.</li></ol></details>
-    <details class="pp-how"><summary><b>Android</b> (your bank's notification or SMS)</summary><ol>
+    <details class="pp-how"><summary><b>Android</b> (your bank's notification or SMS)</summary>
+      <p class="small" style="margin:8px 0 4px"><b>Easiest:</b> install the <a href="${ANDROID_APK}" target="_blank" rel="noopener">Finance Helper app for Android</a> on the phone, open this screen there and follow two steps. Or, without the app:</p><ol>
       <li>Install <b>MacroDroid</b> (free, Play Store) and allow it to read notifications.</li>
       <li><b>Add macro</b> → Trigger <b>Notification</b> → <b>Notification received</b> → choose your bank's app (or Trigger <b>SMS received</b> from your bank).</li>
       <li>Action <b>Web interactions</b> → <b>HTTP request</b>: method <b>POST</b>, paste the link, Body <b>text/plain</b> with the magic text <b>[notification]</b> (for SMS: <b>[sms_message]</b>).</li>
@@ -403,6 +424,14 @@ async function openPhonePay(reset = false) {
     <p class="muted small" id="pp-preview" data-testid="pp-preview" aria-live="polite"></p>
     <div class="btns"><button type="button" class="btn" data-act="phone-pay-reset">New link</button><button type="button" class="btn primary" data-close>Done</button></div>`, (sheet) => {
     const save = () => { st.settings.updatedAt = Date.now(); ctx.commit(); };
+    if (window.FHAndroid) {
+      try { window.FHAndroid.setCapture(url); } catch { /* older app */ }
+      paintAndroid(sheet);
+      const again = () => { if (document.body.contains(sheet)) paintAndroid(sheet); };
+      document.addEventListener('visibilitychange', again);
+      sheet.addEventListener('click', (e) => { if (e.target.closest('[data-pp-android="allow"]')) window.FHAndroid.openListenerSettings(); });
+      sheet.addEventListener('change', (e) => { const pkg = e.target.dataset?.ppApp; if (pkg) { window.FHAndroid.setApp(pkg, e.target.checked); ctx.toast(e.target.checked ? 'Its payments will be recorded' : 'Not recorded any more'); } });
+    }
     sheet.querySelectorAll('[data-pp-last4]').forEach((inp) => inp.addEventListener('change', () => {
       const a = st.settings.accounts.find((x) => x.id === inp.dataset.ppLast4);
       const v = inp.value.replace(/\D/g, '').slice(-4);
@@ -439,7 +468,7 @@ function openPhoneGuide() {
     <p class="muted" style="margin-top:0">The same app, with the same records: open this address on your phone, sign in with your PIN once, and add it to the home screen. It opens full screen, works offline and syncs with this ${isDesktop() ? 'computer' : 'device'}.</p>
     <div class="phone-link" data-testid="phone-link"><code>${esc(link)}</code><button type="button" class="btn sm" data-act="phone-copy">Copy</button></div>
     <div class="phone-steps">
-      <div><b>Android (Chrome)</b><ol><li>Open the address.</li><li>Tap ⋮ (top right) → <b>Install app</b> or <b>Add to Home screen</b>.</li></ol></div>
+      <div><b>Android</b><ol><li><b>Best:</b> <a href="${ANDROID_APK}" target="_blank" rel="noopener" data-testid="android-apk">download the Finance Helper app</a> on the phone and open it (Android asks to allow installing from your browser once). It records your bank's payments by itself and has a Safe to spend widget.</li><li>Or open the address in Chrome → ⋮ → <b>Install app</b>.</li></ol></div>
       <div><b>iPhone (Safari)</b><ol><li>Open the address in Safari.</li><li>Tap the Share button □↑ → <b>Add to Home Screen</b>.</li></ol></div>
     </div>
     <p class="muted small">Press and hold the icon on the home screen for <b>Add expense</b>, <b>Add income</b> and <b>Plan</b> straight away.</p>
@@ -670,6 +699,7 @@ export function onClick(act, el) {
 
 /** Desktop: the tray icon's "Safe to spend today" (hover the icon by the clock). */
 function updateTray() {
+  if (window.FHAndroid && !ctx.DEMO) { try { window.FHAndroid.setWidgetLine(trayLine(ctx.state, todayISO()).line); } catch { /* older app */ } }
   if (!window.desktop?.tray || ctx.DEMO) return;
   try { window.desktop.tray(trayLine(ctx.state, todayISO(), { hidden: isMoneyHidden() })).catch(() => {}); } catch { /* not critical */ }
 }
@@ -699,7 +729,11 @@ export function init() {
     },
   });
   cloud.subscribe(() => refreshCard());
-  if (window.desktop?.tray) { setTimeout(updateTray, 3000); setInterval(updateTray, 60000); }
+  if (window.desktop?.tray || window.FHAndroid) { setTimeout(updateTray, 3000); setInterval(updateTray, 60000); }
+  // The Android app's notification "Payment seen from maib" opens #phone-pay.
+  const phonePayHash = () => { if (location.hash === '#phone-pay') { history.replaceState(null, '', '#settings'); ctx.ui.settingsTab = 'data'; ctx.render(); if (cloud.config.signedIn) openPhonePay(); else ctx.toast('Sign in to Cloud sync first (Settings → Data & backups).'); } };
+  window.addEventListener('hashchange', phonePayHash);
+  setTimeout(phonePayHash, 1500);
   // "Backup before a risky step" (js/dupes.js): the desktop's own backup folder.
   if (isDesktop()) globalThis.__fhBackupBefore = () => ctx.backupNow?.();
   // Every change you make (js/screens/sync.js changed() calls this): sent a few seconds later, many changes as one.

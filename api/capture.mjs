@@ -1,6 +1,7 @@
 // Payments recorded by themselves from your phone (js/phonepay.js reads them).
 //   POST /api/capture?k=<secret>  body: JSON {text} | {amount, merchant, card}, or the plain text
 //        of a bank notification/SMS → {ok, saved, text}   (text: one line to show on the phone)
+//   POST /api/capture?k=<secret>&q=safe → {line: 'Safe to spend today: 412 MDL'} (the Android widget)
 //   POST /api/capture {op:'link'|'reset'}  (Bearer session) → {url}   reset: the old link stops working
 // The record goes into Money's copy on the server (the apps get it on their next sync) and, when
 // the always-on bot is set up, Telegram says what was saved with an Undo button.
@@ -13,6 +14,7 @@ import { paymentRecord } from '../js/phonepay.js'
 import { formatMoney } from '../js/money.js'
 import { safeLine } from '../js/safespend.js'
 import { loggedText } from '../js/telegram.js'
+import { trayLine } from '../js/trayline.js'
 import { botConfig, moneyDay, recordButtons, tg } from './_tgbot.mjs'
 
 const T = 'CREATE TABLE IF NOT EXISTS sys_capture (id INTEGER PRIMARY KEY CHECK (id = 1), secret TEXT NOT NULL)'
@@ -68,6 +70,16 @@ export default async function handler(req, res) {
   try { input = await body(req) } catch { return send(res, 400, { error: 'Bad request' }) }
   const now = Date.now()
   const today = moneyDay(now)
+  // The Android widget: today's Safe to spend line, nothing recorded.
+  if (url.searchParams.get('q') === 'safe') {
+    try {
+      const cur = await readValue(cfg)
+      const st = normalizeState({ ...(cur.value?.data || {}), version: SCHEMA_VERSION })
+      return send(res, 200, { ok: true, line: trayLine(st, today).line, today })
+    } catch (e) {
+      return send(res, 503, { error: e.message || 'Try again' })
+    }
+  }
   try {
     const cur = await readValue(cfg)
     const state = normalizeState({ ...(cur.value?.data || {}), version: SCHEMA_VERSION })

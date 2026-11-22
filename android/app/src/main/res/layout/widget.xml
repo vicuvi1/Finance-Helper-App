@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+  android:id="@+id/w_root" android:layout_width="match_parent" android:layout_height="match_parent"
+  android:orientation="horizontal" android:gravity="center_vertical" android:padding="14dp"
+  android:background="@drawable/widget_bg">
+  <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical">
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/widget_name" android:textColor="@color/muted" android:textSize="12sp" />
+    <TextView android:id="@+id/w_amount" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Open the app once" android:textColor="@color/text" android:textSize="22sp" android:textStyle="bold" android:maxLines="1" />
+    <TextView android:id="@+id/w_note" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="@color/muted" android:textSize="11sp" android:maxLines="1" />
+  </LinearLayout>
+  <TextView android:id="@+id/w_add" android:layout_width="44dp" android:layout_height="44dp" android:gravity="center" android:text="+" android:textSize="26sp" android:textColor="@color/bg" android:background="@drawable/widget_btn" android:contentDescription="@string/add_expense" />
+</LinearLayout>

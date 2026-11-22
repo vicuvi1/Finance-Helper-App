@@ -6527,3 +6527,7 @@ tr.week-row b.bad { color: var(--expense); } tr.week-row b.good { color: var(--i
 .debt-table td { white-space: normal; vertical-align: top; overflow-wrap: anywhere; }
 .debt-table .st-new td > .st-in { display: block; width: 100%; box-sizing: border-box; }
 .debt-table .st-new td > .st-in + .st-in { margin-top: 6px; }
+.pp-app { display: flex; gap: 10px; align-items: flex-start; padding: 8px 0; border-top: 1px solid var(--line); }
+.pp-app input { margin-top: 3px; width: 20px; height: 20px; }
+.pp-app span { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.pp-app small { color: var(--muted); overflow-wrap: anywhere; }

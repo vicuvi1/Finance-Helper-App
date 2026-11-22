@@ -123,8 +123,14 @@ test('first visit: sign in with the PIN and Money comes from the server; a web r
   assert.equal((await fetch(link.replace(/s=[^&]+/, 's=wrong'))).status, 404);
   await page.click('.sheet [data-close]');
   // Payments recorded by themselves from the phone: the link takes a bank message once.
+  // Inside the Android app (a stand-in for window.FHAndroid): two steps, the link is handed over.
+  await page.evaluate(() => { window.FHAndroid = { status: () => JSON.stringify({ listener: true, apps: [{ pkg: 'md.madeup.bank', label: 'Made-up Bank', example: 'Plata 10 MDL', on: false, seen: 1 }] }), setCapture: (u) => { window.__cap = u; }, setApp: (p, on) => { window.__app = [p, on]; }, openListenerSettings: () => {}, setWidgetLine: () => {} }; });
   await page.click('[data-testid="phone-pay"]');
   await page.waitForSelector('[data-testid="pp-link"]', { timeout: 15000 });
+  assert.match(await page.textContent('[data-testid="pp-android"]'), /Step 1 done[\s\S]*Made-up Bank/);
+  await page.check('[data-pp-app="md.madeup.bank"]');
+  assert.deepEqual(await page.evaluate(() => window.__app), ['md.madeup.bank', true]);
+  assert.match(await page.evaluate(() => window.__cap), /\/api\/capture\?k=/);
   await page.fill('[data-testid="pp-try"]', 'Plata 120,50 MDL la LINELLA, card *9999');
   assert.match(await page.textContent('[data-testid="pp-preview"]'), /Would save: spent 120,50.*Linella/);
   const ppLink = (await page.textContent('[data-testid="pp-link"] code')).replace(/^https:\/\/[^/]+/, server.url);
@@ -134,6 +140,8 @@ test('first visit: sign in with the PIN and Money comes from the server; a web r
   assert.match(first.text, /88.*Made-Up Shop/);
   assert.equal((await post('Achitare 88.00 MDL MADE-UP SHOP *9999')).saved, false, 'the same payment twice is one record');
   assert.equal((await post('Codul de confirmare 123456')).saved, false);
+  const safe = await fetch(`${ppLink}&q=safe`, { method: 'POST', body: '{}' }).then((r) => r.json());
+  assert.match(safe.line, /^Safe to spend today: /, 'the Android widget gets today\'s line');
   assert.equal((await fetch(ppLink.replace(/k=[^&]+/, 'k=wrong'), { method: 'POST', body: 'Plata 5 MDL' })).status, 404);
   await page.click('.sheet [data-close]');
   // Data & health: the server's space and how long it lasts, and the checks.

@@ -1,0 +1,42 @@
+// Finance Helper for Android: the web app in a window, plus what only a phone app can do
+// (read your bank's payment notifications, a home-screen widget). No libraries.
+import groovy.json.JsonSlurper
+
+plugins { id 'com.android.application' }
+
+def pkg = new JsonSlurper().parse(rootProject.file('../package.json'))
+def (maj, min, pat) = pkg.version.tokenize('.').collect { it.toInteger() }
+
+android {
+  namespace 'app.financehelper'
+  compileSdk 34
+  defaultConfig {
+    applicationId 'app.financehelper'
+    minSdk 26
+    targetSdk 34
+    versionName pkg.version
+    versionCode maj * 10000 + min * 100 + pat
+  }
+  signingConfigs {
+    // CI: the keystore comes from the repository's secrets (never committed).
+    release {
+      def ks = System.getenv('FH_KEYSTORE')
+      if (ks) {
+        storeFile file(ks)
+        storePassword System.getenv('FH_KEYSTORE_PASSWORD')
+        keyAlias 'financehelper'
+        keyPassword System.getenv('FH_KEYSTORE_PASSWORD')
+      }
+    }
+  }
+  buildTypes {
+    release {
+      minifyEnabled false
+      signingConfig System.getenv('FH_KEYSTORE') ? signingConfigs.release : signingConfigs.debug
+    }
+  }
+  compileOptions {
+    sourceCompatibility JavaVersion.VERSION_17
+    targetCompatibility JavaVersion.VERSION_17
+  }
+}
