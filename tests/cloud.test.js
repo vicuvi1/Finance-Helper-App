@@ -189,3 +189,23 @@ test('change the server PIN from the app; list devices and sign one out', async 
     assert.equal((await c.cloud.devices()).devices.some((d) => d.sid === theirs.sid), false);
   }
 });
+
+test('a sync with nothing new on either side is one small read, no merge', async () => {
+  const c = client({ tx: [tx('fast1', 1234)] });
+  await c.cloud.signIn('8642');
+  assert.equal((await c.cloud.sync()).ok, true);
+  const before = c.state;
+  const r = await c.cloud.sync();
+  assert.equal(r.ok, true);
+  assert.equal(r.same, true);
+  assert.equal(c.state, before, 'the data is not touched');
+  // Another device changes something: the next sync merges it as usual.
+  const d = client();
+  await d.cloud.signIn('8642');
+  await d.cloud.sync();
+  d.edit((s) => { s.tx.push(tx('fast2', 99)); return s; });
+  await d.cloud.sync();
+  const r2 = await c.cloud.sync();
+  assert.equal(r2.same, undefined);
+  assert.ok(c.state.tx.some((t) => t.id === 'fast2'));
+});

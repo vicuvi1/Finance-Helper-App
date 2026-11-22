@@ -84,6 +84,7 @@ export function createCloud({ transport, store, app, now = () => Date.now() }) {
   let cfg = { url: '', session: '', seen: 0, restore: '', dirtyAt: 0, okAt: 0, ...(parse(store.getItem(CLOUD_KEY)) || {}) };
   const status = { state: cfg.session ? 'idle' : 'signedout', error: '', note: '', busy: false, okAt: cfg.okAt || 0, sent: 0, got: 0 };
   let lastText = null; // the server value's whole text, as last read or written (for heal)
+  let lastRaw = null; // the stored value (manifest or text) this device last agreed on: unchanged + nothing new here = nothing to do
   let running = null;
 
   const save = () => { try { store.setItem(CLOUD_KEY, JSON.stringify(cfg)); } catch { /* private window */ } };
@@ -129,8 +130,8 @@ export function createCloud({ transport, store, app, now = () => Date.now() }) {
   }
 
   /** Reads the server's copy: {raw, value, sealed}. Puts back lost pieces when this device can. */
-  async function readServer(check = false) {
-    const r = await money({ op: 'read' });
+  async function readServer(check = false, pre = null) {
+    const r = pre || await money({ op: 'read' });
     if (r.raw == null && !r.sliced) return { raw: null, value: null, sealed: !!r.sealed };
     try {
       const text = await textOf(r.raw, r.sliced, r.len);
@@ -197,7 +198,18 @@ export function createCloud({ transport, store, app, now = () => Date.now() }) {
       await renewIfDue();
       const startState = app.getState();
       const edited = !!cfg.dirtyAt;
-      const srv = await readServer(check || !checked);
+      // Nothing changed here and the server holds what we last agreed on: done, no merge (fast with big data).
+      let pre = null;
+      if (!edited && !check && checked && lastRaw != null) {
+        pre = await money({ op: 'read' });
+        if (pre.raw != null && pre.raw === lastRaw && !pre.sliced) {
+          cfg.okAt = now();
+          save();
+          set({ state: 'ok', busy: false, okAt: cfg.okAt, sent: 0, got: 0, error: '' });
+          return { ok: true, sent: 0, got: 0, confirmed: true, same: true };
+        }
+      }
+      const srv = await readServer(check || !checked, pre);
       checked = true;
       let local = startState;
       let got = 0;
@@ -243,6 +255,7 @@ export function createCloud({ transport, store, app, now = () => Date.now() }) {
       cfg.dirtyAt = 0;
       cfg.okAt = now();
       cfg.raw = typeof raw === 'string' && raw.length < 4000 ? raw : '';
+      lastRaw = typeof raw === 'string' ? raw : null;
       save();
       set({ state: 'ok', busy: false, okAt: cfg.okAt, sent, got, error: '', note: srv.sealed ? 'Life System also keeps a PIN-locked copy of Money; this app syncs the plain copy.' : '' });
       return { ok: true, sent, got, confirmed: true };

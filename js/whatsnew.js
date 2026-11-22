@@ -6,6 +6,7 @@
 import { isNewerVersion } from './version.js';
 
 export const NOTES = [
+  { v: '1.108.0', items: ['Faster with lots of data: when nothing changed on either side, the sync every minute is one small check instead of re-merging everything (tested with 20 000 and 40 000 records).'] },
   { v: '1.107.0', items: ['Bank statement import: rows you already logged yourself (same amount within 2 days, any note) start unticked, showing your record; categories come from what you chose before for that shop, and guesses are marked ? so you check only those.'] },
   { v: '1.106.0', items: ['Streaks: 🔥 days in a row you logged something, and 🌱 no-spend days, in Reports → Your spending habits and in the bot\'s messages ("Keep your 12-day streak going").', 'Money wrapped: at the end of a month recap, "Share as a picture" makes one image of your month (amounts only if you tick them) to save or share.'] },
   { v: '1.105.0', items: ['Close the month in 5 minutes: from the 1st to the 15th, "Do this next" offers a checklist for last month (accounts, "Other", subscriptions, recap), then marks it ✓ checked. Also in the Log on past months.', 'Clean-up suggestions in that checklist: categories you never use, subscriptions you may have cancelled, accounts with no records for 6 months, each with one tap (or "Keep it").'] },
