@@ -1864,6 +1864,7 @@ function render({ enter = false } = {}) {
     state.meta.workJarsMoved = 1;
     const moved = M.moveWorkCostsOutOfJars(state);
     persist({ quiet: true });
+    if (moved.length) Sync.changed();
     if (moved.length && !DEMO) setTimeout(() => toast(`${moved.join(', ')}: now a work cost, outside your personal jars. Change it in Settings → Categories.`), 1500);
   }
   // Once: the owner chose look B (Midnight, dark). "Light" stays in Settings.
@@ -3811,12 +3812,14 @@ document.addEventListener('input', (e) => {
     const lbl = e.target.closest('label')?.querySelector('span');
     if (lbl) lbl.textContent = `Wallpaper Opacity (${Math.round(state.settings.wallpaperOpacity * 100)}%)`;
     persist();
+    Sync.changed();
     return;
   }
   if (e.target.dataset.set === 'customWallpaper') {
     state.settings.customWallpaper = e.target.value.trim();
     applyWallpaper();
     persist();
+    Sync.changed();
     return;
   }
   if (!e.target.closest('.sheet') && SCREENS[ui.tab]?.onInput?.(e.target)) return;
@@ -4126,6 +4129,7 @@ window.addEventListener('storage', (e) => {
       } catch { /* keep this device's copy; the next sync merges */ }
       saveSoon(state);
       flushSave();
+      Sync.changed(); // the merged copy holds this tab's waiting change: send it
       render();
       return;
     }
@@ -4141,7 +4145,7 @@ window.addEventListener('storage', (e) => {
       if (!next) return;
       state = waiting ? mergeLocal(state, next) : next;
       Changes.track(state, 'sync'); history.reset(state); // arrived from elsewhere: logged, never part of an undo step
-      if (waiting) { saveSoon(state); flushSave(); }
+      if (waiting) { saveSoon(state); flushSave(); Sync.changed(); }
       render();
     }).catch(() => {});
   }

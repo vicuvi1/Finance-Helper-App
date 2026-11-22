@@ -9,7 +9,8 @@ import { staleSubscriptions } from './smartwarn.js';
 import { activeAccounts, accountBalances } from './model.js';
 
 export const closedMonths = (state) => state.settings?.closedMonths || {};
-export const isClosed = (state, key) => !!closedMonths(state)[key];
+// A negative time means reopened then (kept so another device's older close doesn't come back).
+export const isClosed = (state, key) => Number(closedMonths(state)[key]) > 0;
 
 /** The month to close: last month, until it is closed (then null). Offered on days 1–15. */
 export function monthToClose(state, today) {
@@ -82,8 +83,6 @@ export function closeMonth(state, key, now = Date.now()) {
 }
 
 export function reopenMonth(state, key, now = Date.now()) {
-  const c = { ...closedMonths(state) };
-  delete c[key];
-  state.settings.closedMonths = c;
+  state.settings.closedMonths = { ...closedMonths(state), [key]: -now };
   state.settings.updatedAt = now;
 }

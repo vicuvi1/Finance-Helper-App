@@ -62,6 +62,7 @@ export async function syncNow({ announce = false } = {}) {
     const { state: merged, pullChanged, pushNeeded } = mergeStates(ctx.state, remote);
     if (pullChanged) {
       ctx.replaceState(merged);
+      try { globalThis.__fhCloudChanged?.(); } catch { /* the server copy gets what came from Drive */ }
       if (!document.querySelector('.sheet')) ctx.render();
     }
     if (pushNeeded || reseal) await t.push(await sealForExport(JSON.stringify(toCloud(ctx.state, deviceId()))));

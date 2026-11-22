@@ -4,6 +4,7 @@
 // month, a line of encouragement, and confetti when you pass a milestone.
 
 import { ctx, esc } from '../ctx.js';
+import { changed as syncChanged } from './sync.js';
 import * as M from '../model.js';
 import { todayISO, monthLabel, dayLabel } from '../dates.js';
 import { evalAmount, centsToPlain, formatMoney } from '../money.js';
@@ -151,7 +152,7 @@ export function checkMilestones() {
       ctx.buddy?.({ mood: 'proud', text: milestone === 100 ? `You reached ${g.name}! I'm so proud 🏆` : `${g.name} is ${milestone}% there! Keep going 🚀` });
     } else if (milestone < g.lastMilestone) { g.lastMilestone = milestone; changed = true; }
   }
-  if (changed) ctx.persist();
+  if (changed) { ctx.persist(); syncChanged(); }
 }
 
 // ---------- Add / edit ----------

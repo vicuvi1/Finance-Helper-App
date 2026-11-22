@@ -35,3 +35,20 @@ test('Safe to spend keeps it back (unless you move it to savings yourself)', () 
   assert.equal(removePlan(s, 'p1'), true);
   assert.equal(safeToSpend(s, TODAY).pool, before);
 });
+
+test('a paid plan is no longer held back, even in its own month', async () => {
+  const { defaultState } = await import('../js/model.js');
+  const { addPlan, plannedHeld, planStatus, markPlanPaid } = await import('../js/planned.js');
+  const s = defaultState();
+  const acc = s.settings.accounts[0].id;
+  addPlan(s, { name: 'Car insurance', amount: 350000, month: '2026-11' }, { id: 'p1', now: 1, today: '2026-09-10' });
+  assert.equal(plannedHeld(s, '2026-11-05'), 350000);
+  s.tx.push({ id: 't1', date: '2026-11-04', type: 'expense', amount: 340000, currency: 'MDL', account: acc, category: 'other', note: 'Insurance for the car', createdAt: 1, updatedAt: 1 });
+  assert.equal(plannedHeld(s, '2026-11-05'), 0);
+  assert.equal(planStatus(s, s.settings.planned[0], '2026-11-05').paidBy, 't1');
+  s.tx = [];
+  markPlanPaid(s, 'p1', true, { now: 2 });
+  assert.equal(plannedHeld(s, '2026-11-05'), 0);
+  markPlanPaid(s, 'p1', false, { now: 3 });
+  assert.equal(plannedHeld(s, '2026-11-05'), 350000);
+});

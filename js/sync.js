@@ -7,7 +7,7 @@
 import { normalizeState, SCHEMA_VERSION } from './model.js';
 import { mergeRules } from './learn.js';
 import { settleArchive, buried } from './archive.js';
-import { LOCAL_SETTINGS, BY_ID, LATER_DAY, plainKeys, mergePlain } from './settingstamp.js';
+import { LOCAL_SETTINGS, BY_ID, BY_KEY_TIME, LATER_DAY, plainKeys, mergePlain, mergeKeyTimes } from './settingstamp.js';
 
 export { LOCAL_SETTINGS };
 
@@ -118,6 +118,10 @@ export function mergeStates(local, remote) {
     const pos = new Map();
     for (const x of [...(first ? b || [] : a || []), ...(first ? a || [] : b || [])]) if (x && !pos.has(x.id)) pos.set(x.id, pos.size);
     settings[k] = list.sort((x, y) => pos.get(x.id) - pos.get(y.id));
+  }
+  // Closed months: month by month, the later close or reopen wins.
+  for (const k of BY_KEY_TIME) {
+    if (local.settings[k] || r.settings[k]) settings[k] = mergeKeyTimes(local.settings[k], r.settings[k]);
   }
   // "Last done on" days: the later day.
   for (const k of LATER_DAY) {

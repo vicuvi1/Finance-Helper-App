@@ -66,3 +66,14 @@ test('the lowest point ahead: money runs low before the next income', async () =
   assert.ok(low.left < 0);
   assert.ok(smartSteps(s, '2026-11-21').some((x) => x.id === 'low:2026-11-28' && x.go === 'calendar'));
 });
+
+test('a cancelled subscription (many payments never logged) does not make money "run low"', async () => {
+  const { defaultState } = await import('../js/model.js');
+  const { lowestPoint } = await import('../js/smartwarn.js');
+  const s = defaultState();
+  const acc = s.settings.accounts.find((a) => a.kind === 'card' || a.kind === 'cash') || s.settings.accounts[0];
+  s.tx.push({ id: 'in', date: '2026-11-01', type: 'income', amount: 100000, currency: 'MDL', account: acc.id, category: 'other-in', note: 'made-up', createdAt: 1, updatedAt: 1 });
+  s.recurring = [{ id: 'r1', type: 'expense', amount: 60000, currency: 'MDL', account: acc.id, category: 'other', note: 'Old gym', every: 'month', day: 3, start: '2026-01-03', subscription: true, updatedAt: 1 }];
+  const low = lowestPoint(s, '2026-11-22', 5);
+  assert.equal(low, null);
+});

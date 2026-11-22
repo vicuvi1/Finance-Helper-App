@@ -45,3 +45,23 @@ test('clean-up: a category unused for a year, a forgotten subscription, an idle 
   s.settings.cleanupHidden = { 'sub:s1': 1 };
   assert.equal(cleanupSuggestions(s, '2026-11-22').some((x) => x.id === 'sub:s1'), false, '"Keep it" hides it');
 });
+
+test('closed months and planned expenses from two devices are both kept', async () => {
+  const { mergeStates } = await import('../js/sync.js');
+  const { defaultState } = await import('../js/model.js');
+  const { closeMonth, reopenMonth, isClosed } = await import('../js/closemonth.js');
+  const { addPlan } = await import('../js/planned.js');
+  const a = defaultState();
+  const b = defaultState();
+  closeMonth(a, '2026-09', 1000);
+  closeMonth(b, '2026-10', 2000);
+  closeMonth(b, '2026-08', 500);
+  reopenMonth(a, '2026-08', 3000);
+  addPlan(a, { name: 'Made-up insurance', amount: 350000, month: '2027-03' }, { id: 'p1', now: 1000, today: '2026-11-22' });
+  addPlan(b, { name: 'Made-up holiday', amount: 900000, month: '2027-07' }, { id: 'p2', now: 2000, today: '2026-11-22' });
+  const remote = { app: 'finance-helper', schema: b.version, data: b };
+  const m = mergeStates(a, remote).state;
+  assert.ok(isClosed(m, '2026-09') && isClosed(m, '2026-10'));
+  assert.equal(isClosed(m, '2026-08'), false, 'a later reopen wins');
+  assert.deepEqual(m.settings.planned.map((p) => p.id).sort(), ['p1', 'p2']);
+});

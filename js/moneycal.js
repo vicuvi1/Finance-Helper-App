@@ -8,6 +8,7 @@
 //   settings.moneyFloor  cents, the money you want to keep (default 0)
 
 import { B, knownRates } from './model.js';
+import { spendingIds } from './forecast.js';
 import { safeToSpend, isEveryday } from './safespend.js';
 import { dueItems, upcomingItems, occurrences } from './recurring.js';
 import { countsAsSpending } from './catshare.js';
@@ -36,9 +37,15 @@ export function moneyLine(state, today, to) {
   const days = daysBetween(today, to);
   if (days < 1) return out;
   const sf = safeToSpend(state, today);
-  // Late items (due before today, never logged) are money still to move.
+  // Late items (due before today, never logged) are money still to move: the last 31 days only,
+  // and not a rule with 3 or more payments never logged (most likely cancelled, not owed).
   let left = sf.liquid;
-  for (const x of dueItems(state, today)) {
+  const due = dueItems(state, today);
+  const missed = new Map();
+  for (const x of due) missed.set(x.rule.id, (missed.get(x.rule.id) || 0) + 1);
+  const since = addDays(today, -31);
+  for (const x of due) {
+    if (missed.get(x.rule.id) >= 3 || (x.date && x.date < since)) continue;
     const v = toBase(x.rule.amount, x.rule.currency);
     if (x.rule.type === 'income') left += v; else if (x.rule.type === 'expense') left -= v;
   }
@@ -48,8 +55,11 @@ export function moneyLine(state, today, to) {
     const v = toBase(x.rule.amount, x.rule.currency);
     if (x.rule.type === 'income') at(x.date).in += v; else if (x.rule.type === 'expense') at(x.date).out += v;
   }
+  // Records logged ahead: only those on your cards and cash (a future move into savings isn't spending money).
+  const mine = spendingIds(state, today);
   for (const t of state.tx) {
     if (t.date <= today || t.date > to || t.notIncome || t.notSpending) continue;
+    if (t.account && !mine.has(t.account)) continue;
     if (t.type === 'income') at(t.date).in += B(t); else if (t.type === 'expense') at(t.date).out += B(t);
   }
   out.set(today, { left, in: 0, out: 0 });

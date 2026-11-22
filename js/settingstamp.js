@@ -15,12 +15,24 @@
 /** Device-only settings: never travel. */
 export const LOCAL_SETTINGS = ['theme', 'themeInLife', 'themeMotion', 'logView'];
 /** Settings lists merged item by item (id + updatedAt, deletions in state.deleted). */
-export const BY_ID = ['wishlist', 'savedViews', 'customFields', 'realityHistory'];
+export const BY_ID = ['wishlist', 'savedViews', 'customFields', 'realityHistory', 'planned'];
+/** Maps of key → time merged key by key: the later time wins (a negative time = undone at that time). */
+export const BY_KEY_TIME = ['closedMonths'];
 /** "Last done on" days: the later day wins, whoever saved last. */
 export const LATER_DAY = ['cashCountLast', 'checkupSnooze'];
 /** Keys with their own merge in sync.js. */
 const OWN_MERGE = ['jars', 'incomeSources', 'accounts', 'categories', 'subcats', 'subMemory', 'rules', 'archive', 'budgets', 'checkupLast', 'updatedAt', 'changedAt'];
-const NOT_PLAIN = new Set([...LOCAL_SETTINGS, ...BY_ID, ...LATER_DAY, ...OWN_MERGE]);
+const NOT_PLAIN = new Set([...LOCAL_SETTINGS, ...BY_ID, ...BY_KEY_TIME, ...LATER_DAY, ...OWN_MERGE]);
+
+/** Two key → time maps merged: per key the later moment wins (|time|; negative = undone). */
+export function mergeKeyTimes(a, b) {
+  const out = { ...(a && typeof a === 'object' ? a : {}) };
+  for (const [k, v] of Object.entries(b && typeof b === 'object' ? b : {})) {
+    const t = Number(v) || 0;
+    if (!(k in out) || Math.abs(t) > Math.abs(Number(out[k]) || 0)) out[k] = t;
+  }
+  return out;
+}
 
 /** The plain keys of a settings object: merged key by key, by their change time. */
 export const plainKeys = (settings) => Object.keys(settings || {}).filter((k) => !NOT_PLAIN.has(k));

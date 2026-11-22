@@ -5,7 +5,7 @@ import { ctx, esc } from '../ctx.js';
 import * as M from '../model.js';
 import { evalAmount, formatMoney } from '../money.js';
 import { todayISO, monthLabel, addMonths } from '../dates.js';
-import { plannedList, planStatus, addPlan, removePlan } from '../planned.js';
+import { plannedList, planStatus, addPlan, removePlan, markPlanPaid } from '../planned.js';
 
 const draft = { name: '', amount: '', currency: '', month: '', keep: 'spending' };
 
@@ -21,9 +21,9 @@ export function tab() {
   const rows = list.map((x) => `<tr class="${x.done ? 'pl-done' : ''}" data-testid="plan-row">
       <td><b>${esc(x.name)}</b></td><td class="num">${esc(formatMoney(x.amount, x.currency))}</td><td>${esc(monthLabel(x.month))}</td>
       <td class="num">${x.done ? '—' : `<b>${esc(formatMoney(x.perMonth, base))}</b> a month`}</td>
-      <td>${x.done ? 'Time to pay it' : `${esc(formatMoney(x.byNow, base))} by now · ${x.left} month${x.left === 1 ? '' : 's'} left`}</td>
+      <td>${x.paidBy ? `✓ Paid${x.paid ? '' : ' (found in your records)'}` : x.done ? 'Time to pay it' : `${esc(formatMoney(x.byNow, base))} by now · ${x.left} month${x.left === 1 ? '' : 's'} left`}</td>
       <td>${x.keep === 'savings' ? 'You move it to savings' : 'Kept back from Safe to spend'}</td>
-      <td class="num"><button type="button" class="icon-btn" data-pl-act="delete" data-id="${esc(x.id)}" aria-label="Delete" title="Delete">🗑️</button></td></tr>`).join('');
+      <td class="num">${x.paid ? `<button type="button" class="btn sm" data-pl-act="unpaid" data-id="${esc(x.id)}">Not paid</button>` : x.paidBy ? '' : `<button type="button" class="btn sm" data-pl-act="paid" data-id="${esc(x.id)}" data-testid="plan-paid">Paid</button>`}<button type="button" class="icon-btn" data-pl-act="delete" data-id="${esc(x.id)}" aria-label="Delete" title="Delete">🗑️</button></td></tr>`).join('');
   return `<section class="card" data-testid="planned-card">
     <div class="st-top"><div><h2 style="margin:0">Planned big expenses</h2>
       <p class="muted small" style="margin:4px 0 0">Spread over the months until then, so the money is there when it comes. ${live.length ? `Putting aside <b>${esc(formatMoney(perMonth, base))}</b> a month in total.` : ''}</p></div></div>
@@ -36,7 +36,7 @@ export function tab() {
         <td colspan="2"><select class="st-in" data-pl="keep"><option value="spending" ${draft.keep !== 'savings' ? 'selected' : ''}>It stays in my spending money</option><option value="savings" ${draft.keep === 'savings' ? 'selected' : ''}>I move it to savings</option></select></td>
         <td><button type="button" class="btn primary sm" data-pl-act="add" data-testid="plan-add">Add</button></td></tr>
     </tbody></table></div>
-    <p class="muted small" style="margin-bottom:0">When the month comes, log the payment as usual. "It stays in my spending money": Safe to spend keeps what should be put aside by now out of what you can spend today.</p>
+    <p class="muted small" style="margin-bottom:0">When the month comes, log the payment as usual: it's found by its name and amount (or press Paid). "It stays in my spending money": Safe to spend keeps what should be put aside by now out of what you can spend today.</p>
   </section>`;
 }
 
@@ -66,6 +66,7 @@ export function init() {
     const b = e.target.closest?.('[data-pl-act]');
     if (!b) return;
     if (b.dataset.plAct === 'add') add();
+    else if ((b.dataset.plAct === 'paid' || b.dataset.plAct === 'unpaid') && markPlanPaid(ctx.state, b.dataset.id, b.dataset.plAct === 'paid')) { ctx.commit(); ctx.toast(b.dataset.plAct === 'paid' ? 'Marked paid: no longer kept back from Safe to spend' : 'Not paid yet', 'Undo', () => ctx.undo()); }
     else if (b.dataset.plAct === 'delete' && removePlan(ctx.state, b.dataset.id)) { ctx.commit(); ctx.toast('Deleted', 'Undo', () => ctx.undo()); }
   });
 }

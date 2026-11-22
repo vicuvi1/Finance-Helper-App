@@ -2,6 +2,7 @@
 // be shown as work time ("3.5 h of your work").
 
 import { ctx, esc } from '../ctx.js';
+import { changed } from './sync.js';
 import { evalAmount, centsToPlain } from '../money.js';
 import { todayISO } from '../dates.js';
 import { hourlyRate, workPrefs, formatWork, DEFAULT_HOURS } from '../workhours.js';
@@ -52,6 +53,7 @@ export function onChange(el) {
   state.settings.workHour = p;
   state.settings.updatedAt = Date.now();
   ctx.persist();
+  changed();
   const card = document.getElementById('wh-card');
   if (card) card.outerHTML = settingsCard();
   return true;
