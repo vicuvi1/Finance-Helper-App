@@ -987,6 +987,7 @@ function autoPay() {
   if (!tx) return;
   state.tx.push(tx);
   persist({ quiet: true });
+  Sync.changed(); // the salary reaches your other devices too
   setTimeout(() => toast(`Salary paid: ${formatMoney(tx.base, state.settings.currency)} from your buffer.`), 1200);
 }
 
@@ -3036,6 +3037,7 @@ function onCellChange(el) {
   } else return;
   M.touch(t);
   persist();
+  Sync.changed(); // a table edit is sent like any other change
   renderKeepFocus();
 }
 

@@ -21,6 +21,10 @@ test('a day and a month, either order; a future one means last year', () => {
   assert.equal(takeDate('12 dec 120 gift', TODAY).date, '2025-12-12');
   assert.equal(takeDate('3 noiembrie 2025 90 cinema', TODAY).date, '2025-11-03');
   assert.equal(takeDate('2026-11-02 45 bus', TODAY).date, '2026-11-02');
+  // A 4-digit number after the day is the amount unless it is a year near today's.
+  assert.deepEqual(takeDate('12 nov 4500 rent', TODAY), { text: '4500 rent', date: '2026-11-12' });
+  assert.deepEqual(takeDate('nov 12 1500 rent', TODAY), { text: '1500 rent', date: '2026-11-12' });
+  assert.deepEqual(takeDate('1 sept 2000 school', TODAY), { text: '2000 school', date: '2026-09-01' });
 });
 
 test('weekdays: the latest one, today included', () => {

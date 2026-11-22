@@ -10,6 +10,7 @@ import { startDevServer } from '../e2e/devserver.mjs';
 import { createCloud } from '../js/cloud.js';
 import { normalizeState, SCHEMA_VERSION } from '../js/model.js';
 import { manifestOf } from '../js/parts.js';
+import { readFileSync } from 'node:fs';
 
 const SETUP = 'test-setup-key';
 let turso;
@@ -208,4 +209,40 @@ test('a sync with nothing new on either side is one small read, no merge', async
   const r2 = await c.cloud.sync();
   assert.equal(r2.same, undefined);
   assert.ok(c.state.tx.some((t) => t.id === 'fast2'));
+});
+
+test('a record added (in place, as the app does) while a sync is sending is never lost', async () => {
+  // The app changes its data in place (state.tx.push) and then calls changed(); the object stays the same.
+  let state = normalizeState({ version: SCHEMA_VERSION, tx: [tx('ip1', 100)] });
+  let cloud = null;
+  let late = false;
+  const slow = async (path, body, token) => {
+    if (path === '/api/money' && body?.op === 'push' && !late) {
+      late = true;
+      state.tx.push(tx('ip-late', 55)); // logged while the push is on its way
+      cloud.changed();
+    }
+    return transport(path, body, token);
+  };
+  cloud = createCloud({ transport: slow, store: memStore(), app: { getState: () => state, setState: (s) => { state = s; } } });
+  await cloud.signIn('8642');
+  const r = await cloud.sync();
+  assert.equal(late, true, 'the record was added during the push');
+  assert.ok(state.tx.some((t) => t.id === 'ip-late'), 'the record is still on this device');
+  assert.equal(cloud.config.dirty, true, 'and still waits to be sent');
+  assert.equal(r.again, true);
+  assert.equal((await cloud.sync()).ok, true);
+  assert.ok(state.tx.some((t) => t.id === 'ip-late'));
+  const other = client();
+  await other.cloud.signIn('8642');
+  await other.cloud.sync();
+  assert.ok(other.state.tx.some((t) => t.id === 'ip-late'), 'the server got it on the next round');
+});
+
+test('changes saved outside the record sheet still tell the sync (a quiet sync only reads when nothing was flagged)', () => {
+  // e2e/cloud.e2e.mjs checks the real thing in a browser; this keeps the two calls from being dropped.
+  const src = readFileSync(new URL('../js/app.js', import.meta.url), 'utf8');
+  const body = (name) => { const i = src.indexOf(`function ${name}(`); return src.slice(i, src.indexOf('\n}\n', i)); };
+  assert.match(body('onCellChange'), /M\.touch\(t\);\s*persist\(\);\s*Sync\.changed\(\)/, 'a cell edited in the Log table');
+  assert.match(body('autoPay'), /state\.tx\.push\(tx\);\s*persist\([^)]*\);\s*Sync\.changed\(\)/, 'the automatic salary on pay day');
 });

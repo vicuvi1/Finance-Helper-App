@@ -6,7 +6,7 @@
 import { addMonths, monthKey, monthLabel, daysBetween } from './dates.js';
 import { checkupAccounts } from './checkup.js';
 import { staleSubscriptions } from './smartwarn.js';
-import { activeAccounts } from './model.js';
+import { activeAccounts, accountBalances } from './model.js';
 
 export const closedMonths = (state) => state.settings?.closedMonths || {};
 export const isClosed = (state, key) => !!closedMonths(state)[key];
@@ -63,8 +63,11 @@ export function cleanupSuggestions(state, today) {
     if (hidden[`sub:${s.rule.id}`]) continue;
     out.push({ id: `sub:${s.rule.id}`, kind: 'subscription', title: `${s.name}: ${s.missed} payments not logged`, text: 'Cancelled? Pause it so it stops reminding you and stops counting in your totals.', btn: 'Pause', act: 'cm-pause-sub', data: { id: s.rule.id } });
   }
+  const bal = accountBalances(state);
   for (const a of activeAccounts(state)) {
     if (hidden[`acc:${a.id}`]) continue;
+    // Only empty ones: an archived account leaves your totals, so one that still holds money (or coins) stays.
+    if (bal[a.id] || (a.holdings || []).length) continue;
     const last = lastUse.get(a.id);
     if (last && daysBetween(last, today) > 180) {
       out.push({ id: `acc:${a.id}`, kind: 'account', title: `${a.name}: no records for 6 months`, text: 'If you closed it, archive it. Its history stays.', btn: 'Archive', act: 'cm-archive-acc', data: { id: a.id } });

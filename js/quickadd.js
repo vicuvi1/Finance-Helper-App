@@ -65,7 +65,10 @@ export function takeDate(text, today) {
   const dayMonth = (d, mw, y) => {
     const m = monthOf(mw);
     if (!m) return null;
-    let year = y ? Number(y.length === 2 ? `20${y}` : y) : Number(today.slice(0, 4));
+    const thisYear = Number(today.slice(0, 4));
+    let year = y ? Number(y.length === 2 ? `20${y}` : y) : thisYear;
+    // "12 nov 4500 rent": 4500 is the amount, not a year. A year is one near today's.
+    if (y && (year < thisYear - 10 || year > thisYear + 1)) return null;
     let iso = `${year}-${pad2(m)}-${pad2(Number(d))}`;
     if (!isValidISO(iso)) return null;
     if (!y && iso > today) { year -= 1; iso = `${year}-${pad2(m)}-${pad2(Number(d))}`; if (!isValidISO(iso)) return null; }

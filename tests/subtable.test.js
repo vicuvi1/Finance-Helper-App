@@ -93,3 +93,11 @@ test('notifications: a subscription due soon is sent once per payment date', asy
   assert.equal(subs(dueNotices(s, TODAY, first.sent)).length, 0, 'not twice');
   assert.equal(subs(dueNotices(s, '2026-11-22', first.sent)).length, 1, 'once more on the day');
 });
+
+test('"Next payment" on a rule set to a day of the month moves to the day you picked', () => {
+  const s = normalizeState({ recurring: [{ id: 'dom5', type: 'expense', subscription: true, note: 'Made-up Cloud', amount: 9900, currency: 'MDL', every: 'custom', n: 1, unit: 'month', dom: 5, start: '2026-01-05', lastDone: '2026-11-05' }] });
+  assert.equal(subscriptionTable(s, TODAY).rows[0].next, '2026-12-05');
+  assert.equal(editSubscription(s, 'dom5', 'next', '2026-12-20'), true);
+  assert.equal(subscriptionTable(s, TODAY).rows[0].next, '2026-12-20', 'not the 5th of January');
+  assert.equal(subscriptionTable(s, '2027-01-25').rows[0].next, '2026-12-20', 'late until it is logged');
+});

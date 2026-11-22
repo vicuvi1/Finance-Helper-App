@@ -20,6 +20,14 @@ test('one all-day event per payment, with a reminder', () => {
   assert.match(ics, /BEGIN:VALARM/);
 });
 
+test('a long name with emoji is folded between characters, never inside one', () => {
+  const note = `x${'🎬'.repeat(60)}`;
+  const s = normalizeState({ recurring: [{ id: 'r1', type: 'expense', note, amount: 19900, currency: 'MDL', every: 'month', start: '2026-12-05' }] });
+  const ics = calendarICS(s, '2026-11-21', { months: 1 });
+  assert.equal(Buffer.from(ics, 'utf8').toString('utf8'), ics, 'no half emoji at the end of a folded line');
+  assert.ok(ics.replace(/\r\n /g, '').includes(note), 'unfolded, the name is whole');
+});
+
 let turso; let server;
 before(async () => {
   turso = await startFakeTurso();

@@ -86,6 +86,22 @@ test('first visit: sign in with the PIN and Money comes from the server; a web r
   await page.evaluate(() => window.dispatchEvent(new Event('focus')));
   await page.waitForFunction(() => document.getElementById('app').innerHTML.includes('made-up desk taxi'), null, { timeout: 15000 });
 
+  // A cell changed in the Log table is sent too (it is saved without the record sheet).
+  await page.click('[data-view="table"]').catch(() => {});
+  await page.waitForSelector('#tx-table');
+  // Nothing else is waiting to be sent (switching the view is a change of its own).
+  await page.waitForFunction(() => !JSON.parse(localStorage.getItem('finance-helper.cloud')).dirtyAt, null, { timeout: 15000 });
+  const coffeeId = await page.evaluate(() => JSON.parse(globalThis.__fhStore.getItem('finance-helper.state')).tx.find((t) => t.note === 'made-up web coffee').id);
+  await page.fill(`#tx-table tr[data-id="${coffeeId}"] [data-col="note"]`, 'made-up web tea');
+  await page.press(`#tx-table tr[data-id="${coffeeId}"] [data-col="note"]`, 'Tab');
+  let edited = false;
+  for (let i = 0; i < 20 && !edited; i++) {
+    await new Promise((r) => setTimeout(r, 1000));
+    await desk.cloud.sync();
+    edited = desk.state.tx.some((t) => t.note === 'made-up web tea');
+  }
+  assert.ok(edited, 'the table edit reached the desktop-like client');
+
   // Settings → Data & backups shows the cloud card as synced.
   await page.evaluate(() => { location.hash = '#settings'; });
   await page.waitForSelector('#app header.top');

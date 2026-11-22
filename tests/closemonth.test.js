@@ -32,12 +32,16 @@ test('clean-up: a category unused for a year, a forgotten subscription, an idle 
   for (let i = 0; i < 60; i++) list.push(tx(`t${i}`, '2026-11-01'));
   list.push(tx('old', '2025-06-01', 'food', 'expense'));
   const s = normalizeState({ tx: list, recurring: [{ id: 's1', type: 'expense', subscription: true, note: 'Made-up Music', amount: 5000, currency: 'MDL', every: 'month', start: '2026-06-01' }] });
-  s.settings.accounts.push({ id: 'idle', name: 'Made-up idle', currency: 'MDL', kind: 'card' });
+  s.settings.accounts.push({ id: 'idle', name: 'Made-up idle', currency: 'MDL', kind: 'card', start: 1000 });
+  // A deposit you haven't touched for a year still holds money: archiving it would take it out of your totals.
+  s.settings.accounts.push({ id: 'deposit', name: 'Made-up deposit', currency: 'MDL', kind: 'savings', savings: true, start: 5000000 });
+  s.tx.push({ ...tx('dep1', '2025-10-10'), account: 'deposit' });
   s.tx.push({ ...tx('idle1', '2026-01-10'), account: 'idle' });
   const c = cleanupSuggestions(s, '2026-11-22');
   assert.ok(c.some((x) => x.kind === 'category'), 'categories never used show');
   assert.ok(c.some((x) => x.id === 'sub:s1'));
   assert.ok(c.some((x) => x.id === 'acc:idle'));
+  assert.equal(c.some((x) => x.id === 'acc:deposit'), false, 'an account with money in it is never suggested');
   s.settings.cleanupHidden = { 'sub:s1': 1 };
   assert.equal(cleanupSuggestions(s, '2026-11-22').some((x) => x.id === 'sub:s1'), false, '"Keep it" hides it');
 });

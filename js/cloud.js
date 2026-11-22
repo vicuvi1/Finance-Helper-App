@@ -86,6 +86,7 @@ export function createCloud({ transport, store, app, now = () => Date.now() }) {
   let lastText = null; // the server value's whole text, as last read or written (for heal)
   let lastRaw = null; // the stored value (manifest or text) this device last agreed on: unchanged + nothing new here = nothing to do
   let running = null;
+  let edits = 0; // how many times this device said "Money changed" (the app edits its data in place)
 
   const save = () => { try { store.setItem(CLOUD_KEY, JSON.stringify(cfg)); } catch { /* private window */ } };
   const emit = () => { for (const fn of listeners) { try { fn({ ...status }); } catch { /* ignore */ } } };
@@ -197,6 +198,7 @@ export function createCloud({ transport, store, app, now = () => Date.now() }) {
     try {
       await renewIfDue();
       const startState = app.getState();
+      const startEdits = edits;
       const edited = !!cfg.dirtyAt;
       // Nothing changed here and the server holds what we last agreed on: done, no merge (fast with big data).
       let pre = null;
@@ -214,6 +216,9 @@ export function createCloud({ transport, store, app, now = () => Date.now() }) {
       let local = startState;
       let got = 0;
       // A restore made elsewhere: this device takes that copy as it is (its own device settings stay).
+      // A device that never synced (a first sign-in) has nothing older than the restore to drop:
+      // its records are merged like any others, and it only notes the mark.
+      if (srv.value?.restore && srv.value.restore !== cfg.restore && !cfg.okAt) cfg.restore = srv.value.restore;
       if (srv.value?.restore && srv.value.restore !== cfg.restore) {
         await app.backup?.('Before taking a restore from the server');
         const own = {};
@@ -242,7 +247,7 @@ export function createCloud({ transport, store, app, now = () => Date.now() }) {
           if (after?.data) merged = mergeStates(merged, remote(after.data)).state;
         }
       }
-      if (app.getState() !== startState) {
+      if (app.getState() !== startState || edits !== startEdits) {
         // Money changed here while this ran: never overwrite that edit; the next round merges it.
         set({ busy: false, state: 'waiting' });
         return { ok: true, again: true };
@@ -272,7 +277,7 @@ export function createCloud({ transport, store, app, now = () => Date.now() }) {
     subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); },
     setUrl(url) { cfg.url = String(url || '').trim().replace(/\/+$/, ''); save(); },
     /** This device changed Money (an edit, an import…): the next round sends it. */
-    changed() { if (!cfg.dirtyAt) cfg.dirtyAt = Math.max(now(), (Number(cfg.seen) || 0) + 1); else cfg.dirtyAt = Math.max(now(), cfg.dirtyAt); save(); },
+    changed() { edits++; if (!cfg.dirtyAt) cfg.dirtyAt = Math.max(now(), (Number(cfg.seen) || 0) + 1); else cfg.dirtyAt = Math.max(now(), cfg.dirtyAt); save(); },
     async signIn(pin, { setupKey = '' } = {}) {
       // With the server's setup key: a new PIN (the first one, or a reset when it was forgotten).
       const body = setupKey ? { reset: setupKey, pin: String(pin) } : { pin: String(pin), ...(cfg.session ? { prev: cfg.session } : {}) };

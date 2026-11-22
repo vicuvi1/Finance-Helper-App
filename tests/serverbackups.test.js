@@ -81,6 +81,28 @@ test('the nightly backup, then a restore that every device takes', async () => {
   assert.deepEqual(a.state.tx.map((t) => t.id).sort(), ['a1', 'a2']);
 });
 
+test('a device that signs in for the first time after a restore is merged, not replaced', async () => {
+  // The server's copy keeps its restore mark. A new device (or the web app in a new browser) with
+  // records of its own never synced before: the sign-in sheet promises a merge where nothing is deleted.
+  const c = device({ tx: [tx('c1', 300)] });
+  await c.cloud.signIn(PIN);
+  assert.equal((await c.cloud.sync()).ok, true);
+  assert.deepEqual(c.state.tx.map((t) => t.id).sort(), ['a1', 'a2', 'c1'], 'its own record is still here');
+  assert.equal(c.backups.length, 0, 'nothing was replaced, so no "before a restore" backup');
+  const d = device();
+  await d.cloud.signIn(PIN);
+  await d.cloud.sync();
+  assert.ok(d.state.tx.some((t) => t.id === 'c1'), 'and it reached the server');
+  // That device still takes the next restore like every other one.
+  const session = (await post('/api/login', { pin: PIN })).json.session;
+  const list = (await post('/api/money', { op: 'backups' }, session)).json.backups;
+  const nightly = list.find((x) => x.kind === 'daily').id;
+  assert.equal((await post('/api/money', { op: 'restore', id: nightly }, session)).status, 200);
+  await c.cloud.sync();
+  assert.deepEqual(c.state.tx.map((t) => t.id).sort(), ['a1', 'a2']);
+  assert.equal(c.backups.length, 1);
+});
+
 test('back up now, and only the last 30 days are kept', async () => {
   const session = (await post('/api/login', { pin: PIN })).json.session;
   const now = await post('/api/money', { op: 'backup-now' }, session);
