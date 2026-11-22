@@ -17,7 +17,7 @@ import { recordsCSV, monthsCSV } from '../js/sheetfeed.js'
 const T = 'CREATE TABLE IF NOT EXISTS sys_calendar (id INTEGER PRIMARY KEY CHECK (id = 1), secret TEXT NOT NULL)'
 const day = (ms) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Chisinau', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(ms))
 const icsText = (s) => String(s ?? '').replace(/[\\;,]/g, (c) => `\\${c}`).replace(/\r?\n/g, '\\n')
-const fold = (line) => line.length <= 74 ? line : line.match(/.{1,74}/g).join('\r\n ')
+const fold = (line) => line.length <= 74 ? line : line.match(/.{1,74}/gu).join('\r\n ')
 
 const T_SHEET = 'CREATE TABLE IF NOT EXISTS sys_sheetfeed (id INTEGER PRIMARY KEY CHECK (id = 1), secret TEXT NOT NULL)'
 
