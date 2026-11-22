@@ -1157,7 +1157,7 @@ function viewHome() {
   ${CashCount.card(today)}
   ${homeStrip(s, key)}
   ${Spending.spendingCard({ key: 'home', period: ui.spendPeriod })}
-  ${Goals.homeCard({ featured: true })}
+  ${isEmergencyGoal(M.mainGoal(state)) && Money3.emergencyCard() ? '' : Goals.homeCard({ featured: true })}
   ${Money3.emergencyCard()}
   ${monthComparison(today)}
   ${Money3.favsCard() || quickRow()}
@@ -1174,6 +1174,9 @@ function viewHome() {
     </div>
   </div>`;
 }
+
+/** The emergency fund as your main goal: Home's emergency card already shows it (once is enough). */
+const isEmergencyGoal = (g) => !!g && (g.emergency || g.id === 'g-ef' || /emergency/i.test(g.name || ''));
 
 function logView() {
   // Once: wide screens switch to the new Sheet view (like the Google Sheet).

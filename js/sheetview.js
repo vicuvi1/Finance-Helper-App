@@ -1,5 +1,5 @@
 // Log → Sheet: modern financial spreadsheet with Google Sheets / Excel aesthetics.
-// Includes interactive formula bar, month KPI summary chips, Day Net (B−D) column,
+// Includes interactive formula bar, month KPI summary chips, Day net column,
 // category chips, sticky headers, jump-to-today, and live status footer metrics.
 
 import { formatMoney } from './money.js';
@@ -12,10 +12,12 @@ const plain = (c) => formatMoney(c, '');
 
 // Romanian, the way the sheet wrote its dates and tab names.
 export const LUNI = ['ianuarie', 'februarie', 'martie', 'aprilie', 'mai', 'iunie', 'iulie', 'august', 'septembrie', 'octombrie', 'noiembrie', 'decembrie'];
-const DOW_RO = ['Lu', 'Ma', 'Mi', 'Jo', 'Vi', 'Sâ', 'Du'];
+const DOW_RO = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
+const MONTHS_EN = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
-export const roDate = (iso) => `${Number(iso.slice(8, 10))} ${LUNI[Number(iso.slice(5, 7)) - 1]} ${iso.slice(0, 4)}`;
-export const roMonth = (key) => { const n = LUNI[Number(key.slice(5, 7)) - 1]; return n[0].toUpperCase() + n.slice(1); };
+// Shown in English like the rest of the app (LUNI stays for reading the old Romanian sheet).
+export const roDate = (iso) => `${Number(iso.slice(8, 10))} ${MONTHS_EN[Number(iso.slice(5, 7)) - 1].slice(0, 3)} ${iso.slice(0, 4)}`;
+export const roMonth = (key) => MONTHS_EN[Number(key.slice(5, 7)) - 1];
 
 const COLS = ['A', 'B', 'C', 'D', 'E', 'F'];
 
@@ -56,11 +58,11 @@ export function sheetHTML(state, key, { today, extra = new Set(), fmt, tabs }) {
   const rows = [`<tr class="gs-head-row">
     <th class="gs-rn">1</th>
     <td class="gs-h"><span class="gs-h-flex">📅 Date</span></td>
-    <td class="gs-h in"><span class="gs-h-flex"><span class="gs-col-pill in">+</span> Amount Earned</span></td>
-    <td class="gs-h in"><span class="gs-h-flex">Income Note &amp; Category</span></td>
-    <td class="gs-h out"><span class="gs-h-flex"><span class="gs-col-pill out">−</span> Amount Invested</span></td>
-    <td class="gs-h out"><span class="gs-h-flex">Expense Note &amp; Category</span></td>
-    <td class="gs-h net"><span class="gs-h-flex">Day Net (B−D)</span></td>
+    <td class="gs-h in"><span class="gs-h-flex"><span class="gs-col-pill in">+</span> Earned</span></td>
+    <td class="gs-h in"><span class="gs-h-flex">Income: note &amp; category</span></td>
+    <td class="gs-h out"><span class="gs-h-flex"><span class="gs-col-pill out">−</span> Spent</span></td>
+    <td class="gs-h out"><span class="gs-h-flex">Spending: note &amp; category</span></td>
+    <td class="gs-h net"><span class="gs-h-flex">Day net</span></td>
   </tr>`];
 
   let r = 2;
@@ -89,7 +91,7 @@ export function sheetHTML(state, key, { today, extra = new Set(), fmt, tabs }) {
       const todayId = isToday && k === 0 ? ' id="gs-today-row"' : '';
 
       const dateCell = k === 0
-        ? `<td class="gs-date" title="${['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'][di]}"><span class="gs-flex"><span class="gs-d-dow ${di >= 5 ? 'wknd' : ''}">${DOW_RO[di]}</span><span class="gs-dtext">${esc(roDate(d.date))}</span>${isToday ? '<span class="gs-today">azi</span>' : ''}<button type="button" class="gs-add" data-act="sh-add" data-date="${d.date}" title="Add a row for this day" aria-label="Add a row for ${esc(roDate(d.date))}">+</button></span></td>`
+        ? `<td class="gs-date" title="${['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'][di]}"><span class="gs-flex"><span class="gs-d-dow ${di >= 5 ? 'wknd' : ''}">${DOW_RO[di]}</span><span class="gs-dtext">${esc(roDate(d.date))}</span>${isToday ? '<span class="gs-today">today</span>' : ''}<button type="button" class="gs-add" data-act="sh-add" data-date="${d.date}" title="Add a row for this day" aria-label="Add a row for ${esc(roDate(d.date))}">+</button></span></td>`
         : '<td class="gs-date gs-cont"></td>';
 
       const netCell = k === 0
@@ -123,7 +125,7 @@ export function sheetHTML(state, key, { today, extra = new Set(), fmt, tabs }) {
         <span class="gs-kpi-lbl">Earned</span>
         <b class="income">+${fmt(earned)}</b>
       </div>
-      <div class="gs-kpi-chip out" title="Invested / Spent this month">
+      <div class="gs-kpi-chip out" title="Spent this month">
         <span class="gs-kpi-lbl">Spent</span>
         <b class="expense">-${fmt(spent)}</b>
       </div>

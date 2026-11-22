@@ -80,8 +80,9 @@ export function nextSteps(state, today, { hidden = {}, max = 3, demo = false } =
       : { id: `pay:${key}`, level: 'do', icon: '💼', title: `Pay yourself ${fmt(pay.amount)}`, text: `This month's salary, from your buffer. It still covers ${Math.max(0, Math.floor(pay.runway * 10) / 10)} months.`, btn: 'Pay now', act: 'pay-now' });
   }
 
-  // 2. Bills due (late first), then the ones due tomorrow.
-  const bills = [...dueItems(state, today), ...upcomingItems(state, today, 1)].filter((x) => x.rule.type !== 'income');
+  // 2. Bills due today and tomorrow. Late ones (not marked paid) are on Home's "To confirm" card
+  // with Confirm / Skip, so they aren't said twice.
+  const bills = [...dueItems(state, today).filter((x) => x.date >= today), ...upcomingItems(state, today, 1)].filter((x) => x.rule.type !== 'income');
   for (const { rule, date } of bills.slice(0, 2)) {
     const late = date < today;
     add({ id: `bill:${rule.id}:${date}`, level: late ? 'bad' : 'do', icon: '🔔', title: `${late ? 'Late: ' : ''}${rule.note || 'Bill'} ${formatMoney(rule.amount, rule.currency)}`,
