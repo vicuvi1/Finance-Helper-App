@@ -109,7 +109,7 @@ export function editSubscription(state, id, field, value, { now = Date.now() } =
   else if (field === 'amount') { const v = Math.round(Number(value)); if (v > 0) r.amount = v; }
   else if (field === 'currency') { if (/^[A-Z]{3}$/.test(value)) r.currency = value; }
   else if (field === 'every') { if (EVERY.some((e) => e.id === value)) { r.every = value; delete r.n; delete r.unit; delete r.dom; } }
-  else if (field === 'next') { if (/^\d{4}-\d{2}-\d{2}$/.test(value)) { r.start = value; r.lastDone = addDays(value, -1); } }
+  else if (field === 'next') { if (/^\d{4}-\d{2}-\d{2}$/.test(value)) { r.start = value; r.lastDone = addDays(value, -1); if (Number.isInteger(r.dom)) r.dom = Number(value.slice(8)); } } // a "day of the month" rule follows the day you picked
   else if (field === 'account') { if ((state.settings.accounts || []).some((a) => a.id === value)) r.account = value; }
   else if (field === 'sub') { if (value) r.sub = value; else delete r.sub; }
   else if (field === 'remind') { const v = Number(value); if (REMIND.includes(v)) r.remind = v; }
