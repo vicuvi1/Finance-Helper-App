@@ -6488,3 +6488,6 @@ tr.week-row b.bad { color: var(--expense); } tr.week-row b.good { color: var(--i
 .cm-h { margin: 6px 0 8px; font-size: 14px; }
 .hb-streak { margin: 0 0 10px; font-weight: 600; color: var(--gold); }
 .wr-canvas { width: 100%; max-width: 360px; aspect-ratio: 4 / 5; display: block; margin: 0 auto 12px; border-radius: 14px; box-shadow: var(--shadow-card); }
+.bp-why { display: block; font-size: 11.5px; color: var(--gold); }
+.bp-likely { opacity: 0.75; }
+.bp-q { display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; background: var(--gold-soft); color: var(--gold); font-weight: 700; font-size: 12px; }

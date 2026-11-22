@@ -64,7 +64,14 @@ export function openBankImport(rows, { fileName = '' } = {}) {
   const unticked = new Set();
   const catPick = new Map();
   const rowKey = (t, i) => `${t.date}|${t.type}|${t.amount}|${t.note}|${i}`;
-  const chosen = () => (res?.tx || []).map((t, i) => ({ ...t, category: catPick.get(rowKey(t, i)) || t.category, _k: rowKey(t, i) })).filter((t) => !unticked.has(t._k));
+  const seeded = new Set(); // rows that start unticked once ("probably already logged")
+  const chosen = () => (res?.tx || []).map((t, i) => {
+    const { _likely, _level, ...rest } = t;
+    const picked = catPick.get(rowKey(t, i));
+    const out = { ...rest, category: picked || t.category, _k: rowKey(t, i) };
+    if (picked) delete out.catBy; // your choice: the app learns from it
+    return out;
+  }).filter((t) => !unticked.has(t._k));
 
   const header = () => (rows[cfg.headerRow] || []).map((h, i) => ({ i, name: String(h ?? '').trim() || `Column ${i + 1}` }));
   const colSelect = (f) => `<label class="field"><span>${esc(f.label)}</span><select data-map="${f.id}">
@@ -81,12 +88,15 @@ export function openBankImport(rows, { fileName = '' } = {}) {
       res.income = res.tx.filter((t) => t.type === 'income').reduce((a, t) => a + t.base, 0);
       res.expense = res.tx.filter((t) => t.type === 'expense').reduce((a, t) => a + t.base, 0);
     }
+    if (res) res.tx.forEach((t, i) => { const k = rowKey(t, i); if (t._likely && !seeded.has(k)) { seeded.add(k); unticked.add(k); } });
     if (!ok) return '<p class="lock-msg">Pick the date column and either the amount column or the money in / out columns.</p>';
     if (!res.tx.length) return `<p class="muted">${res.duplicates ? `All ${res.duplicates} records are already in the app.` : 'No rows with a date and an amount under these headings. Check the heading row and the columns.'}</p>`;
     const cur = (t) => formatMoney(t.type === 'income' ? t.amount : -t.amount, t.currency, { sign: t.type === 'income' });
     return `<div class="split-row"><span>${res.tx.filter((t) => t.type === 'income').length} in</span><b class="money income">${ctx.money(res.income)}</b></div>
       <div class="split-row"><span>${res.tx.filter((t) => t.type === 'expense').length} out</span><b class="money expense">${ctx.money(res.expense)}</b></div>
       ${res.duplicates ? `<div class="split-row"><span class="muted">Already in the app, skipped</span><b>${res.duplicates}</b></div>` : ''}
+      ${res.likely ? `<div class="split-row" data-testid="bk-likely"><span class="muted">Probably already logged by you (same amount within 2 days), left unticked</span><b>${res.likely}</b></div>` : ''}
+      ${res.unsure ? `<div class="split-row"><span class="muted">Category is a guess: check the ones marked ?</span><b>${res.unsure}</b></div>` : ''}
       ${res.skipped ? `<div class="split-row"><span class="muted">Rows without a date or amount (totals, notes)</span><b>${res.skipped}</b></div>` : ''}
       ${RateGaps.gapHTML(RateGaps.gapsOf(res.tx))}
       <p class="muted small">${res.months.map((m) => monthLabel(m)).join(', ')}. Check the totals against the statement.</p>
@@ -95,7 +105,8 @@ export function openBankImport(rows, { fileName = '' } = {}) {
     const k = rowKey(t, i);
     const cat = catPick.get(k) || t.category;
     const cats = state.settings.categories.filter((c) => c.type === t.type);
-    return `<label class="bp-row bp-pick"><input type="checkbox" data-bk-row="${esc(k)}" ${unticked.has(k) ? '' : 'checked'} aria-label="Import ${esc(t.note || 'this row')}"><span class="muted">${esc(dayLabel(t.date))}</span><span class="bp-note">${esc(t.note || '—')}</span><select class="bp-cat" data-bk-cat="${esc(k)}" aria-label="Category">${cats.map((c) => `<option value="${esc(c.id)}" ${c.id === cat ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select><b class="${t.type === 'income' ? 'income' : ''}">${cur(t)}</b></label>`;
+    const unsure = !t._likely && (t._level === 'guess' || t._level === 'none');
+    return `<label class="bp-row bp-pick${t._likely ? ' bp-likely' : ''}"><input type="checkbox" data-bk-row="${esc(k)}" ${unticked.has(k) ? '' : 'checked'} aria-label="Import ${esc(t.note || 'this row')}"><span class="muted">${esc(dayLabel(t.date))}</span><span class="bp-note">${esc(t.note || '—')}${t._likely ? `<small class="bp-why">probably logged as "${esc(t._likely.note || 'no note')}" on ${esc(dayLabel(t._likely.date))}</small>` : ''}</span>${unsure ? '<span class="bp-q" title="A guess: check the category">?</span>' : ''}<select class="bp-cat" data-bk-cat="${esc(k)}" aria-label="Category">${cats.map((c) => `<option value="${esc(c.id)}" ${c.id === cat ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select><b class="${t.type === 'income' ? 'income' : ''}">${cur(t)}</b></label>`;
   }).join('')}</div>
       <p class="muted small">Imported records don't earn points: they weren't logged on the day.</p>`;
   };

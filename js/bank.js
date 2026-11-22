@@ -5,7 +5,8 @@
 // guess; the mapping is remembered per statement layout.
 
 import { parseAmount } from './money.js';
-import { parseLooseDate } from './dates.js';
+import { parseLooseDate, daysBetween } from './dates.js';
+import { suggest } from './learn.js';
 import { suggestCategory, uid } from './model.js';
 import { txKey } from './importer.js';
 import { pairRate } from './fx.js';
@@ -64,6 +65,15 @@ export function parseStatement(rows, { headerRow, map }, state, { account, flip 
   const acc = state.settings.accounts.find((a) => a.id === account) || state.settings.accounts[0];
   const existing = new Map();
   for (const t of state.tx) existing.set(txKey(t), (existing.get(txKey(t)) || 0) + 1);
+  // Records you logged yourself (any note): same type and amount, within 2 days → "probably already logged".
+  const byAmount = new Map();
+  for (const t of state.tx) {
+    if (t.type !== 'expense' && t.type !== 'income') continue;
+    const k = `${t.type}|${t.amount}`;
+    if (!byAmount.has(k)) byAmount.set(k, []);
+    byAmount.get(k).push(t);
+  }
+  const used = new Set();
   const cell = (row, i) => (i != null && i >= 0 ? row[i] : '');
   const out = [];
   let duplicates = 0;
@@ -86,17 +96,27 @@ export function parseStatement(rows, { headerRow, map }, state, { account, flip 
     const note = cleanNote(cell(row, map.desc));
     const code = String(cell(row, map.currency)).trim().toUpperCase();
     const currency = /^[A-Z]{3}$/.test(code) ? code : acc?.currency || baseCur;
-    const t = { type, amount, date, note, account: acc.id, category: suggestCategory(state, note, type) || (type === 'income' ? 'other-in' : 'other') };
+    // Category: what you chose before for this shop, else the keyword guess.
+    const kw = suggestCategory(state, note, type);
+    const s = note ? suggest(state, { note, type }, { guess: kw }) : null;
+    const learned = s?.category && s.why !== 'keyword';
+    const category = learned ? s.category : kw || (type === 'income' ? 'other-in' : 'other');
+    const level = learned ? s.level : kw ? 'guess' : 'none';
+    const t = { type, amount, date, note, account: acc.id, category, ...(level === 'sure' ? {} : { catBy: 'auto' }) };
     const key = txKey(t);
     if (existing.get(key) > 0) { existing.set(key, existing.get(key) - 1); duplicates++; continue; }
+    const near = (byAmount.get(`${type}|${amount}`) || []).filter((x) => !used.has(x.id) && x.date && Math.abs(daysBetween(x.date, date)) <= 2)
+      .sort((a, b) => (a.account === acc.id ? -1 : 0) - (b.account === acc.id ? -1 : 0) || Math.abs(daysBetween(a.date, date)) - Math.abs(daysBetween(b.date, date)))[0];
+    if (near) used.add(near.id);
     const rate = currency === baseCur ? 1 : pairRate(currency, baseCur, state.rates);
     stamp++;
     // `source: 'bank'`: came from a statement, not logged by you that day, so it
     // never pays "Spending logged" points in Life System.
-    out.push({ id: uid(), createdAt: stamp, updatedAt: stamp, ...t, currency, rate, base: rate ? Math.round(amount * rate) : amount, source: 'bank' });
+    out.push({ id: uid(), createdAt: stamp, updatedAt: stamp, ...t, currency, rate, base: rate ? Math.round(amount * rate) : amount, source: 'bank',
+      _level: level, ...(near ? { _likely: { id: near.id, date: near.date, note: near.note || '' } } : {}) });
   }
   const income = out.filter((t) => t.type === 'income').reduce((a, t) => a + t.base, 0);
   const expense = out.filter((t) => t.type === 'expense').reduce((a, t) => a + t.base, 0);
   const months = [...new Set(out.map((t) => t.date.slice(0, 7)))].sort();
-  return { tx: out, duplicates, skipped, income, expense, months };
+  return { tx: out, duplicates, skipped, income, expense, months, likely: out.filter((t) => t._likely).length, unsure: out.filter((t) => !t._likely && (t._level === 'guess' || t._level === 'none')).length };
 }

@@ -51,3 +51,17 @@ test('signed amount column, Russian headers, currency column', () => {
 test('no statement-like header', () => {
   assert.equal(guessMapping([['a', 'b'], ['1', '2']]), null);
 });
+
+test('a row you already logged by hand (another note) is spotted; learned categories come first', async () => {
+  const { parseStatement } = await import('../js/bank.js');
+  const { normalizeState } = await import('../js/model.js');
+  const s = normalizeState({ tx: [{ id: 'mine', type: 'expense', amount: 34000, currency: 'MDL', account: 'cash', category: 'food', date: '2026-11-12', note: 'groceries', createdAt: 1, updatedAt: 1 }] });
+  const acc = s.settings.accounts[0].id;
+  s.tx[0].account = acc;
+  const rows = [['Data', 'Suma', 'Descriere'], ['13.11.2026', '-340,00', 'LINELLA CHISINAU 123'], ['14.11.2026', '-55,00', 'BOLT RIDE']];
+  const r = parseStatement(rows, { headerRow: 0, map: { date: 0, amount: 1, desc: 2 } }, s, { account: acc });
+  assert.equal(r.tx.length, 2);
+  assert.equal(r.likely, 1);
+  assert.equal(r.tx[0]._likely.id, 'mine');
+  assert.equal(r.tx[1]._likely, undefined);
+});
