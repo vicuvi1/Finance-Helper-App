@@ -90,7 +90,7 @@ export function takeDate(text, today) {
  *   note?: string, tx?: object }}
  * `tx` is the record to save (without id and times) when ok.
  */
-export function parseQuick(state, text, { catOverride = null, today } = {}) {
+export function parseQuick(state, text, { catOverride = null, today, accountId = null } = {}) {
   const typed = String(text ?? '').trim();
   if (!typed) return { ok: false, missing: null, kind: null };
   // "yesterday", "12 nov", "2 days ago", "mon": the record goes on that day.
@@ -176,7 +176,7 @@ export function parseQuick(state, text, { catOverride = null, today } = {}) {
 
   // Account: named, else one in the typed currency, else the usual one for this category.
   const want = typedCur || base;
-  let account = named || null;
+  let account = named || (accountId ? accounts.find((a) => a.id === accountId) : null) || null;
   if (!account && typedCur && typedCur !== base) account = accounts.find((a) => (a.currency || base) === typedCur && !a.savings && a.kind !== 'crypto') || null;
   const acc = account || M.account(state, M.defaultAccount(state, catType, category)) || accounts[0];
   if (!acc) return { ok: false, missing: 'No account to put it in. Add one in Settings → Accounts.', kind };

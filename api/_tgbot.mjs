@@ -97,7 +97,7 @@ export async function handleUpdate(cfg, bot, update, { now = Date.now(), fetchIm
   const cq = update.callback_query
   if (cq) {
     if (String(cq.message?.chat?.id ?? cq.from?.id) !== bot.chat) return calls
-    const id = /^undo:(tg-\d+)$/.exec(cq.data || '')?.[1]
+    const id = /^undo:((?:tg-\d+)|(?:ph-[a-z0-9]+))$/.exec(cq.data || '')?.[1]
     if (!id) { await call('answerCallbackQuery', { callback_query_id: cq.id }); return calls }
     const t = await removeRecord(cfg, id, now, fetchImpl)
     await call('answerCallbackQuery', { callback_query_id: cq.id, text: t ? 'Removed' : 'Already removed' })

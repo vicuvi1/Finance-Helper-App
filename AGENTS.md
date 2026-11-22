@@ -89,7 +89,9 @@ Rules that keep three agents from tripping over each other:
   (Telegram webhook with a secret header; only your chat; records `tg-<update id>` go into the
   synced copy through `pushCopy`; Undo = deletion marker; token MONEY_BOT_TOKEN or
   FINANCE_BOT_TOKEN, chat MONEY_CHAT_ID or TELEGRAM_CHAT_ID; on/off from Settings → Telegram &
-  Binance; the desktop's own reader disconnects while it is on). At most 12 functions (Hobby); now 4.
+  Binance; the desktop's own reader disconnects while it is on). At most 12 functions (Hobby); now 7 (login, db, money, telegram, cron, calendar, capture).
+  `api/capture.mjs` takes payments from the phone (iPhone Shortcuts on Apple Pay, Android MacroDroid
+  forwarding the bank's notification/SMS) with a secret link; `js/phonepay.js` reads them (tested), ids `ph-…`.
 - Money's server copy keeps Life System's exact format (`settings.app_sync_finance` =
   `{savedAt, editedAt, data}`, big copies as a manifest + `setting_parts`, js/parts.js): never
   change how pieces are named (tests/parts.test.js pins Life's values).

@@ -106,6 +106,20 @@ test('first visit: sign in with the PIN and Money comes from the server; a web r
   assert.match(csv, /made-up lunch/);
   assert.equal((await fetch(link.replace(/s=[^&]+/, 's=wrong'))).status, 404);
   await page.click('.sheet [data-close]');
+  // Payments recorded by themselves from the phone: the link takes a bank message once.
+  await page.click('[data-testid="phone-pay"]');
+  await page.waitForSelector('[data-testid="pp-link"]', { timeout: 15000 });
+  await page.fill('[data-testid="pp-try"]', 'Plata 120,50 MDL la LINELLA, card *9999');
+  assert.match(await page.textContent('[data-testid="pp-preview"]'), /Would save: spent 120,50.*Linella/);
+  const ppLink = (await page.textContent('[data-testid="pp-link"] code')).replace(/^https:\/\/[^/]+/, server.url);
+  const post = (body) => fetch(ppLink, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body }).then((r) => r.json());
+  const first = await post('Plata 88,00 MDL la MADE-UP SHOP SRL, card *9999. Sold: 1 000 MDL');
+  assert.equal(first.saved, true);
+  assert.match(first.text, /88.*Made-Up Shop/);
+  assert.equal((await post('Achitare 88.00 MDL MADE-UP SHOP *9999')).saved, false, 'the same payment twice is one record');
+  assert.equal((await post('Codul de confirmare 123456')).saved, false);
+  assert.equal((await fetch(ppLink.replace(/k=[^&]+/, 'k=wrong'), { method: 'POST', body: 'Plata 5 MDL' })).status, 404);
+  await page.click('.sheet [data-close]');
   // Data & health: the server's space and how long it lasts, and the checks.
   await page.click('[data-act="set-tab"][data-sec="health"]');
   await page.waitForSelector('[data-testid="data-health"]');

@@ -19,6 +19,9 @@ import { updateStatus, onUpdateChange, watchServiceWorker, webUpdateWaiting } fr
 import { APP_VERSION } from './version.js';
 import { notesSince, shouldShow, NOTES } from './whatsnew.js';
 import { trayLine } from './trayline.js';
+import { readPayment, accountFor } from './phonepay.js';
+import { activeAccounts, touch } from './model.js';
+import { formatMoney } from './money.js';
 import { passkeyPossible, hasReader, hasLocalPasskey, setLocalPasskey, localPasskeyId, makePasskey, usePasskey, deviceLabel } from './passkey.js';
 
 const isDesktop = () => typeof window !== 'undefined' && !!window.desktop?.isDesktop;
@@ -95,7 +98,7 @@ export function cloudCard() {
       <div class="set-sb-content"><b>${cfg.signedIn ? 'Signed in' : 'Signed out'}</b><p class="muted small" style="margin:2px 0 0" data-testid="cloud-status">${line}</p>${st.note && st.state === 'ok' ? `<p class="muted small" style="margin:4px 0 0">${esc(st.note)}</p>` : ''}</div></div>
     ${isDesktop() ? `<label class="field" style="margin-top:12px"><span>Server address</span><input id="cloud-url" type="url" value="${esc(baseUrl())}" placeholder="${DEFAULT_URL}" data-testid="cloud-url"></label>` : ''}
     ${cfg.signedIn
-      ? `<div class="btns" style="margin-top:12px"><button class="btn primary" data-act="cloud-sync" data-testid="cloud-sync">Sync now</button><button class="btn" data-act="cloud-pin" data-testid="cloud-pin-change">Change PIN</button><button class="btn" data-act="cloud-devices" data-testid="cloud-devices">Devices</button><button class="btn" data-act="phone-guide" data-testid="phone-guide">📱 On your phone</button>${passkeyHere() ? (hasLocalPasskey() ? '<button class="btn" data-act="pk-devices" data-testid="pk-on">👆 Fingerprint sign-in: on</button>' : '<button class="btn" data-act="pk-setup" data-testid="pk-setup">👆 Sign in with fingerprint</button>') : ''}<button class="btn" data-act="cloud-signout">Sign out</button></div>`
+      ? `<div class="btns" style="margin-top:12px"><button class="btn primary" data-act="cloud-sync" data-testid="cloud-sync">Sync now</button><button class="btn" data-act="cloud-pin" data-testid="cloud-pin-change">Change PIN</button><button class="btn" data-act="cloud-devices" data-testid="cloud-devices">Devices</button><button class="btn" data-act="phone-guide" data-testid="phone-guide">📱 On your phone</button><button class="btn" data-act="phone-pay" data-testid="phone-pay">📲 Record payments automatically</button>${passkeyHere() ? (hasLocalPasskey() ? '<button class="btn" data-act="pk-devices" data-testid="pk-on">👆 Fingerprint sign-in: on</button>' : '<button class="btn" data-act="pk-setup" data-testid="pk-setup">👆 Sign in with fingerprint</button>') : ''}<button class="btn" data-act="cloud-signout">Sign out</button></div>`
       : `<div class="btns" style="margin-top:12px"><button class="btn primary" data-act="cloud-signin" data-testid="cloud-signin">Sign in</button></div>`}
     <p class="muted small" style="margin-bottom:0">Each record's newest edit wins and nothing is deleted by syncing. Your data stays on this device too and works offline.</p>
   </section>`;
@@ -368,6 +371,62 @@ async function openSheetFeed(reset = false) {
     <div class="btns"><button type="button" class="btn" data-act="sheet-reset">New links</button><button type="button" class="btn primary" data-close>Done</button></div>`);
 }
 
+// ---------- Payments recorded by themselves from the phone ----------
+
+async function openPhonePay(reset = false) {
+  let url;
+  try { url = (await cloud.api('/api/capture', { op: reset ? 'reset' : 'link' })).url; } catch (e) { ctx.toast(e.message); return; }
+  const st = ctx.state;
+  const cards = activeAccounts(st).filter((a) => a.kind !== 'crypto' && !a.savings);
+  const def = st.settings.capture?.account || '';
+  const rows = cards.map((a) => `<label class="pp-card"><span>${esc(a.name)}</span><input inputmode="numeric" maxlength="4" placeholder="1234" value="${esc(a.last4 || '')}" data-pp-last4="${esc(a.id)}" aria-label="Last 4 digits of ${esc(a.name)}"></label>`).join('');
+  if (document.querySelector('.sheet')) ctx.closeSheet();
+  ctx.openSheet(`<h3>Record payments automatically <button type="button" class="icon-btn" data-close aria-label="Close">✕</button></h3>
+    <p class="muted" style="margin-top:0">Each time you pay, your phone sends the payment to your server and it's recorded by itself: the amount, the shop and the card. The apps get it within a minute, and the Telegram bot (if it's on) tells you, with Undo. The same payment sent twice is recorded once.</p>
+    <p class="small" style="margin:10px 0 4px"><b>Your private link</b> (anyone with it can add records: keep it to yourself)</p>
+    <div class="phone-link" data-testid="pp-link"><code>${esc(url)}</code><button type="button" class="btn sm" data-act="copy-text" data-text="${esc(url)}">Copy</button></div>
+    <details class="pp-how" open><summary><b>iPhone</b> (Apple Pay)</summary><ol>
+      <li>Open <b>Shortcuts</b> → <b>Automation</b> → <b>＋</b> → <b>Wallet</b>.</li>
+      <li>Choose your cards, pick <b>Run Immediately</b>, then <b>Next</b> → <b>New Blank Automation</b>.</li>
+      <li>Add the action <b>Get Contents of URL</b>. Paste the link. Tap ▸: Method <b>POST</b>, Request Body <b>JSON</b>, and add 3 text fields:
+        <code>amount</code> = Shortcut Input › <b>Amount</b>, <code>merchant</code> = <b>Merchant</b>, <code>card</code> = <b>Card</b> (or Name).</li>
+      <li>Optional: add <b>Get Dictionary Value</b> “text” and <b>Show Notification</b> to see what was saved.</li></ol></details>
+    <details class="pp-how"><summary><b>Android</b> (your bank's notification or SMS)</summary><ol>
+      <li>Install <b>MacroDroid</b> (free, Play Store) and allow it to read notifications.</li>
+      <li><b>Add macro</b> → Trigger <b>Notification</b> → <b>Notification received</b> → choose your bank's app (or Trigger <b>SMS received</b> from your bank).</li>
+      <li>Action <b>Web interactions</b> → <b>HTTP request</b>: method <b>POST</b>, paste the link, Body <b>text/plain</b> with the magic text <b>[notification]</b> (for SMS: <b>[sms_message]</b>).</li>
+      <li>Save. Codes, declined payments and messages without an amount are ignored.</li></ol></details>
+    <p class="small" style="margin:12px 0 4px"><b>Which card is it?</b> The last 4 digits of each card (from the bank's message), so payments go to the right account.</p>
+    <div class="pp-cards">${rows || '<p class="muted small">No cards yet.</p>'}</div>
+    <label class="field" style="margin-top:8px"><span>When the card isn't known</span><select id="pp-default"><option value="">The usual account for the category</option>${cards.map((a) => `<option value="${esc(a.id)}"${a.id === def ? ' selected' : ''}>${esc(a.name)}</option>`).join('')}</select></label>
+    <label class="field"><span>Try it: paste a bank message</span><textarea id="pp-try" rows="2" placeholder="Plata 120,50 MDL la LINELLA, card *4821" data-testid="pp-try"></textarea></label>
+    <p class="muted small" id="pp-preview" data-testid="pp-preview" aria-live="polite"></p>
+    <div class="btns"><button type="button" class="btn" data-act="phone-pay-reset">New link</button><button type="button" class="btn primary" data-close>Done</button></div>`, (sheet) => {
+    const save = () => { st.settings.updatedAt = Date.now(); ctx.commit(); };
+    sheet.querySelectorAll('[data-pp-last4]').forEach((inp) => inp.addEventListener('change', () => {
+      const a = st.settings.accounts.find((x) => x.id === inp.dataset.ppLast4);
+      const v = inp.value.replace(/\D/g, '').slice(-4);
+      inp.value = v;
+      if (!a || (a.last4 || '') === v) return;
+      a.last4 = v;
+      touch(a);
+      save();
+    }));
+    sheet.querySelector('#pp-default').addEventListener('change', (e) => {
+      st.settings.capture = { ...(st.settings.capture || {}), account: e.target.value };
+      save();
+    });
+    const prev = sheet.querySelector('#pp-preview');
+    sheet.querySelector('#pp-try').addEventListener('input', (e) => {
+      const p = readPayment({ text: e.target.value });
+      if (!e.target.value.trim()) { prev.textContent = ''; return; }
+      if (p.kind === 'skip') { prev.textContent = `Ignored: ${p.why}`; return; }
+      const acc = st.settings.accounts.find((a) => a.id === accountFor(st, p));
+      prev.textContent = `Would save: ${p.kind === 'income' ? 'money in' : 'spent'} ${formatMoney(p.amount, p.currency || st.settings.currency || 'MDL', { reveal: true })} · ${p.merchant || 'Card payment'} · ${acc ? acc.name : 'the usual account'}${p.last4 && !acc ? ` (no card ending ${p.last4} yet: type it above)` : ''}`;
+    });
+  });
+}
+
 // ---------- On your phone ----------
 
 /** The web address to open on the phone: this site on the web, the server on the desktop. */
@@ -553,6 +612,7 @@ export function onClick(act, el) {
   if (act === 'cloud-pin') { openChangePin(); return true; }
   if (act === 'cloud-devices') { openDevices(); return true; }
   if (act === 'phone-guide') { openPhoneGuide(); return true; }
+  if (act === 'phone-pay' || act === 'phone-pay-reset') { openPhonePay(act === 'phone-pay-reset'); return true; }
   if (act === 'sheet-feed' || act === 'sheet-reset') { openSheetFeed(act === 'sheet-reset'); return true; }
   if (act === 'copy-text') {
     const t = el.dataset.text || '';

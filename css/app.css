@@ -6498,3 +6498,12 @@ tr.week-row b.bad { color: var(--expense); } tr.week-row b.good { color: var(--i
 .phone-steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
 .phone-steps ol{margin:6px 0 0;padding-left:20px}
 .phone-steps li{margin:3px 0}
+
+/* Record payments automatically (js/standalone.js openPhonePay) */
+.pp-how{margin:8px 0;padding:8px 12px;border-radius:12px;background:var(--surface-2)}
+.pp-how summary{cursor:pointer}
+.pp-how ol{margin:8px 0 4px;padding-left:20px}
+.pp-how li{margin:4px 0}
+.pp-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px}
+.pp-card{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 10px;border-radius:10px;background:var(--surface-2)}
+.pp-card input{width:72px;text-align:center}
