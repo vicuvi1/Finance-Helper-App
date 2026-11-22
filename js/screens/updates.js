@@ -3,6 +3,7 @@
 // updates itself: it always loads the newest version when online.
 
 import { ctx, esc } from '../ctx.js';
+import { NOTES } from '../whatsnew.js';
 import { APP_VERSION, isNewerVersion } from '../version.js';
 
 const desk = () => (typeof window !== 'undefined' ? window.desktop?.update : null);
@@ -135,7 +136,10 @@ export function settingsCard() {
       ${desk() ? `<div class="kv"><span>Last update check</span><b>${esc(when(m.lastUpdateCheck))}</b></div>` : ''}
     </div>
     <div style="margin-top:14px">${body}</div>
-    <button type="button" class="btn block" style="margin-top:8px" data-act="whats-new" data-testid="whats-new-btn">What's new</button>
+    <details class="upd-history" data-testid="update-history" style="margin-top:12px"><summary><b>Update history</b> <span class="muted small">· every version, newest first</span></summary>
+      ${NOTES.map((n) => `<section><b>Version ${esc(n.v)}</b>${n.v === (u.current || APP_VERSION) ? ' <span class="muted small">· this one</span>' : ''}<ul>${n.items.map((i) => `<li>${esc(i)}</li>`).join('')}</ul></section>`).join('')}
+      <p class="muted small">Older versions (before 1.85) are listed on GitHub: github.com/vicuvi1/Finance-Helper-App/releases</p>
+    </details>
   </section>`;
 }
 

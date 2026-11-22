@@ -155,18 +155,20 @@ export function dayLabelHTML(date, today) {
 }
 
 function dayRow(date, d, today, fmt0, year, span = 9) {
+  d = d || { in: 0, out: 0, n: 0 };
   const fmt = (c) => fmt0(Math.round(c / 100) * 100); // day totals in whole lei
   const parts = [
     d.in ? `<span class="day-stat-pill in">+${fmt(d.in)}</span>` : '',
     d.out ? `<span class="day-stat-pill out">−${fmt(d.out)}</span>` : '',
     d.loanOut ? `<span class="day-stat-pill loan-out">⚡ −${fmt(d.loanOut)} lent</span>` : '',
     d.loanIn ? `<span class="day-stat-pill loan-in">⚡ +${fmt(d.loanIn)} back</span>` : '',
-    `<span class="day-stat-pill count">${d.n} record${d.n === 1 ? '' : 's'}</span>`
+    d.n ? `<span class="day-stat-pill count">${d.n} record${d.n === 1 ? '' : 's'}</span>` : '<span class="day-stat-pill count empty">nothing logged</span>'
   ].filter(Boolean).join('');
-  return `<tr class="day-row dow-${dowIndex(date)}${date === today ? ' is-today' : ''}" aria-hidden="true"><td colspan="${span}"><div class="dr-wrap"><span class="dr">${dayLabelHTML(date, today)}${year ? `<span class="muted">${date.slice(0, 4)}</span>` : ''}</span><div class="dr-sum">${parts}</div></div></td></tr>`;
+  const add = date <= today ? `<button type="button" class="day-add" data-day-add="${date}" title="Add a record on this day" aria-label="Add a record on ${esc(date)}" data-testid="day-add">＋</button>` : '';
+  return `<tr class="day-row dow-${dowIndex(date)}${date === today ? ' is-today' : ''}${d.n ? '' : ' empty-day'}" data-day="${date}"><td colspan="${span}"><div class="dr-wrap"><span class="dr">${dayLabelHTML(date, today)}${year ? `<span class="muted">${date.slice(0, 4)}</span>` : ''}${add}</span><div class="dr-sum">${parts}</div></div></td></tr>`;
 }
 
-export function tableHTML(state, list, { sort, draft, fmt: fmtExact, selected = new Set(), years = false, extra = [] }) {
+export function tableHTML(state, list, { sort, draft, fmt: fmtExact, selected = new Set(), years = false, extra = [], month = null }) {
   const fmt = (c) => fmtExact(Math.round(c / 100) * 100); // totals in whole lei
   const rows = sortRows(state, list, sort);
   const today = todayISO();
@@ -191,16 +193,29 @@ export function tableHTML(state, list, { sort, draft, fmt: fmtExact, selected = 
     }
     if (t.type === 'income') d.in += B(t); else d.out += B(t);
   }
+  // A month by date: every day up to today gets its header (with ＋), even the ones with nothing logged.
+  const emptyHead = (date) => dayRow(date, null, today, fmt, years, span);
+  const allDays = byDate && month ? (() => {
+    const last = `${month}-${String(daysInMonth(month)).padStart(2, '0')}`;
+    const end = last < today ? last : today;
+    const out = [];
+    for (let d = `${month}-01`; d <= end; d = addDays(d, 1)) out.push(d);
+    return out;
+  })() : [];
+  const desc = sort.dir < 0;
+  const missing = (from, to) => allDays.filter((d) => !perDay[d] && (desc ? d < from && d > to : d > from && d < to));
   let prevDate = null;
   const body = rows.map((t) => {
     const newDay = t.date !== prevDate;
+    let gap = '';
+    if (byDate && month && newDay) gap = missing(prevDate ?? (desc ? '9999' : '0000'), t.date).sort((a, b) => (desc ? b.localeCompare(a) : a.localeCompare(b))).map(emptyHead).join('');
     prevDate = t.date;
     const isLoan = Boolean(t.loan);
     const head = byDate && newDay ? dayRow(t.date, perDay[t.date], today, fmt, years, span) : '';
     const on = selected.has(t.id);
-    return `${head}<tr data-id="${esc(t.id)}" class="t-${t.type}${isLoan ? ' is-loan' : ''}${newDay ? ' newday' : ''}${t.date === today ? ' is-today' : ''}${on ? ' selected' : ''}"><td class="selc"><input type="checkbox" class="sel" data-act="sel" data-id="${esc(t.id)}" ${on ? 'checked' : ''} aria-label="Select this record"></td>${cells(state, t, { who })}${extra.map((c) => `<td class="c-extra">${c.cell(t)}</td>`).join('')}
+    return `${gap}${head}<tr data-id="${esc(t.id)}" data-date="${esc(t.date)}" class="t-${t.type}${isLoan ? ' is-loan' : ''}${newDay ? ' newday' : ''}${t.date === today ? ' is-today' : ''}${on ? ' selected' : ''}"><td class="selc">${byDate ? `<span class="drag-h" draggable="true" title="Drag onto another day to move it" aria-hidden="true">⠿</span>` : ''}<input type="checkbox" class="sel" data-act="sel" data-id="${esc(t.id)}" ${on ? 'checked' : ''} aria-label="Select this record"></td>${cells(state, t, { who })}${extra.map((c) => `<td class="c-extra">${c.cell(t)}</td>`).join('')}
       <td class="c-del"><button type="button" class="row-del" data-act="row-del" data-id="${esc(t.id)}" aria-label="Delete this record" title="Delete">×</button></td></tr>`;
-  }).join('');
+  }).join('') + (byDate && month ? missing(prevDate ?? (desc ? '9999' : '0000'), desc ? '0000' : '9999').sort((a, b) => (desc ? b.localeCompare(a) : a.localeCompare(b))).map(emptyHead).join('') : '');
   const income = list.filter((t) => countsAsIncome(t)).reduce((a, t) => a + B(t), 0);
   const expense = list.filter((t) => countsAsSpending(t)).reduce((a, t) => a + signed(t, B(t)), 0);
   const loanOut = list.filter((t) => t.type === 'expense' && t.loan).reduce((a, t) => a + B(t), 0);

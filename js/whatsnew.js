@@ -6,6 +6,7 @@
 import { isNewerVersion } from './version.js';
 
 export const NOTES = [
+  { v: '1.103.0', items: ['Log table: every day of the month is listed, even days with nothing logged, each with a ＋ to add a record on that day.', 'Drag a record by its ⠿ handle onto another day to move it there (Undo works).', 'Settings → About & updates → Update history: every version and what it brought.'] },
   { v: '1.102.0', items: ['"Money runs low around 28 Nov": a warning in "Do this next" (and the bot\'s morning message) when bills would take your cards and cash under the money you want to keep.', 'Can I afford it? now says when, if not this month: "In about 4 months (March) if you keep saving like the last 3 months".'] },
   { v: '1.101.0', items: ['Plan → 🗓️ Planned: big expenses coming (insurance, a holiday) spread over the months until then; Safe to spend keeps that money aside.'] },
   { v: '1.100.0', items: ['Plan → Subscriptions → 📅 Add to Google Calendar: every bill and subscription on its day, with a reminder the evening before.'] },

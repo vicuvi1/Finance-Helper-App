@@ -458,6 +458,7 @@ function onMouseDown(e) {
   if (r < 0 || c < 0) return;
   if (e.shiftKey && st.key) { e.preventDefault(); activate(m, r, c, { extend: true }); return; }
   if (e.target.closest('button, a, input, select, textarea, summary')) return; // the box takes the focus (see onFocusIn)
+  if (e.target.closest('.drag-h')) return; // the ⠿ handle starts a drag onto another day (js/app.js)
   e.preventDefault();
   activate(m, r, c);
 }

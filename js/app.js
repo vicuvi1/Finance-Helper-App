@@ -1520,7 +1520,7 @@ function viewLog() {
     const shown = new Set(list.map((t) => t.id));
     for (const id of ui.selected) if (!shown.has(id)) ui.selected.delete(id);
     content = `<div id="bulk-slot">${bulkBar()}</div>`
-      + tableHTML(state, list, { sort: ui.sort, draft: q ? null : draftRow(), fmt: (c) => money(c), selected: ui.selected, years: !!q, extra: RecordX.tableCols() })
+      + tableHTML(state, list, { sort: ui.sort, draft: q ? null : draftRow(), fmt: (c) => money(c), selected: ui.selected, years: !!q, extra: RecordX.tableCols(), month: q ? null : ui.month })
       + `<datalist id="people-list">${state.people.map((p) => `<option value="${esc(p.name)}">`).join('')}</datalist>`;
   } else {
     const groups = new Map();
@@ -1927,6 +1927,53 @@ document.addEventListener('click', (e) => {
   input.dispatchEvent(new Event('change', { bubbles: true }));
   for (const c of b.parentElement.querySelectorAll('[data-day-back]')) { c.classList.toggle('on', c === b); c.setAttribute('aria-pressed', String(c === b)); }
 });
+// Log table: ＋ on a day adds a record on that day; drag a record onto another day to move it.
+document.addEventListener('click', (e) => {
+  const b = e.target.closest?.('[data-day-add]');
+  if (!b) return;
+  e.stopPropagation();
+  openTxSheet(null, { date: b.dataset.dayAdd });
+}, true);
+let dragId = null;
+const dropDay = (el) => el?.closest?.('tr[data-day], tr[data-date]');
+document.addEventListener('dragstart', (e) => {
+  if (!e.target.closest?.('.drag-h')) return;
+  const tr = e.target.closest('#tx-table tr[data-id]');
+  if (!tr) return;
+  dragId = tr.dataset.id;
+  tr.classList.add('dragging');
+  try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', dragId); } catch { /* ignore */ }
+});
+document.addEventListener('dragend', () => {
+  dragId = null;
+  document.querySelectorAll('#tx-table .dragging, #tx-table .drop-here').forEach((x) => x.classList.remove('dragging', 'drop-here'));
+});
+document.addEventListener('dragover', (e) => {
+  if (!dragId) return;
+  const tr = dropDay(e.target);
+  if (!tr || !tr.closest('#tx-table')) return;
+  e.preventDefault();
+  const day = tr.dataset.day || tr.dataset.date;
+  document.querySelectorAll('#tx-table .drop-here').forEach((x) => { if ((x.dataset.day || x.dataset.date) !== day) x.classList.remove('drop-here'); });
+  document.querySelectorAll(`#tx-table tr[data-day="${day}"], #tx-table tr[data-date="${day}"]`).forEach((x) => x.classList.add('drop-here'));
+});
+document.addEventListener('drop', (e) => {
+  if (!dragId) return;
+  const tr = dropDay(e.target);
+  const id = dragId;
+  dragId = null;
+  if (!tr || !tr.closest('#tx-table')) return;
+  e.preventDefault();
+  const day = tr.dataset.day || tr.dataset.date;
+  const t = state.tx.find((x) => x.id === id);
+  if (!t || !day || t.date === day) return;
+  t.date = day;
+  M.touch(t);
+  ui.flashId = t.id;
+  commit();
+  toast(`Moved to ${dayLabel(day)}`, 'Undo', () => undoRedo(-1));
+});
+
 document.addEventListener('change', (e) => {
   if (e.target?.id !== 'tx-date') return;
   const box = e.target.closest('form')?.querySelector('.day-chips');

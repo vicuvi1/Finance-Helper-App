@@ -173,6 +173,39 @@ test('Plan → Planned: add a big expense, it is spread over the months', async 
   await context.close();
 });
 
+test('Log table: ＋ on an empty past day adds a record there; drag a record onto another day', async () => {
+  const { page, errors, context } = await openPage(browser, server.url);
+  await page.goto(`${server.url}#log`);
+  await page.waitForSelector('#app header.top');
+  await page.click('[data-view="table"]').catch(() => {});
+  await page.waitForSelector('#tx-table');
+  const days = await page.$$eval('[data-day-add]', (b) => b.map((x) => x.dataset.dayAdd));
+  assert.ok(days.length >= 1, 'every day up to today has a ＋');
+  const first = days.sort()[0];
+  await page.click(`[data-day-add="${first}"]`);
+  await page.waitForSelector('#tx-amount');
+  assert.equal(await page.inputValue('#tx-date'), first);
+  await page.fill('#tx-amount', '15');
+  await page.fill('#tx-note', 'e2e plus day');
+  await page.click('.sheet button[type=submit]');
+  await page.waitForFunction((d) => JSON.parse(globalThis.__fhStore.getItem('finance-helper.state')).tx.some((t) => t.note === 'e2e plus day' && t.date === d), first);
+  const id = await page.evaluate(() => JSON.parse(globalThis.__fhStore.getItem('finance-helper.state')).tx.find((t) => t.note === 'e2e plus day').id);
+  const target = days.find((d) => d !== first);
+  if (target) {
+    await page.waitForSelector(`#tx-table tr[data-id="${id}"]`);
+    const h = await (await page.$(`#tx-table tr[data-id="${id}"] .drag-h`)).boundingBox();
+    const to = await (await page.$(`#tx-table tr[data-day="${target}"]`)).boundingBox();
+    await page.mouse.move(h.x + 4, h.y + 8);
+    await page.mouse.down();
+    await page.mouse.move(h.x + 30, h.y + 20, { steps: 5 });
+    await page.mouse.move(to.x + 100, to.y + 10, { steps: 10 });
+    await page.mouse.up();
+    await page.waitForFunction(([i, d]) => JSON.parse(globalThis.__fhStore.getItem('finance-helper.state')).tx.find((t) => t.id === i)?.date === d, [id, target]);
+  }
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
 test('Home: a verdict, a spending limit that sets Safe to spend, and the month recap story', async () => {
   const { page, errors, context } = await openPage(browser, server.url);
   await page.goto(`${server.url}#home`);

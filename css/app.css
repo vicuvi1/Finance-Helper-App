@@ -6440,3 +6440,19 @@ html[data-in-life] .lt-eye svg { width: 18px; height: 18px; fill: none; stroke: 
 .hb-bar i { display: block; height: 100%; background: var(--gold); border-radius: inherit; }
 .hb-time b { text-align: right; }
 .af-when { margin: -4px 0 12px; font-size: 14px; color: var(--muted); }
+
+/* Log table: ＋ on each day, empty days, drag a record onto another day. */
+.day-add { margin-left: 8px; width: 26px; height: 26px; border-radius: 8px; border: 1px dashed var(--line-strong, var(--line)); background: transparent; color: var(--muted); font: 600 15px/1 var(--font); cursor: pointer; display: inline-grid; place-items: center; vertical-align: middle; }
+.day-add:hover, .day-add:focus-visible { border-style: solid; border-color: var(--gold); color: var(--gold); background: var(--gold-soft); }
+tr.day-row.empty-day td { opacity: 0.62; }
+tr.day-row.empty-day:hover td { opacity: 1; }
+.day-stat-pill.count.empty { font-style: italic; }
+#tx-table .drag-h { cursor: grab; color: var(--faint); font-size: 14px; margin-right: 4px; user-select: none; opacity: 0.5; }
+#tx-table tr:hover .drag-h { opacity: 1; }
+#tx-table tr.dragging { opacity: 0.45; }
+#tx-table tr.drop-here > td { background: color-mix(in srgb, var(--gold) 14%, transparent) !important; }
+#tx-table tr.day-row.drop-here > td { box-shadow: inset 0 0 0 2px var(--gold); }
+.upd-history summary { cursor: pointer; padding: 8px 0; }
+.upd-history section { margin: 10px 0; }
+.upd-history ul { margin: 4px 0 0; padding-left: 20px; color: var(--muted); }
+.upd-history li { margin: 3px 0; }
