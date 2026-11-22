@@ -185,6 +185,11 @@ export function nextSteps(state, today, { hidden = {}, max = 3, demo = false } =
     if (usual > 0) add({ id: 'limit:suggest', level: 'nice', icon: '🚦', title: 'Set a spending limit', text: `You usually spend about ${fmt(usual)} a month on everyday things. A limit turns it into a daily amount.`, btn: 'Set it', act: 'limit-setup' });
   }
 
+  // 10b. Signed in to your server: on the 1st–5th, download this month's backup to keep (once a month).
+  if (!demo && state.meta?.lastSync && Number(today.slice(8)) <= 5 && state.meta?.heldBackup !== key && state.tx.length >= 20) {
+    add({ id: `heldbackup:${key}`, level: 'nice', icon: '💾', title: 'Download this month\'s backup', text: 'Your server keeps 30 days of backups. Once a month, keep one yourself too: one file, locked with a password if you like.', btn: 'Download', act: 'srv-download-latest' });
+  }
+
   // 11. No backup for two weeks (the desktop app backs up by itself).
   const lastSafe = Math.max(state.meta?.lastBackup || 0, state.meta?.lastAutoBackup || 0, state.meta?.lastSync || 0);
   if (!demo && state.tx.length >= 20 && Date.now() - lastSafe > 14 * 864e5) {

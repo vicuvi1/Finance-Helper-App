@@ -19,6 +19,7 @@ import { updateStatus, onUpdateChange, watchServiceWorker, webUpdateWaiting } fr
 import { APP_VERSION } from './version.js';
 import { notesSince, shouldShow, NOTES } from './whatsnew.js';
 import { trayLine } from './trayline.js';
+import { deriveKey, seal, newSalt } from './cipher.js';
 import { readPayment, accountFor } from './phonepay.js';
 import { activeAccounts, touch } from './model.js';
 import { formatMoney } from './money.js';
@@ -148,7 +149,7 @@ export function serverBackupsCard() {
     const when = d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' }) + ' ' + d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
     return `${when}${b.kind === 'before-restore' ? ' · before a restore' : b.kind === 'manual' ? ' · made by you' : ''}`;
   };
-  const rows = (bk?.list || []).map((b) => `<div class="kv"><span>${esc(label(b))} <small class="muted">· ${b.records.toLocaleString()} records</small></span><b><button type="button" class="btn sm" data-act="srv-restore" data-id="${esc(b.id)}" data-testid="srv-restore">Restore</button></b></div>`).join('');
+  const rows = (bk?.list || []).map((b) => `<div class="kv"><span>${esc(label(b))} <small class="muted">· ${b.records.toLocaleString()} records</small></span><b><button type="button" class="btn sm" data-act="srv-download" data-id="${esc(b.id)}" data-at="${b.at}" data-testid="srv-download" title="Download a copy to keep">⬇︎ Download</button> <button type="button" class="btn sm" data-act="srv-restore" data-id="${esc(b.id)}" data-testid="srv-restore">Restore</button></b></div>`).join('');
   return `<section class="card" id="srv-backups" data-testid="srv-backups"><h2>Server backups</h2>
     <p class="muted small" style="margin-top:0">${signed ? 'Your server saves a full copy of your Money every night (around 9:00) and keeps the last 30 days. Restoring one puts it back on every device; how things were just before is saved first, so a restore can be undone.' : 'Sign in to Cloud sync (above) to see your server backups.'}</p>
     ${bk?.error ? `<p class="small" style="color:var(--expense)">${esc(bk.error)}</p>` : ''}
@@ -156,6 +157,47 @@ export function serverBackupsCard() {
     <div class="btns" style="margin-top:12px"><button type="button" class="btn" data-act="srv-backup-now" data-testid="srv-backup-now"${bkBusy ? ' disabled' : ''}>${bkBusy === 'now' ? 'Saving…' : 'Back up now'}</button><button type="button" class="btn" data-act="sheet-feed" data-testid="sheet-feed">📊 Copy in Google Sheets</button></div>` : ''}
   </section>`;
 }
+/** Download one server backup as a file to keep, locked with a password if you type one. */
+function downloadSheet(id, at) {
+  if (!id) return;
+  const day = at ? new Date(at).toISOString().slice(0, 10) : todayISO();
+  ctx.openSheet(`<h3>Download a backup to keep <button type="button" class="icon-btn" data-close aria-label="Close">✕</button></h3>
+    <p class="muted" style="margin-top:0">A copy of all your Money from ${esc(new Date(at || Date.now()).toLocaleString())}, as one file. Keep it somewhere safe (a USB stick, your own cloud). To bring it back: Settings → Data & backups → Restore from a file.</p>
+    <form id="dl-form">
+      <label class="field"><span>Password (optional, recommended)</span><input id="dl-pw" type="password" autocomplete="new-password" data-testid="dl-pw" placeholder="Leave empty for a plain file"></label>
+      <label class="field"><span>The same password again</span><input id="dl-pw2" type="password" autocomplete="new-password" data-testid="dl-pw2"></label>
+      <p class="muted small">With a password, the file is locked (AES-256): nobody can read it without the password, and neither can you if you forget it. It isn't saved anywhere.</p>
+      <p class="small" id="dl-err" role="alert" style="color:var(--expense)"></p>
+      <div class="btns"><button type="button" class="btn" data-close>Cancel</button><button class="btn primary" data-testid="dl-go">Download</button></div>
+    </form>`, (sheet) => {
+    sheet.querySelector('#dl-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const pw = sheet.querySelector('#dl-pw').value;
+      const err = sheet.querySelector('#dl-err');
+      if (pw !== sheet.querySelector('#dl-pw2').value) { err.textContent = 'The two passwords are not the same.'; return; }
+      if (pw && pw.length < 6) { err.textContent = 'Use at least 6 characters (or none).'; return; }
+      err.textContent = 'Preparing…';
+      try {
+        const r = await cloud.api('/api/money', { op: 'backup-get', id });
+        const plain = JSON.stringify({ app: 'finance-helper', exportedAt: new Date().toISOString(), backupOf: day, ...r.data }, null, 1);
+        let text = plain;
+        if (pw) {
+          const salt = newSalt();
+          const box = await seal(plain, await deriveKey(pw, salt), salt);
+          text = JSON.stringify({ app: 'finance-helper', exportedAt: new Date().toISOString(), backupOf: day, ...box });
+        }
+        ctx.download(`finance-helper-backup-${day}${pw ? '-locked' : ''}.json`, text, 'application/json');
+        ctx.state.meta.heldBackup = todayISO().slice(0, 7);
+        ctx.persist?.({ quiet: true });
+        ctx.closeSheet();
+        ctx.toast(pw ? 'Downloaded, locked with your password. Keep the password safe.' : 'Downloaded. Keep the file somewhere safe.');
+      } catch (e2) {
+        err.textContent = e2.message || 'Could not download it.';
+      }
+    });
+  });
+}
+
 function confirmRestore(id) {
   const b = (bk?.list || []).find((x) => x.id === id);
   if (!b) return;
@@ -676,6 +718,14 @@ export function onClick(act, el) {
   if (act === 'whats-new') { openWhatsNew(); return true; }
   if (act === 'srv-bot-check') { loadBotStatus(); return true; }
   if (act === 'srv-restore') { confirmRestore(el?.dataset.id); return true; }
+  if (act === 'srv-download') { downloadSheet(el?.dataset.id, Number(el?.dataset.at)); return true; }
+  if (act === 'srv-download-latest') {
+    (bk?.list?.length ? Promise.resolve() : loadBackups()).then(() => {
+      const b = bk?.list?.[0];
+      if (b) downloadSheet(b.id, b.at); else ctx.toast('No server backup yet: press Back up now first (Settings → Data & backups).');
+    });
+    return true;
+  }
   if (act === 'srv-backup-now') {
     bkBusy = 'now'; paintBackups();
     cloud.api('/api/money', { op: 'backup-now' }).then(() => ctx.toast('Backup saved on your server'), (e) => ctx.toast(e.message)).finally(() => { bkBusy = ''; bk = null; loadBackups(); });

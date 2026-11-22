@@ -12,7 +12,7 @@
 import { bearer, config, readBody, requireSession, send, countCall } from './_lib.mjs'
 import { ANSWER_CHARS, hasParts, healCopy, incomingText, moneyStats, pushCopy, readParts, readRaw, readSlice, uploadParts } from './_money.mjs'
 import { listDevices } from './_devices.mjs'
-import { listBackups, makeBackup, restoreBackup } from './_backups.mjs'
+import { listBackups, makeBackup, readBackup, restoreBackup } from './_backups.mjs'
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return send(res, 405, { error: 'POST only' })
@@ -65,6 +65,15 @@ export default async function handler(req, res) {
       out = { backups: await listBackups(cfg) }
     } else if (op === 'backup-now') {
       out = { backup: await makeBackup(cfg, { kind: 'manual' }) }
+    } else if (op === 'backup-get') {
+      // One backup's data, to download and keep (the app can lock the file with a password).
+      if (typeof body.id !== 'string' || !body.id) return send(res, 400, { error: 'Which backup?' })
+      const text = await readBackup(cfg, body.id)
+      if (!text) return send(res, 404, { error: 'That backup is gone' })
+      let data
+      try { data = JSON.parse(text).data } catch { data = null }
+      if (!data) return send(res, 500, { error: 'That backup is damaged' })
+      out = { data }
     } else if (op === 'restore') {
       if (typeof body.id !== 'string' || !body.id) return send(res, 400, { error: 'Which backup?' })
       out = await restoreBackup(cfg, body.id)

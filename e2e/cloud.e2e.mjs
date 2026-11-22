@@ -112,6 +112,18 @@ test('first visit: sign in with the PIN and Money comes from the server; a web r
   await page.click('[data-testid="srv-backup-now"]');
   await page.waitForSelector('[data-testid="srv-restore"]', { timeout: 15000 });
   assert.match(await page.textContent('[data-testid="srv-backups"]'), /made by you/);
+  // Download it to keep, locked with a password.
+  await page.click('[data-testid="srv-download"]');
+  await page.fill('[data-testid="dl-pw"]', 'made-up-pass');
+  await page.fill('[data-testid="dl-pw2"]', 'made-up-pass');
+  const [dl] = await Promise.all([page.waitForEvent('download'), page.click('[data-testid="dl-go"]')]);
+  const { readFileSync } = await import('node:fs');
+  const box = JSON.parse(readFileSync(await dl.path(), 'utf8'));
+  assert.equal(box.fh, 'enc1', 'the file is locked');
+  assert.equal(box.app, 'finance-helper');
+  const { openWithPin } = await import('../js/cipher.js');
+  const inside = JSON.parse(await openWithPin(box, 'made-up-pass'));
+  assert.ok(inside.tx.some((t) => t.note === 'made-up lunch'), 'the password opens it, with your records');
   // A Google Sheet copy: an =IMPORTDATA line whose link gives the records as CSV.
   await page.click('[data-testid="sheet-feed"]');
   await page.waitForSelector('[data-testid="sheet-records"]', { timeout: 15000 });
