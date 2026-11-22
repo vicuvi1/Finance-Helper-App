@@ -6,6 +6,7 @@
 import { isNewerVersion } from './version.js';
 
 export const NOTES = [
+  { v: '1.111.0', items: ['Your Money in Google Sheets, kept up to date by itself: Settings → Data & backups → Server backups → 📊 Copy in Google Sheets gives one line to paste in a sheet (every record, and month by month). No Google sign-in needed.'] },
   { v: '1.110.0', items: ['Web app: sign in with your fingerprint, face or Windows Hello instead of the PIN. Turn it on in Settings → Data & backups → Cloud sync → 👆 Sign in with fingerprint (the PIN keeps working). Remove it any time under Devices.'] },
   { v: '1.109.0', items: ['Desktop: hover the Finance Helper icon by the clock (or right-click it) to see Safe to spend today without opening the app.', 'Settings → Data & backups → Cloud sync → 📱 On your phone: the address to open and how to add Money to your phone\'s home screen (Android and iPhone).'] },
   { v: '1.108.0', items: ['Faster with lots of data: when nothing changed on either side, the sync every minute is one small check instead of re-merging everything (tested with 20 000 and 40 000 records).'] },

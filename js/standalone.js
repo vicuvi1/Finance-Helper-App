@@ -150,7 +150,7 @@ export function serverBackupsCard() {
     <p class="muted small" style="margin-top:0">${signed ? 'Your server saves a full copy of your Money every night (around 9:00) and keeps the last 30 days. Restoring one puts it back on every device; how things were just before is saved first, so a restore can be undone.' : 'Sign in to Cloud sync (above) to see your server backups.'}</p>
     ${bk?.error ? `<p class="small" style="color:var(--expense)">${esc(bk.error)}</p>` : ''}
     ${signed ? `<div class="set-kv-list">${rows || '<div class="kv"><span class="muted">No backup yet. The first one is made tonight, or press Back up now.</span></div>'}</div>
-    <div class="btns" style="margin-top:12px"><button type="button" class="btn" data-act="srv-backup-now" data-testid="srv-backup-now"${bkBusy ? ' disabled' : ''}>${bkBusy === 'now' ? 'Saving…' : 'Back up now'}</button></div>` : ''}
+    <div class="btns" style="margin-top:12px"><button type="button" class="btn" data-act="srv-backup-now" data-testid="srv-backup-now"${bkBusy ? ' disabled' : ''}>${bkBusy === 'now' ? 'Saving…' : 'Back up now'}</button><button type="button" class="btn" data-act="sheet-feed" data-testid="sheet-feed">📊 Copy in Google Sheets</button></div>` : ''}
   </section>`;
 }
 function confirmRestore(id) {
@@ -351,6 +351,23 @@ async function openDevices() {
     <div class="btns"><button type="button" class="btn" data-close>Close</button></div>`);
 }
 
+// ---------- A Google Sheet that keeps itself up to date ----------
+
+async function openSheetFeed(reset = false) {
+  let r;
+  try { r = await cloud.api('/api/calendar', { op: reset ? 'sheet-reset' : 'sheet-link' }); } catch (e) { ctx.toast(e.message); return; }
+  const formula = (u) => `=IMPORTDATA("${u}")`;
+  const line = (title, u, id) => `<p class="small" style="margin:10px 0 4px"><b>${title}</b></p><div class="phone-link" data-testid="${id}"><code>${esc(formula(u))}</code><button type="button" class="btn sm" data-act="copy-text" data-text="${esc(formula(u))}">Copy</button></div>`;
+  if (document.querySelector('.sheet')) ctx.closeSheet();
+  ctx.openSheet(`<h3>Your Money in Google Sheets <button type="button" class="icon-btn" data-close aria-label="Close">✕</button></h3>
+    <p class="muted" style="margin-top:0">A sheet that fills itself from your server and stays up to date (Google refreshes it about every hour). No Google sign-in needed. It only reads: changes in the sheet don't come back here.</p>
+    <ol class="muted small" style="padding-left:18px;margin:6px 0"><li>Open <b>sheets.new</b> (a new Google Sheet).</li><li>Copy a line below and paste it in cell <b>A1</b>, press Enter.</li><li>For the second one, add a sheet (＋ bottom left) and paste it in A1 there.</li></ol>
+    ${line('Every record', r.records, 'sheet-records')}
+    ${line('Month by month', r.months, 'sheet-months')}
+    <p class="muted small">Anyone with these lines can read your Money: keep the sheet private. "New links" stops the old ones working.</p>
+    <div class="btns"><button type="button" class="btn" data-act="sheet-reset">New links</button><button type="button" class="btn primary" data-close>Done</button></div>`);
+}
+
 // ---------- On your phone ----------
 
 /** The web address to open on the phone: this site on the web, the server on the desktop. */
@@ -536,6 +553,12 @@ export function onClick(act, el) {
   if (act === 'cloud-pin') { openChangePin(); return true; }
   if (act === 'cloud-devices') { openDevices(); return true; }
   if (act === 'phone-guide') { openPhoneGuide(); return true; }
+  if (act === 'sheet-feed' || act === 'sheet-reset') { openSheetFeed(act === 'sheet-reset'); return true; }
+  if (act === 'copy-text') {
+    const t = el.dataset.text || '';
+    (navigator.clipboard?.writeText(t) || Promise.reject()).then(() => ctx.toast('Copied.'), () => ctx.toast(t));
+    return true;
+  }
   if (act === 'pk-setup') { setupPasskey(); return true; }
   if (act === 'pk-devices') { openDevices(); return true; }
   if (act === 'pk-remove') {

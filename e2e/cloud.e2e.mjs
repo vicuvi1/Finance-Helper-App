@@ -96,6 +96,16 @@ test('first visit: sign in with the PIN and Money comes from the server; a web r
   await page.click('[data-testid="srv-backup-now"]');
   await page.waitForSelector('[data-testid="srv-restore"]', { timeout: 15000 });
   assert.match(await page.textContent('[data-testid="srv-backups"]'), /made by you/);
+  // A Google Sheet copy: an =IMPORTDATA line whose link gives the records as CSV.
+  await page.click('[data-testid="sheet-feed"]');
+  await page.waitForSelector('[data-testid="sheet-records"]', { timeout: 15000 });
+  const formula = await page.textContent('[data-testid="sheet-records"] code');
+  const link = formula.match(/IMPORTDATA\("([^"]+)"\)/)[1].replace(/^https:\/\/[^/]+/, server.url);
+  const csv = await (await fetch(link)).text();
+  assert.match(csv, /^Date,Type,Amount/);
+  assert.match(csv, /made-up lunch/);
+  assert.equal((await fetch(link.replace(/s=[^&]+/, 's=wrong'))).status, 404);
+  await page.click('.sheet [data-close]');
   // Data & health: the server's space and how long it lasts, and the checks.
   await page.click('[data-act="set-tab"][data-sec="health"]');
   await page.waitForSelector('[data-testid="data-health"]');

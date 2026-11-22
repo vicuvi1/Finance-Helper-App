@@ -85,6 +85,7 @@ const SHELL = [
   './js/afford.js',
   './js/trayline.js',
   './js/passkey.js',
+  './js/sheetfeed.js',
   './js/wishlist.js',
   './js/screens/calendar.js',
   './js/screens/afford.js',
