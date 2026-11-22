@@ -216,6 +216,9 @@ export function createCloud({ transport, store, app, now = () => Date.now() }) {
       let local = startState;
       let got = 0;
       // A restore made elsewhere: this device takes that copy as it is (its own device settings stay).
+      // A device that never synced (a first sign-in) has nothing older than the restore to drop:
+      // its records are merged like any others, and it only notes the mark.
+      if (srv.value?.restore && srv.value.restore !== cfg.restore && !cfg.okAt) cfg.restore = srv.value.restore;
       if (srv.value?.restore && srv.value.restore !== cfg.restore) {
         await app.backup?.('Before taking a restore from the server');
         const own = {};
