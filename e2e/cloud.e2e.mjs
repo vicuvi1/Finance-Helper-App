@@ -147,3 +147,37 @@ test('Import from Life System: preview, back up and merge (nothing deleted)', as
   assert.deepEqual(errors, []);
   await context.close();
 });
+
+test('fingerprint sign-in: set it up after the PIN, then sign in with it (virtual reader)', async () => {
+  // Passkeys need a site name, not an IP address: the same server as localhost.
+  const url = `${server.url.replace('127.0.0.1', 'localhost')}/`;
+  const { page, errors, context } = await openPage(browser, url);
+  const cdp = await context.newCDPSession(page);
+  await cdp.send('WebAuthn.enable');
+  await cdp.send('WebAuthn.addVirtualAuthenticator', { options: { protocol: 'ctap2', transport: 'internal', hasResidentKey: true, hasUserVerification: true, isUserVerified: true } });
+  await page.goto(url);
+  await page.waitForSelector('[data-testid="cloud-pin"]', { timeout: 15000 });
+  assert.equal(await page.$('[data-testid="pk-signin"]'), null, 'no fingerprint button before one is set up');
+  await page.fill('[data-testid="cloud-pin"]', PIN);
+  await page.click('[data-testid="cloud-pin-go"]');
+  await page.waitForFunction(() => !document.querySelector('[data-testid="cloud-pin"]'));
+  await page.evaluate(() => { location.hash = '#settings'; });
+  await page.waitForSelector('#app header.top');
+  await page.click('[data-act="set-tab"][data-sec="data"]');
+  await page.click('[data-testid="pk-setup"]');
+  await page.waitForSelector('[data-testid="pk-on"]', { timeout: 15000 });
+  // It is listed under Devices.
+  await page.click('[data-testid="cloud-devices"]');
+  await page.waitForSelector('[data-testid="passkey-list"]');
+  assert.match(await page.textContent('[data-testid="passkey-list"]'), /this device/);
+  await page.click('.sheet [data-close]');
+  // Sign out, reload: the sign-in sheet offers the fingerprint first, and it works.
+  await page.click('[data-act="cloud-signout"]');
+  await page.reload();
+  await page.waitForSelector('[data-testid="pk-signin"]', { timeout: 15000 });
+  await page.click('[data-testid="pk-signin"]');
+  await page.waitForFunction(() => !document.querySelector('[data-testid="pk-signin"]'), null, { timeout: 15000 });
+  await page.waitForFunction(() => !!JSON.parse(localStorage.getItem('finance-helper.cloud') || '{}').session, null, { timeout: 15000 });
+  assert.deepEqual(errors, []);
+  await context.close();
+});

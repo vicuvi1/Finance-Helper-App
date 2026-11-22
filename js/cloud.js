@@ -300,6 +300,25 @@ export function createCloud({ transport, store, app, now = () => Date.now() }) {
       if (r?.session) { cfg.session = r.session; save(); }
       return true;
     },
+    /** Fingerprint / face sign-in (a passkey): a one-time challenge from the server. */
+    passkeyOptions(op) { return call('/api/login', { passkey: 'options', op }, ''); },
+    /** Saves a passkey made on this device (needs this device's session: the PIN came first). */
+    passkeyRegister(answer) { return call('/api/login', { passkey: 'register', session: cfg.session, ...answer }, ''); },
+    /** Removes one passkey from the server. */
+    removePasskey(id) { return call('/api/login', { revokePasskey: id, session: cfg.session }, ''); },
+    /** Signs in with a passkey answer instead of the PIN. */
+    async signInPasskey(answer) {
+      let r;
+      try { r = await call('/api/login', { passkey: 'login', ...answer }, ''); } catch (e) {
+        if (e.status === 401) throw new Error(e.body?.error || 'Fingerprint sign-in failed: use your PIN.');
+        throw e;
+      }
+      cfg.session = r.session;
+      cfg.dirtyAt = cfg.dirtyAt || now();
+      save();
+      set({ state: 'idle', error: '' });
+      return true;
+    },
     /** The devices signed in to the server, and which one is this. */
     devices() { return call('/api/login', { devices: cfg.session }, ''); },
     /** Signs one device out (it must enter the PIN again). */

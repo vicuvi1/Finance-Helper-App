@@ -19,11 +19,15 @@ import { updateStatus, onUpdateChange, watchServiceWorker, webUpdateWaiting } fr
 import { APP_VERSION } from './version.js';
 import { notesSince, shouldShow, NOTES } from './whatsnew.js';
 import { trayLine } from './trayline.js';
+import { passkeyPossible, hasReader, hasLocalPasskey, setLocalPasskey, localPasskeyId, makePasskey, usePasskey, deviceLabel } from './passkey.js';
 
 const isDesktop = () => typeof window !== 'undefined' && !!window.desktop?.isDesktop;
 const isWeb = () => !isDesktop() && typeof location !== 'undefined' && /^https?:$/.test(location.protocol);
 /** Where the server is: the desktop's chosen address, or (web) this site itself. */
 const baseUrl = () => (isDesktop() ? cloud?.config.url || DEFAULT_URL : cloud?.config.url || location.origin);
+
+/** Fingerprint / face sign-in works here: the web app on the server's own address. */
+const passkeyHere = () => isWeb() && baseUrl() === location.origin && passkeyPossible();
 
 function transport(path, body, token) {
   if (isDesktop()) return window.desktop.cloud.request(baseUrl(), path, body, token);
@@ -91,7 +95,7 @@ export function cloudCard() {
       <div class="set-sb-content"><b>${cfg.signedIn ? 'Signed in' : 'Signed out'}</b><p class="muted small" style="margin:2px 0 0" data-testid="cloud-status">${line}</p>${st.note && st.state === 'ok' ? `<p class="muted small" style="margin:4px 0 0">${esc(st.note)}</p>` : ''}</div></div>
     ${isDesktop() ? `<label class="field" style="margin-top:12px"><span>Server address</span><input id="cloud-url" type="url" value="${esc(baseUrl())}" placeholder="${DEFAULT_URL}" data-testid="cloud-url"></label>` : ''}
     ${cfg.signedIn
-      ? `<div class="btns" style="margin-top:12px"><button class="btn primary" data-act="cloud-sync" data-testid="cloud-sync">Sync now</button><button class="btn" data-act="cloud-pin" data-testid="cloud-pin-change">Change PIN</button><button class="btn" data-act="cloud-devices" data-testid="cloud-devices">Devices</button><button class="btn" data-act="phone-guide" data-testid="phone-guide">📱 On your phone</button><button class="btn" data-act="cloud-signout">Sign out</button></div>`
+      ? `<div class="btns" style="margin-top:12px"><button class="btn primary" data-act="cloud-sync" data-testid="cloud-sync">Sync now</button><button class="btn" data-act="cloud-pin" data-testid="cloud-pin-change">Change PIN</button><button class="btn" data-act="cloud-devices" data-testid="cloud-devices">Devices</button><button class="btn" data-act="phone-guide" data-testid="phone-guide">📱 On your phone</button>${passkeyHere() ? (hasLocalPasskey() ? '<button class="btn" data-act="pk-devices" data-testid="pk-on">👆 Fingerprint sign-in: on</button>' : '<button class="btn" data-act="pk-setup" data-testid="pk-setup">👆 Sign in with fingerprint</button>') : ''}<button class="btn" data-act="cloud-signout">Sign out</button></div>`
       : `<div class="btns" style="margin-top:12px"><button class="btn primary" data-act="cloud-signin" data-testid="cloud-signin">Sign in</button></div>`}
     <p class="muted small" style="margin-bottom:0">Each record's newest edit wins and nothing is deleted by syncing. Your data stays on this device too and works offline.</p>
   </section>`;
@@ -337,10 +341,13 @@ async function openDevices() {
   let r;
   try { r = await cloud.devices(); } catch (e) { ctx.toast(e.message); return; }
   const rows = (r.devices || []).map((d) => `<div class="kv"><span>${esc(d.label)}${d.sid === r.current ? ' <b class="income">· this device</b>' : ''}<br><small class="muted">last sign-in ${d.lastSeen ? esc(new Date(d.lastSeen).toLocaleString()) : '—'}</small></span><b>${d.sid === r.current ? '' : `<button type="button" class="btn sm" data-act="cloud-revoke" data-sid="${esc(d.sid)}">Sign out</button>`}</b></div>`).join('');
+  const mine = localPasskeyId();
+  const keys = (r.passkeys || []).map((k) => `<div class="kv"><span>👆 ${esc(k.label)}${k.id === mine ? ' <b class="income">· this device</b>' : ''}<br><small class="muted">fingerprint sign-in, made ${k.created ? esc(new Date(k.created).toLocaleDateString()) : '—'}</small></span><b><button type="button" class="btn sm" data-act="pk-remove" data-id="${esc(k.id)}" data-mine="${k.id === mine ? '1' : ''}">Remove</button></b></div>`).join('');
   if (document.querySelector('.sheet')) ctx.closeSheet();
   ctx.openSheet(`<h3>Your devices <button type="button" class="icon-btn" data-close aria-label="Close">✕</button></h3>
     <p class="muted" style="margin-top:0">Every device signed in to your server. Sign out one you no longer use (an old computer, Life System): it must enter the PIN again.</p>
     <div class="set-kv-list" data-testid="devices-list">${rows || '<div class="kv"><span class="muted">No devices listed.</span></div>'}</div>
+    ${keys ? `<p class="muted small" style="margin:12px 0 4px">Fingerprint / face sign-in</p><div class="set-kv-list" data-testid="passkey-list">${keys}</div>` : ''}
     <div class="btns"><button type="button" class="btn" data-close>Close</button></div>`);
 }
 
@@ -363,11 +370,46 @@ function openPhoneGuide() {
     <div class="btns"><button type="button" class="btn" data-close>Close</button></div>`);
 }
 
+// ---------- Fingerprint / face sign-in (passkeys) ----------
+
+async function setupPasskey() {
+  if (!(await hasReader())) { ctx.toast('No fingerprint, face or Windows Hello found on this device. Set it up in the device settings first.'); return; }
+  try {
+    const opts = await cloud.passkeyOptions('register');
+    const answer = await makePasskey(opts, { label: deviceLabel() });
+    await cloud.passkeyRegister(answer);
+    setLocalPasskey(answer.credentialId);
+    ctx.toast('Done: next time, sign in with your fingerprint or face. The PIN still works too.');
+    refreshCard();
+  } catch (e) {
+    ctx.toast(e?.name === 'NotAllowedError' ? 'Cancelled.' : e?.name === 'InvalidStateError' ? 'This device already has fingerprint sign-in.' : e.message || 'Could not set up fingerprint sign-in.');
+  }
+}
+
+async function signInWithPasskey(sheet) {
+  const err = sheet.querySelector('#cloud-err');
+  err.textContent = 'Waiting for your fingerprint or face…';
+  try {
+    const answer = await usePasskey(await cloud.passkeyOptions('login'));
+    await cloud.signInPasskey(answer);
+    ctx.closeSheet();
+    ctx.toast('Signed in. Syncing your Money…');
+    const r = await cloud.sync();
+    after(r);
+    ctx.toast(r.ok ? (r.got ? `Synced: ${r.got} records came from the server` : 'Synced') : r.error);
+    ctx.render();
+  } catch (e) {
+    if (/Unknown passkey/.test(e.message || '')) setLocalPasskey(false);
+    err.textContent = e?.name === 'NotAllowedError' ? 'Cancelled. Use your PIN, or try again.' : e.message || 'Fingerprint sign-in failed: use your PIN.';
+  }
+}
+
 // ---------- Sign in ----------
 
 export function openSignIn({ first = false, keep = false } = {}) {
   ctx.openSheet(`<h3>${first ? 'Sign in to load your Money' : keep ? 'Keep this device in step' : 'Sign in to Cloud sync'} <button type="button" class="icon-btn" data-close aria-label="Close">✕</button></h3>
     <p class="muted" style="margin-top:0">${keep ? 'This device is not syncing, so the web and desktop apps can show different numbers. Sign in with your server PIN: the records here and on the server are merged (the newest edit of each wins, nothing is deleted).' : 'Your server PIN (the one Life System used). It is checked by the server and never stored here.'}</p>
+    ${passkeyHere() && hasLocalPasskey() ? '<button type="button" class="btn primary" style="width:100%;margin-bottom:12px" data-testid="pk-signin" id="pk-signin">👆 Use fingerprint or face</button><p class="muted small" style="text-align:center;margin:0 0 8px">or your PIN</p>' : ''}
     <form id="cloud-form">
       <label class="field"><span id="cloud-pin-label">PIN</span><input id="cloud-pin" type="password" inputmode="numeric" autocomplete="current-password" required minlength="4" maxlength="12" data-testid="cloud-pin"></label>
       <details id="cloud-forgot" style="margin:8px 0" data-testid="cloud-forgot"><summary class="muted small">Forgot your PIN? (or first time on this server)</summary>
@@ -377,7 +419,8 @@ export function openSignIn({ first = false, keep = false } = {}) {
       <div class="btns">${first || keep ? '<button type="button" class="btn" data-close>Not now</button>' : '<button type="button" class="btn" data-close>Cancel</button>'}<button class="btn primary" data-testid="cloud-pin-go">Sign in</button></div>
     </form>`, (sheet) => {
     const form = sheet.querySelector('#cloud-form');
-    sheet.querySelector('#cloud-pin').focus();
+    const pk = sheet.querySelector('#pk-signin');
+    if (pk) { pk.addEventListener('click', () => signInWithPasskey(sheet)); pk.focus(); } else sheet.querySelector('#cloud-pin').focus();
     sheet.querySelector('#cloud-forgot').addEventListener('toggle', (e) => {
       sheet.querySelector('#cloud-pin-label').textContent = e.target.open ? 'New PIN' : 'PIN';
       sheet.querySelector('[data-testid="cloud-pin-go"]').textContent = e.target.open ? 'Set the new PIN and sign in' : 'Sign in';
@@ -493,6 +536,13 @@ export function onClick(act, el) {
   if (act === 'cloud-pin') { openChangePin(); return true; }
   if (act === 'cloud-devices') { openDevices(); return true; }
   if (act === 'phone-guide') { openPhoneGuide(); return true; }
+  if (act === 'pk-setup') { setupPasskey(); return true; }
+  if (act === 'pk-devices') { openDevices(); return true; }
+  if (act === 'pk-remove') {
+    const id = el.dataset.id;
+    cloud.removePasskey(id).then(() => { if (el.dataset.mine === '1') setLocalPasskey(false); ctx.toast('Fingerprint sign-in removed. The PIN still works.'); openDevices(); refreshCard(); }, (e) => ctx.toast(e.message));
+    return true;
+  }
   if (act === 'phone-copy') {
     const link = phoneLink();
     (navigator.clipboard?.writeText(link) || Promise.reject()).then(() => ctx.toast('Link copied. Send it to your phone.'), () => ctx.toast(link));
