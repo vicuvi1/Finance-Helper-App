@@ -6,6 +6,7 @@
 import { isNewerVersion } from './version.js';
 
 export const NOTES = [
+  { v: '1.130.1', items: ['Fix: the People cards were squashed (names and amounts on top of each other) since 1.112. They look right again.'] },
   { v: '1.130.0', items: ['Under "All my money" in the sidebar: about how much that is in dollars and euros at today\'s rates, in small print (hidden with your amounts when you press Space).'] },
   { v: '1.129.0', items: ['Android app: a quick-add button in the phone\'s quick settings (swipe down twice, add "Add a record"): type "120 lunch" and Save, without opening the app; it waits and sends itself if you\'re offline.', 'Android app: phone alerts for a bill due tomorrow, a budget at 80% and money running low, each once (switch them off in the phone section of Record payments automatically). Install the new app to get these.'] },
   { v: '1.128.0', items: ['Bank statement import now matches the statement against the app: what you already have (typed, from your phone, from the bot) is matched and marked checked, phone payments leave "To check", and records in the app on those dates that the bank doesn\'t show are listed so you can look at them. If everything is already there, one tap marks it all checked.'] },

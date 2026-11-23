@@ -429,9 +429,9 @@ function paintAndroid(sheet) {
     ? '<p style="margin:0 0 8px">✓ <b>Step 1 done:</b> the app can read notifications.</p>'
     : '<p style="margin:0 0 8px"><b>Step 1:</b> let the app read notifications (Android asks once). It sends only your bank apps\' payments to your server.</p><button type="button" class="btn primary sm" data-pp-android="allow">Allow reading notifications</button>'}
     <p style="margin:12px 0 6px"><b>Step 2:</b> your bank apps. ${apps.length ? 'Tick the ones whose payments to record:' : 'Pay once with your card (or wait for your bank\'s next notification): the bank app shows up here.'}</p>
-    ${apps.map((a) => `<label class="pp-app"><input type="checkbox" data-pp-app="${esc(a.pkg)}" ${a.on ? 'checked' : ''}><span><b>${esc(a.label)}</b><small>${esc(a.example)}</small></span></label>`).join('')}
+    ${apps.map((a) => `<label class="ppay-app"><input type="checkbox" data-pp-app="${esc(a.pkg)}" ${a.on ? 'checked' : ''}><span><b>${esc(a.label)}</b><small>${esc(a.example)}</small></span></label>`).join('')}
     ${st.queued ? `<p style="margin:8px 0 0">${st.queued} payment${st.queued === 1 ? '' : 's'} waiting to be sent (no internet).</p>` : ''}
-    <label class="pp-app" style="margin-top:10px"><input type="checkbox" data-pp-alerts ${st.alerts !== false ? 'checked' : ''}><span><b>Phone alerts</b><small>A bill due tomorrow, a budget at 80%, money running low: a notification on the phone (checked about once an hour).</small></span></label>
+    <label class="ppay-app" style="margin-top:10px"><input type="checkbox" data-pp-alerts ${st.alerts !== false ? 'checked' : ''}><span><b>Phone alerts</b><small>A bill due tomorrow, a budget at 80%, money running low: a notification on the phone (checked about once an hour).</small></span></label>
     <p style="margin:10px 0 0">Add the <b>Safe to spend today</b> widget: press and hold the home screen → Widgets → Finance Helper.</p>
     <p style="margin:6px 0 0">Quick add from anywhere: swipe down twice from the top → ✏️ edit the tiles → drag <b>Add a record</b> in. Tap it, type "120 lunch", Save.</p>`;
 }
@@ -442,27 +442,27 @@ async function openPhonePay(reset = false) {
   const st = ctx.state;
   const cards = activeAccounts(st).filter((a) => a.kind !== 'crypto' && !a.savings);
   const def = st.settings.capture?.account || '';
-  const rows = cards.map((a) => `<label class="pp-card"><span>${esc(a.name)}</span><input inputmode="numeric" maxlength="4" placeholder="1234" value="${esc(a.last4 || '')}" data-pp-last4="${esc(a.id)}" aria-label="Last 4 digits of ${esc(a.name)}"></label>`).join('');
+  const rows = cards.map((a) => `<label class="ppay-card"><span>${esc(a.name)}</span><input inputmode="numeric" maxlength="4" placeholder="1234" value="${esc(a.last4 || '')}" data-pp-last4="${esc(a.id)}" aria-label="Last 4 digits of ${esc(a.name)}"></label>`).join('');
   if (document.querySelector('.sheet')) ctx.closeSheet();
   ctx.openSheet(`<h3>Record payments automatically <button type="button" class="icon-btn" data-close aria-label="Close">✕</button></h3>
     <p class="muted" style="margin-top:0">Each time you pay, your phone sends the payment to your server and it's recorded by itself: the amount, the shop and the card. The apps get it within a minute, and the Telegram bot (if it's on) tells you, with Undo. The same payment sent twice is recorded once.</p>
     <p class="small" style="margin:10px 0 4px"><b>Your private link</b> (anyone with it can add records: keep it to yourself)</p>
     <div class="phone-link" data-testid="pp-link"><code>${esc(url)}</code><button type="button" class="btn sm" data-act="copy-text" data-text="${esc(url)}">Copy</button></div>
-    ${window.FHAndroid ? `<div class="pp-how" data-testid="pp-android"><b>This phone</b><div id="pp-android-body" class="muted small" style="margin-top:6px">Checking…</div></div>` : ''}
-    <details class="pp-how"${window.FHAndroid ? '' : ' open'}><summary><b>iPhone</b> (Apple Pay)</summary><ol>
+    ${window.FHAndroid ? `<div class="ppay-how" data-testid="pp-android"><b>This phone</b><div id="pp-android-body" class="muted small" style="margin-top:6px">Checking…</div></div>` : ''}
+    <details class="ppay-how"${window.FHAndroid ? '' : ' open'}><summary><b>iPhone</b> (Apple Pay)</summary><ol>
       <li>Open <b>Shortcuts</b> → <b>Automation</b> → <b>＋</b> → <b>Wallet</b>.</li>
       <li>Choose your cards, pick <b>Run Immediately</b>, then <b>Next</b> → <b>New Blank Automation</b>.</li>
       <li>Add the action <b>Get Contents of URL</b>. Paste the link. Tap ▸: Method <b>POST</b>, Request Body <b>JSON</b>, and add 3 text fields:
         <code>amount</code> = Shortcut Input › <b>Amount</b>, <code>merchant</code> = <b>Merchant</b>, <code>card</code> = <b>Card</b> (or Name).</li>
       <li>Optional: add <b>Get Dictionary Value</b> “text” and <b>Show Notification</b> to see what was saved.</li></ol></details>
-    <details class="pp-how"><summary><b>Android</b> (your bank's notification or SMS)</summary>
+    <details class="ppay-how"><summary><b>Android</b> (your bank's notification or SMS)</summary>
       <p class="small" style="margin:8px 0 4px"><b>Easiest:</b> install the <a href="${ANDROID_APK}" target="_blank" rel="noopener">Finance Helper app for Android</a> on the phone, open this screen there and follow two steps. Or, without the app:</p><ol>
       <li>Install <b>MacroDroid</b> (free, Play Store) and allow it to read notifications.</li>
       <li><b>Add macro</b> → Trigger <b>Notification</b> → <b>Notification received</b> → choose your bank's app (or Trigger <b>SMS received</b> from your bank).</li>
       <li>Action <b>Web interactions</b> → <b>HTTP request</b>: method <b>POST</b>, paste the link, Body <b>text/plain</b> with the magic text <b>[notification]</b> (for SMS: <b>[sms_message]</b>).</li>
       <li>Save. Codes, declined payments and messages without an amount are ignored.</li></ol></details>
     <p class="small" style="margin:12px 0 4px"><b>Which card is it?</b> The last 4 digits of each card (from the bank's message), so payments go to the right account.</p>
-    <div class="pp-cards">${rows || '<p class="muted small">No cards yet.</p>'}</div>
+    <div class="ppay-cards">${rows || '<p class="muted small">No cards yet.</p>'}</div>
     <label class="field" style="margin-top:8px"><span>When the card isn't known</span><select id="pp-default"><option value="">The usual account for the category</option>${cards.map((a) => `<option value="${esc(a.id)}"${a.id === def ? ' selected' : ''}>${esc(a.name)}</option>`).join('')}</select></label>
     <label class="field"><span>Try it: paste a bank message</span><textarea id="pp-try" rows="2" placeholder="Plata 120,50 MDL la LINELLA, card *4821" data-testid="pp-try"></textarea></label>
     <p class="muted small" id="pp-preview" data-testid="pp-preview" aria-live="polite"></p>
