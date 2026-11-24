@@ -141,6 +141,46 @@ test('a saved record can change its category and account from the buttons', asyn
   assert.equal(t.category, web.state.settings.categories[idx].id);
 });
 
+test('smarter: several records at once with Undo all, plain questions with follow-ups, reminders', async () => {
+  const lastText = () => [...sent].reverse().find((x) => x.method === 'sendMessage')?.p.text.replace(/<[^>]+>/g, '').replace(/\s/g, ' ') || '';
+  // Several records in one message.
+  const m = message('made-up lunch 120, made-up bus 45, made-up coffee 30');
+  sent.length = 0;
+  await post('/api/telegram', m, hookHeaders());
+  assert.match(lastText(), /3 records/);
+  const kb = sent.find((x) => x.method === 'sendMessage').p.reply_markup.inline_keyboard[0][0];
+  assert.equal(kb.callback_data, `undoall:${m.update_id}`);
+  const web = app();
+  await web.cloud.signIn(PIN);
+  await web.cloud.sync();
+  assert.equal(web.state.tx.filter((t) => String(t.id).startsWith(`tg-${m.update_id}-`)).length, 3);
+  // A question, then a follow-up.
+  sent.length = 0;
+  await post('/api/telegram', message('how much on made-up coffee this month'), hookHeaders());
+  assert.match(lastText(), /made-up coffee.*this month.*30 MDL/);
+  sent.length = 0;
+  await post('/api/telegram', message('and last month?'), hookHeaders());
+  assert.match(lastText(), /made-up coffee.*nothing|made-up coffee.*0 MDL/);
+  // Undo all removes the three.
+  sent.length = 0;
+  await post('/api/telegram', { update_id: ++uid, callback_query: { id: 'ua', data: kb.callback_data, from: { id: Number(CHAT) }, message: { message_id: 7, chat: { id: Number(CHAT) } } } }, hookHeaders());
+  assert.equal(sent.find((x) => x.method === 'answerCallbackQuery').p.text, 'Removed 3');
+  await web.cloud.sync();
+  assert.equal(web.state.tx.filter((t) => String(t.id).startsWith(`tg-${m.update_id}-`)).length, 0);
+  // A reminder, listed, then sent in the morning.
+  sent.length = 0;
+  await post('/api/telegram', message('remind me to pay made-up internet tomorrow'), hookHeaders());
+  assert.match(lastText(), /remind you on .* pay made-up internet/);
+  sent.length = 0;
+  await post('/api/telegram', message('/reminders'), hookHeaders());
+  assert.match(lastText(), /pay made-up internet/);
+  const { runBotJob } = await import('../api/_tgbot.mjs');
+  const cfgNow = config({ TURSO_URL: turso.url, TURSO_TOKEN: turso.token, SESSION_SECRET: SECRET });
+  sent.length = 0;
+  await runBotJob(cfgNow, 'morning', { now: Date.now() + 864e5, env: { FINANCE_BOT_TOKEN: '123456:made-up-token', TELEGRAM_CHAT_ID: CHAT, FH_TG_API: fakeTg.url } });
+  assert.ok(sent.some((x) => x.method === 'sendMessage' && /Reminder[\s\S]*pay made-up internet/.test(x.p.text)));
+});
+
 test('commands answer from the synced copy; a message without an amount gets help', async () => {
   sent.length = 0;
   await post('/api/telegram', message('/balance'), hookHeaders());

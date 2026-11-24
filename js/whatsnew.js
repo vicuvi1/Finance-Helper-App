@@ -6,6 +6,7 @@
 import { isNewerVersion } from './version.js';
 
 export const NOTES = [
+  { v: '1.132.0', items: ['A smarter always-on bot, no AI: ask in plain words ("food this month", "taxi in October", "linella last month", "where did my money go", "can I afford 3000", "what\'s left today", "when is rent"), in English, Romanian or Russian, and follow up with "and last month?" or "and taxi?".', 'Several records in one message: "lunch 120, taxi 45, coffee 30", with one Undo for all.', 'Reminders: "remind me to pay internet on the 27th" comes in that morning\'s message; /reminders lists them with Cancel.'] },
   { v: '1.131.0', items: ['Plan → 🧭 Life planner: put your big goals on a timeline (an apartment, a car, a wedding) and see if the money will be there. One answer ("2 of 3 fit"), a line of your money month by month with each goal marked, and for a goal that doesn\'t fit: how much more a month, or the month it would fit. Sliders for what comes in, what you spend, prices, a yearly raise, what savings earn and how much to keep aside; they start from your own months.'] },
   { v: '1.130.1', items: ['Fix: the People cards were squashed (names and amounts on top of each other) since 1.112. They look right again.'] },
   { v: '1.130.0', items: ['Under "All my money" in the sidebar: about how much that is in dollars and euros at today\'s rates, in small print (hidden with your amounts when you press Space).'] },

@@ -29,6 +29,8 @@ import { rateAdvice, heldIn } from '../js/fxsmart.js'
 import { accountBalances, budgetStatus } from '../js/model.js'
 import { addMonths, monthKey } from '../js/dates.js'
 import { pushCopy, readValue } from './_money.mjs'
+import { run } from './_lib.mjs'
+import { answer, isQuestion, splitRecords, readReminder } from '../js/botask.js'
 
 export const MONEY_TZ = 'Europe/Chisinau'
 
@@ -66,9 +68,33 @@ export const HELP = [
   'Type what you spent: <code>coffee 35</code>, <code>taxi 45 maib</code>, <code>120+45 groceries</code>',
   'Income starts with +: <code>+500 salary</code>',
   'Another day: <code>yesterday 120 lunch</code>, <code>300 taxi 12 nov</code>, <code>mon 80 gym</code>',
+  'Several at once: <code>lunch 120, taxi 45, coffee 30</code>',
+  '',
+  '<b>Ask in plain words</b>: <code>food this month</code>, <code>taxi in October</code>, <code>and last month?</code>, <code>can I afford 3000</code>, <code>what\'s left today</code>, <code>when is rent</code>, <code>where did my money go</code>',
+  'Reminders: <code>remind me to pay internet on the 27th</code> · /reminders',
   '',
   '/today · /month · /balance · /last · /undo',
 ].join('\n')
+
+// The last question per chat (30 minutes), so "and last month?" knows what you asked; reminders.
+const T_CTX = 'CREATE TABLE IF NOT EXISTS sys_bot_ctx (chat TEXT PRIMARY KEY, json TEXT NOT NULL, at INTEGER NOT NULL)'
+const T_REM = 'CREATE TABLE IF NOT EXISTS sys_bot_reminders (id TEXT PRIMARY KEY, due TEXT NOT NULL, text TEXT NOT NULL, created INTEGER NOT NULL, done INTEGER NOT NULL DEFAULT 0)'
+async function readCtx(cfg, chat, now, fetchImpl) {
+  const [, rows] = await run(cfg, [[T_CTX], ['SELECT json, at FROM sys_bot_ctx WHERE chat = ?', [chat]]], fetchImpl).catch(() => [null, []])
+  if (!rows?.[0] || now - Number(rows[0][1]) > 30 * 60000) return null
+  try { return JSON.parse(String(rows[0][0])) } catch { return null }
+}
+const saveCtx = (cfg, chat, ctx, now, fetchImpl) => run(cfg, [[T_CTX], ['INSERT INTO sys_bot_ctx (chat, json, at) VALUES (?, ?, ?) ON CONFLICT(chat) DO UPDATE SET json = excluded.json, at = excluded.at', [chat, JSON.stringify(ctx || {}), now]]], fetchImpl).catch(() => null)
+export async function listReminders(cfg, fetchImpl = fetch) {
+  const [, rows] = await run(cfg, [[T_REM], ['SELECT id, due, text FROM sys_bot_reminders WHERE done = 0 ORDER BY due, created LIMIT 30']], fetchImpl)
+  return rows.map(([id, due, text]) => ({ id: String(id), due: String(due), text: String(text) }))
+}
+/** Reminders due by `today` (marked done as they are handed out). */
+export async function takeDueReminders(cfg, today, fetchImpl = fetch) {
+  const [, rows] = await run(cfg, [[T_REM], ['SELECT id, due, text FROM sys_bot_reminders WHERE done = 0 AND due <= ? ORDER BY due', [today]]], fetchImpl)
+  if (rows.length) await run(cfg, [['UPDATE sys_bot_reminders SET done = 1 WHERE done = 0 AND due <= ?', [today]]], fetchImpl)
+  return rows.map(([id, due, text]) => ({ id: String(id), due: String(due), text: String(text) }))
+}
 
 // Under each saved record: Undo, and change its category or account (the next record from the
 // same shop then gets the category you picked: the app learns from your records).
@@ -136,7 +162,25 @@ export async function handleUpdate(cfg, bot, update, { now = Date.now(), fetchIm
   const cq = update.callback_query
   if (cq) {
     if (String(cq.message?.chat?.id ?? cq.from?.id) !== bot.chat) return calls
-    const m = /^(undo|rc|ra|rb|sc|sa):((?:tg-\d+)|(?:ph-[a-z0-9]+))(?::(\d+))?$/.exec(cq.data || '')
+    // Undo all the records of one message; cancel a reminder.
+    const all = /^undoall:(\d+)$/.exec(cq.data || '')
+    if (all) {
+      const cur = await readValue(cfg, fetchImpl)
+      const s = state(cur.value)
+      const ids = s.tx.filter((t) => String(t.id).startsWith(`tg-${all[1]}-`)).map((t) => t.id)
+      for (const id of ids) await removeRecord(cfg, id, now, fetchImpl)
+      await call('answerCallbackQuery', { callback_query_id: cq.id, text: ids.length ? `Removed ${ids.length}` : 'Already removed' })
+      if (ids.length && cq.message) await call('editMessageText', { chat_id: cq.message.chat.id, message_id: cq.message.message_id, text: `↩️ Removed ${ids.length} record${ids.length === 1 ? '' : 's'}` })
+      return calls
+    }
+    const rmx = /^rmx:([a-z0-9-]+)$/.exec(cq.data || '')
+    if (rmx) {
+      await run(cfg, [[T_REM], ['UPDATE sys_bot_reminders SET done = 1 WHERE id = ?', [rmx[1]]]], fetchImpl)
+      await call('answerCallbackQuery', { callback_query_id: cq.id, text: 'Reminder cancelled' })
+      if (cq.message) await call('editMessageReplyMarkup', { chat_id: cq.message.chat.id, message_id: cq.message.message_id, reply_markup: { inline_keyboard: [] } })
+      return calls
+    }
+    const m = /^(undo|rc|ra|rb|sc|sa):((?:tg-\d+(?:-\d+)?)|(?:ph-[a-z0-9]+))(?::(\d+))?$/.exec(cq.data || '')
     if (!m) { await call('answerCallbackQuery', { callback_query_id: cq.id }); return calls }
     const [, op, id, idx] = m
     const where = cq.message ? { chat_id: cq.message.chat.id, message_id: cq.message.message_id } : null
@@ -181,6 +225,18 @@ export async function handleUpdate(cfg, bot, update, { now = Date.now(), fetchIm
     else if (cmd === 'month') await reply(monthText(s, today))
     else if (cmd === 'balance') await reply(balanceText(s))
     else if (cmd === 'last') await reply(lastText(s, 10))
+    else if (cmd === 'reminders') {
+      const list = await listReminders(cfg, fetchImpl)
+      await reply(list.length ? `⏰ <b>Your reminders</b> (they come in the morning message):\n${list.map((r) => `• ${esc(shortDay(r.due))}: ${esc(r.text)}`).join('\n')}` : 'No reminders. Add one: <code>remind me to pay internet on the 27th</code>', list.length ? { reply_markup: { inline_keyboard: list.slice(0, 10).map((r) => [{ text: `✕ ${r.text.slice(0, 30)}`, callback_data: `rmx:${r.id}` }]) } } : {})
+    } else if (cmd === 'remind') {
+      const r = readReminder(text, today)
+      if (!r) await reply('Write it like: <code>/remind pay internet on the 27th</code>')
+      else {
+        const id = `rm-${update.update_id}`
+        await run(cfg, [[T_REM], ['INSERT OR IGNORE INTO sys_bot_reminders (id, due, text, created) VALUES (?, ?, ?, ?)', [id, r.date, r.text.slice(0, 200), now]]], fetchImpl)
+        await reply(`⏰ I'll remind you on <b>${esc(shortDay(r.date))}</b> morning: ${esc(r.text)}`, { reply_markup: { inline_keyboard: [[{ text: '✕ Cancel', callback_data: `rmx:${id}` }]] } })
+      }
+    }
     else if (cmd === 'undo') {
       const mine = s.tx.filter((t) => String(t.id).startsWith('tg-')).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))[0]
       if (!mine || now - (mine.createdAt || 0) > 24 * 3600_000) await reply('Nothing from the bot in the last 24 hours to undo. Delete older records in the app.')
@@ -192,11 +248,45 @@ export async function handleUpdate(cfg, bot, update, { now = Date.now(), fetchIm
     return calls
   }
 
-  // A record. The same message twice (Telegram retries) is one record.
+  // A reminder: "remind me to pay internet on the 27th".
+  const rem = readReminder(text, today)
+  if (rem) {
+    const id = `rm-${update.update_id}`
+    await run(cfg, [[T_REM], ['INSERT OR IGNORE INTO sys_bot_reminders (id, due, text, created) VALUES (?, ?, ?, ?)', [id, rem.date, rem.text.slice(0, 200), now]]], fetchImpl)
+    await reply(`⏰ I'll remind you on <b>${esc(shortDay(rem.date))}</b> morning: ${esc(rem.text)}`, { reply_markup: { inline_keyboard: [[{ text: '✕ Cancel', callback_data: `rmx:${id}` }]] } })
+    return calls
+  }
+
+  // The same message twice (Telegram retries) is handled once.
   const id = `tg-${update.update_id}`
   const cur = await readValue(cfg, fetchImpl)
   const s = state(cur.value)
-  if (s.tx.some((t) => t.id === id) || s.deleted?.[id]) return calls
+  if (s.tx.some((t) => t.id === id || String(t.id).startsWith(`${id}-`)) || s.deleted?.[id]) return calls
+
+  // A question in plain words: "food this month", "and last month?", "can I afford 3000".
+  if (isQuestion(text) || /^(when|next|cand|когда)\b/i.test(text)) {
+    const prev = await readCtx(cfg, chatId, now, fetchImpl)
+    const a = answer(s, text, today, prev)
+    if (a) {
+      if (a.ctx) await saveCtx(cfg, chatId, a.ctx, now, fetchImpl)
+      await reply(a.text)
+      return calls
+    }
+  }
+
+  // Several records in one message: "lunch 120, taxi 45, coffee 30".
+  const parts = splitRecords(text)
+  if (parts) {
+    const read = parts.map((p) => parseQuick(s, p, { today }))
+    if (read.every((r) => r.ok)) {
+      const made = read.map((r, i) => ({ id: `${id}-${i + 1}`, createdAt: now + i, updatedAt: now, ...r.tx, source: 'telegram' }))
+      s.tx.push(...made)
+      await pushCopy(cfg, s, { edited: true, editedAt: now }, now, fetchImpl)
+      const total = made.filter((t) => t.type === 'expense').reduce((a, t) => a + t.amount, 0)
+      await reply(`✅ <b>${made.length} records</b>\n${made.map((t) => `• ${t.type === 'income' ? '+' : '−'}${esc(formatMoney(t.amount, t.currency))} · ${esc(t.note || '')}`).join('\n')}${total ? `\nTogether: ${esc(formatMoney(total, s.settings.currency))}` : ''}\n\n${safeLine(s, today, (c) => money(s, c))}`, { reply_markup: { inline_keyboard: [[{ text: '↩️ Undo all', callback_data: `undoall:${update.update_id}` }]] } })
+      return calls
+    }
+  }
   const r = parseQuick(s, text, { today })
   if (!r.ok) { await reply(`🤔 ${esc(r.missing || 'Type an amount and what it was for, like "coffee 35".')}\n\n/help`); return calls }
   const t = { id, createdAt: now, updatedAt: now, ...r.tx, source: 'telegram' }
@@ -218,7 +308,8 @@ export async function setupBot(cfg, bot, url, fetchImpl = fetch) {
     { command: 'balance', description: 'All my money' },
     { command: 'last', description: 'Last 10 records' },
     { command: 'undo', description: 'Remove the last record from the bot' },
-    { command: 'help', description: 'How to log' },
+    { command: 'reminders', description: 'Your reminders' },
+    { command: 'help', description: 'How to log and what to ask' },
   ] }, fetchImpl).catch(() => {})
   return { bot: me.username }
 }
@@ -304,6 +395,9 @@ export async function runBotJob(cfg, job, { now = Date.now(), fetchImpl = fetch,
   const today = moneyDay(now)
   const texts = []
   if (job === 'morning') {
+    // Reminders you asked for ("remind me to … on the 27th"): always sent, morning message on or off.
+    const due = await takeDueReminders(cfg, today, fetchImpl).catch(() => [])
+    if (due.length) texts.push(`⏰ <b>Reminder${due.length === 1 ? '' : 's'}</b>\n${due.map((r) => `• ${esc(r.text)}${r.due < today ? ` <i>(from ${esc(shortDay(r.due))})</i>` : ''}`).join('\n')}`)
     if (on.morning) texts.push(morningText(s, today))
     if (on.weekly && new Date(`${today}T12:00:00Z`).getUTCDay() === 0) texts.push(weeklyText(s, weeklyReview(s, today)))
     if (on.monthly && today.endsWith('-01')) texts.push(recapText(s, addMonths(monthKey(today), -1)))

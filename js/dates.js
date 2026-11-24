@@ -7,7 +7,7 @@ const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 // Month names the importer understands: English, Romanian (with and without
 // diacritics) and Russian, full or short.
-const MONTH_NAMES = [
+export const MONTH_NAMES = [
   ['january', 'jan', 'ianuarie', 'ian', 'январь', 'января', 'янв'],
   ['february', 'feb', 'februarie', 'febr', 'февраль', 'февраля', 'фев'],
   ['march', 'mar', 'martie', 'март', 'марта'],
