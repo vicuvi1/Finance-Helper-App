@@ -352,6 +352,42 @@ test('Life planner: add a goal, see if it fits, a slider changes the answer', as
   await context.close();
 });
 
+test('Phone Home: four swipe screens on a phone, the long Home on the desktop, Classic Home on request', async () => {
+  const { page, errors, context } = await openPage(browser, server.url, { width: 390, height: 844 });
+  await page.goto(server.url);
+  await page.waitForSelector('#app header.top, [data-testid="phone-home"]');
+  await page.evaluate(() => {
+    const st = JSON.parse(globalThis.__fhStore.getItem('finance-helper.state'));
+    const acc = st.settings.accounts.find((a) => !a.archived).id;
+    const d = new Date().toISOString().slice(0, 10);
+    st.tx.push({ id: 'phh-1', date: d, type: 'expense', amount: 4500, currency: st.settings.currency || 'MDL', account: acc, category: 'other', note: 'Made-up tea', createdAt: Date.now(), updatedAt: Date.now() });
+    globalThis.__fhStore.setItem('finance-helper.state', JSON.stringify(st));
+  });
+  await page.reload();
+  await page.waitForSelector('[data-testid="phone-home"]');
+  assert.equal(await page.$$eval('.ph-panel', (x) => x.length), 4);
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), 390, 'nothing wider than the phone');
+  if (process.env.FH_SHOTS) {
+    for (const [i, n] of ['today', 'month', 'safety', 'next'].entries()) {
+      await page.evaluate((k) => { const t = document.querySelector('.ph-track'); t.scrollLeft = k * t.clientWidth; }, i);
+      await page.waitForTimeout(300);
+      await page.screenshot({ path: `${process.env.FH_SHOTS}/ph-${n}.png` });
+    }
+  }
+  await page.click('[data-ph-go="1"]');
+  await page.waitForFunction(() => document.querySelector('[data-ph-go="1"]').getAttribute('aria-selected') === 'true');
+  await page.click('[data-act="phone-home-classic"]');
+  await page.waitForSelector('[data-testid="home-pick-open"]');
+  assert.equal(await page.$('[data-testid="phone-home"]'), null);
+  assert.deepEqual(errors, []);
+  await context.close();
+  const desk = await openPage(browser, server.url);
+  await desk.page.goto(server.url);
+  await desk.page.waitForSelector('#app header.top');
+  assert.equal(await desk.page.$('[data-testid="phone-home"]'), null, 'the desktop keeps its Home');
+  await desk.context.close();
+});
+
 test('Plan → Planned: add a big expense, it is spread over the months', async () => {
   const { page, errors, context } = await openPage(browser, server.url);
   await page.goto(`${server.url}#plan`);

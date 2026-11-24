@@ -6643,3 +6643,60 @@ tr.week-row b.bad { color: var(--expense); } tr.week-row b.good { color: var(--i
 .lp .lp-table th:nth-child(1) { width: 28%; } .lp .lp-table th:nth-child(2) { width: 15%; } .lp .lp-table th:nth-child(3) { width: 19%; }
 .lp .lp-table th:nth-child(4) { width: auto; } .lp .lp-table th:nth-child(5) { width: 48px; }
 .lp .lp-status { text-align: left; }
+
+/* Phone Home (js/screens/phonehome.js): four swipe screens */
+.ph { display: flex; flex-direction: column; gap: 10px; margin: -4px -16px 0; }
+.ph-tabs { display: flex; gap: 4px; padding: 4px; margin: 0 16px; border-radius: 999px; background: var(--surface); overflow-x: auto; scrollbar-width: none; }
+.ph-tabs::-webkit-scrollbar { display: none; }
+.ph-tab { flex: 1 0 auto; min-height: 36px; padding: 6px 12px; border: 0; border-radius: 999px; background: transparent; color: var(--muted); font: inherit; font-size: 13px; white-space: nowrap; cursor: pointer; }
+.ph-tab[aria-selected="true"] { background: var(--gold); color: var(--bg); font-weight: 600; }
+.ph-track { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; }
+.ph-track::-webkit-scrollbar { display: none; }
+.ph-panel { flex: 0 0 100%; box-sizing: border-box; padding: 6px 16px 12px; scroll-snap-align: start; scroll-snap-stop: always; display: flex; flex-direction: column; gap: 12px; min-height: calc(100dvh - 190px); }
+.ph-q { margin: 6px 0 0; color: var(--muted); font-size: 14px; }
+.ph-a { margin: 0; font-family: var(--display); font-weight: 600; font-size: 40px; line-height: 1.05; letter-spacing: -0.02em; color: var(--gold); }
+.ph-a.good { color: var(--income); }
+.ph-a.warn { color: var(--expense); }
+.ph-sub { margin: 0; color: var(--muted); font-size: 15px; line-height: 1.45; }
+.ph-center { display: flex; justify-content: center; }
+.ph-ring { width: 200px; height: 200px; }
+.ph-ring-bg { fill: none; stroke: var(--surface-3); stroke-width: 18; }
+.ph-ring-fg { fill: none; stroke: var(--gold); stroke-width: 18; stroke-linecap: round; }
+.ph-ring-bg.sm, .ph-ring-fg.sm { stroke-width: 8; }
+.ph-ring-k { fill: var(--muted); font-size: 13px; font-family: var(--font); }
+.ph-ring-v { fill: var(--text); font-size: 30px; font-weight: 600; font-family: var(--display); }
+.ph-box { padding: 12px 14px; border-radius: 16px; background: var(--surface); display: grid; gap: 8px; }
+.ph-row { display: flex; justify-content: space-between; gap: 10px; font-size: 14px; }
+.ph-qa { margin-top: auto; }
+.ph-qa .qa-card { margin: 0; }
+.ph-chart { width: 100%; height: auto; display: block; }
+.ph-line { fill: none; stroke: var(--gold); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+.ph-usual { fill: none; stroke: var(--faint); stroke-width: 2; stroke-dasharray: 5 5; }
+.ph-dot { fill: var(--gold); }
+.ph-base { stroke: var(--line); }
+.ph-axis { fill: var(--faint); font-size: 11px; font-family: var(--font); }
+.ph-legend { margin: 0; display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; font-size: 12px; color: var(--muted); }
+.ph-k { display: inline-block; width: 14px; height: 3px; border-radius: 2px; margin-right: 6px; vertical-align: middle; background: var(--gold); }
+.ph-k.usual { background: none; border-top: 2px dashed var(--faint); height: 0; }
+.ph-trio { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.ph-trio > div { padding: 10px 12px; border-radius: 14px; background: var(--surface); display: grid; gap: 2px; }
+.ph-trio small { color: var(--muted); font-size: 12px; }
+.ph-trio b { font-family: var(--display); font-size: 20px; font-weight: 600; }
+.ph-bar { display: flex; height: 12px; gap: 3px; border-radius: 6px; overflow: hidden; }
+.ph-bar i, .ph-k.c0, .ph-k.c1, .ph-k.c2, .ph-k.c3 { display: inline-block; }
+.ph-bar .c0, .ph-k.c0 { background: var(--c1); } .ph-bar .c1, .ph-k.c1 { background: var(--gold); }
+.ph-bar .c2, .ph-k.c2 { background: var(--c7); } .ph-bar .c3, .ph-k.c3 { background: var(--c5); }
+.ph-k.c0, .ph-k.c1, .ph-k.c2, .ph-k.c3 { width: 10px; height: 10px; border-radius: 3px; }
+.ph-ruler { position: relative; height: 14px; border-radius: 7px; background: var(--surface-3); overflow: hidden; }
+.ph-ruler i { position: absolute; inset: 0 auto 0 0; border-radius: 7px; background: var(--gold); }
+.ph-line6 { position: absolute; left: 50%; top: -2px; bottom: -2px; width: 2px; background: var(--income); }
+.ph-box .ph-legend { justify-content: space-between; }
+.ph-goals { display: grid; gap: 10px; }
+.ph-goal { display: flex; gap: 12px; align-items: center; padding: 10px 12px; border-radius: 14px; background: var(--surface); }
+.ph-goal span { display: grid; gap: 2px; }
+.ph-goal small { color: var(--muted); }
+.ph-goal-p { fill: var(--text); font-size: 15px; font-weight: 600; font-family: var(--font); }
+.ph-panel[data-ph="next"] .card { margin: 0; }
+.ph-classic { text-align: center; margin: 4px 0 8px; font-size: 13px; }
+@media (prefers-reduced-motion: reduce) { .ph-track { scroll-behavior: auto; } }
+.ph-ring.warn .ph-ring-fg { stroke: var(--expense); }

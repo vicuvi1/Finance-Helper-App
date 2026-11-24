@@ -91,6 +91,25 @@ public class MainActivity extends Activity {
     }
   }
 
+  // In the background the page sleeps: no timers, no sync checks, no battery. Payments are still
+  // caught by BankListener (Android's own notification listener), and saved on your server.
+  @Override
+  protected void onPause() {
+    super.onPause();
+    if (web != null) { web.onPause(); web.pauseTimers(); }
+  }
+
+  @Override
+  protected void onResume() {
+    super.onResume();
+    if (web != null) {
+      web.onResume();
+      web.resumeTimers();
+      // Back in the app: catch up at once (the page syncs when it becomes visible).
+      web.evaluateJavascript("window.dispatchEvent(new Event('focus'))", null);
+    }
+  }
+
   @Override protected void onSaveInstanceState(Bundle out) { super.onSaveInstanceState(out); web.saveState(out); }
 
   @Override

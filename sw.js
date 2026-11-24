@@ -105,6 +105,8 @@ const SHELL = [
   './js/lifeplan.js',
   './js/screens/lifeplan.js',
   './js/botask.js',
+  './js/phonehome.js',
+  './js/screens/phonehome.js',
   './js/wishlist.js',
   './js/screens/calendar.js',
   './js/screens/afford.js',

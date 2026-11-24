@@ -32,6 +32,7 @@ import * as Binance from './screens/binance.js';
 import * as Sync from './screens/sync.js';
 import * as HomeCards from './homecards.js';
 import * as BudgetAuto from './budgetauto.js';
+import * as PhoneHome from './screens/phonehome.js';
 import * as ToCheck from './screens/tocheck.js';
 import * as CheckIn from './screens/checkin.js';
 import * as ShopNames from './screens/shopnames.js';
@@ -1131,6 +1132,10 @@ function stepsCard(today) {
 
 function viewHome() {
   const today = todayISO();
+  // On a phone: four swipe screens, one question each (js/screens/phonehome.js).
+  if (PhoneHome.active() && state.tx.length) {
+    return PhoneHome.view(today, { steps: stepsCard(today), quickAdd: MoneyB.topHTML(), coming: Plan.homeCard() });
+  }
   const key = monthKey(today);
   const s = M.monthSummary(state, key);
   const recent = M.sortTx(state.tx).slice(0, 5);
@@ -1185,7 +1190,7 @@ function viewHome() {
       ${on('jars') ? jarsCard(key) : ''}
     </div>
   </div>
-  <p class="home-pick-link"><button type="button" class="linkish" data-act="home-pick" data-testid="home-pick-open">Choose what Home shows</button></p>`;
+  <p class="home-pick-link"><button type="button" class="linkish" data-act="home-pick" data-testid="home-pick-open">Choose what Home shows</button>${window.matchMedia?.('(max-width: 600px)').matches ? ' · <button type="button" class="linkish" data-act="phone-home-new">The phone Home</button>' : ''}</p>`;
 }
 
 /** The emergency fund as your main goal: Home's emergency card already shows it (once is enough). */
@@ -1910,6 +1915,7 @@ function render({ enter = false } = {}) {
   Motion.slideSegs(app);
   // js/flow.js: a short fade for a sub-screen, rows that ease in, out and light up when saved.
   Flow.afterScreen(app, `${ui.tab}|${ui.settingsTab || ''}|${state.settings.logView || ''}`, { enter });
+  if (ui.tab === 'home') PhoneHome.after(app);
   Flow.afterRender(app, `${ui.tab}|${ui.month || ''}|${ui.filter || ''}|${ui.search || ''}|${ui.settingsTab || ''}`, { enter });
   // Phone: keep the chosen month visible in the scrolling month strip.
   const strip = app.querySelector('.mnav-months');
@@ -3623,6 +3629,8 @@ document.addEventListener('click', (e) => {
   else if (act === 'limit-setup') openLimitSheet();
   else if (act === 'spend-setup') openSpendSheet();
   else if (act === 'tocheck-open') ToCheck.open();
+  else if (act === 'phone-home-classic') { PhoneHome.setClassic(true); render(); toast('Classic Home on this phone', 'Undo', () => { PhoneHome.setClassic(false); render(); }); }
+  else if (act === 'phone-home-new') { PhoneHome.setClassic(false); render(); }
   else if (act === 'checkin-open') CheckIn.open();
   else if (act === 'shops-open') ShopNames.open();
   else if (act === 'budget-auto-seen') { state.meta.budgetAutoSeen = state.settings.budgetAutoLast?.month; persist({ quiet: true }); ui.planTab = 'budgets'; location.hash = '#plan'; render(); }
@@ -3876,6 +3884,8 @@ document.addEventListener('input', (e) => {
 });
 
 Money3.install();
+// Turning the phone or resizing past phone width: Home switches between the swipe screens and the long page.
+PhoneHome.onPhoneChange(() => { if (ui.tab === 'home') render(); });
 
 // Desktop shortcuts: N = new record, / = search, 1-9 and 0 = sections, Esc = close.
 document.addEventListener('keydown', (e) => {
