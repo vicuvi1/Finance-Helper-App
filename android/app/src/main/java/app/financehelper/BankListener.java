@@ -46,7 +46,17 @@ public class BankListener extends NotificationListenerService {
       apps.put(pkg, a);
       s.saveApps(apps);
       if (a.optBoolean("on")) {
-        new Thread(() -> Capture.send(this, text)).start();
+        if (s.askFirst()) {
+          // Ask first: "💳 120 MDL · Linella — Food · maib Visa, save it?"
+          String id = Long.toString(now, 36) + Integer.toString(Math.abs(text.hashCode()), 36);
+          new Thread(() -> {
+            org.json.JSONObject pv = Capture.preview(this, text, now);
+            if (pv != null && !pv.optBoolean("payment", false)) return; // not a payment after all (a code, declined)
+            Ask.show(this, id, text, now, pv);
+          }).start();
+        } else {
+          new Thread(() -> Capture.send(this, text)).start();
+        }
       } else if (isNew) {
         ask(pkg, a.optString("label"));
       }

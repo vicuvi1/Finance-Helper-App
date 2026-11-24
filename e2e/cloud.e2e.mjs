@@ -136,11 +136,13 @@ test('first visit: sign in with the PIN and Money comes from the server; a web r
   await page.click('.sheet [data-close]');
   // Payments recorded by themselves from the phone: the link takes a bank message once.
   // Inside the Android app (a stand-in for window.FHAndroid): two steps, the link is handed over.
-  await page.evaluate(() => { window.FHAndroid = { status: () => JSON.stringify({ listener: true, apps: [{ pkg: 'md.madeup.bank', label: 'Made-up Bank', example: 'Plata 10 MDL', on: false, seen: 1 }] }), setCapture: (u) => { window.__cap = u; }, setApp: (p, on) => { window.__app = [p, on]; }, openListenerSettings: () => {}, setWidgetLine: () => {} }; });
+  await page.evaluate(() => { window.FHAndroid = { status: () => JSON.stringify({ listener: true, askFirst: true, version: '1.133.0', latest: '1.133.0', waiting: 1, apps: [{ pkg: 'md.madeup.bank', label: 'Made-up Bank', example: 'Plata 10 MDL', on: false, seen: 1 }] }), setCapture: (u) => { window.__cap = u; }, setApp: (p, on) => { window.__app = [p, on]; }, openListenerSettings: () => {}, setWidgetLine: () => {}, setAskFirst: (on) => { window.__ask = on; }, checkUpdate: () => {} }; });
   await page.click('[data-testid="phone-pay"]');
   await page.waitForSelector('[data-testid="pp-link"]', { timeout: 15000 });
   assert.match(await page.textContent('[data-testid="pp-android"]'), /Step 1 done[\s\S]*Made-up Bank/);
   await page.check('[data-pp-app="md.madeup.bank"]');
+  await page.uncheck('[data-pp-ask]');
+  assert.equal(await page.evaluate(() => window.__ask), false);
   assert.deepEqual(await page.evaluate(() => window.__app), ['md.madeup.bank', true]);
   assert.match(await page.evaluate(() => window.__cap), /\/api\/capture\?k=/);
   await page.fill('[data-testid="pp-try"]', 'Plata 120,50 MDL la LINELLA, card *9999');
@@ -161,6 +163,14 @@ test('first visit: sign in with the PIN and Money comes from the server; a web r
   assert.match(quick.text, /35.*made-up tea/);
   const again = await fetch(ppLink, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ quick: '35 made-up tea', at: 1795000000000 }) }).then((r) => r.json());
   assert.equal(again.saved, false, 'the same tap sent twice (offline retry) is one record');
+  // Ask first: the preview saves nothing; Save with a changed category saves exactly that.
+  const pv = await fetch(`${ppLink}&q=preview`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: 'Plata 64,00 MDL la MADE-UP BAKERY', at: 1795100000000 }) }).then((r) => r.json());
+  assert.equal(pv.payment, true);
+  assert.equal(pv.amount, 6400);
+  assert.ok(pv.categories.length > 1);
+  const pick = pv.categories[1].id;
+  const ok = await fetch(ppLink, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: 'Plata 64,00 MDL la MADE-UP BAKERY', at: 1795100000000, confirm: true, category: pick }) }).then((r) => r.json());
+  assert.equal(ok.saved, true);
   assert.equal((await fetch(ppLink.replace(/k=[^&]+/, 'k=wrong'), { method: 'POST', body: 'Plata 5 MDL' })).status, 404);
   await page.click('.sheet [data-close]');
   // Data & health: the server's space and how long it lasts, and the checks.

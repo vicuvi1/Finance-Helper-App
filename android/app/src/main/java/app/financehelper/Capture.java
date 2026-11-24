@@ -81,6 +81,35 @@ final class Capture {
     }
   }
 
+  /** What a payment would be saved as (nothing saved): the server's preview, or null offline. */
+  static JSONObject preview(Context ctx, String text, long at) {
+    String url = new Store(ctx).capture();
+    if (url.isEmpty()) return null;
+    try {
+      String body = new JSONObject().put("text", text).put("at", at).toString();
+      return post(url + (url.contains("?") ? "&" : "?") + "q=preview", body, "application/json");
+    } catch (Exception e) {
+      return null;
+    }
+  }
+
+  /** Saves a payment you confirmed (with any changes); kept and sent later when offline. Returns the server's line or null. */
+  static String confirm(Context ctx, JSONObject body) {
+    Store s = new Store(ctx);
+    String url = s.capture();
+    String json = body.toString();
+    JSONObject r = url.isEmpty() ? null : post(url, json, "application/json");
+    if (r == null) {
+      JSONArray q = s.queue();
+      q.put(json);
+      trim(q);
+      s.saveQueue(q);
+      return null;
+    }
+    if (r.optBoolean("saved")) Widget.fromLine(ctx, r.optString("text"));
+    return r.optString("text", "Saved");
+  }
+
   /** The phone notifications your server has for you (bills due, budgets, money low). */
   static JSONArray alerts(Context ctx) {
     String url = new Store(ctx).capture();

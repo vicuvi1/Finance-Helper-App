@@ -60,6 +60,7 @@ public class MainActivity extends Activity {
     }
     new Thread(() -> Capture.send(this, null)).start(); // anything waiting from when the phone was offline
     AlertJob.schedule(this);
+    new Thread(() -> UpdateCheck.run(this, false)).start();
   }
 
   /** fh://open/add-expense → https://server/#add-expense */

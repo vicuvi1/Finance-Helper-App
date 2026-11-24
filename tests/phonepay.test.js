@@ -53,3 +53,26 @@ test('a record, on the right card, once', () => {
   assert.equal(again.skip, true);
   assert.equal(accountFor(s, { card: acc.name }), acc.id);
 });
+
+test('ask first: a preview saves nothing; confirming with changes saves exactly that', async () => {
+  const { paymentPreview } = await import('../js/phonepay.js');
+  const s = defaultState();
+  const acc = s.settings.accounts[s.settings.accounts.length - 1];
+  const other = s.settings.accounts.find((a) => a.id !== acc.id && !a.archived);
+  acc.last4 = '4821';
+  const at = Date.UTC(2026, 10, 22, 10);
+  const pv = paymentPreview(s, { text: 'Plata 120,50 MDL la LINELLA, card *4821', at }, { now: at, today: '2026-11-22' });
+  assert.equal(pv.ok, true);
+  assert.equal(pv.amount, 12050);
+  assert.equal(pv.account, acc.id);
+  assert.ok(pv.categories.length > 0 && pv.categories[0].id === pv.category);
+  assert.equal(s.tx.length, 0, 'nothing saved');
+  const cat = s.settings.categories.find((c) => c.type === 'expense' && c.id !== pv.category);
+  const r = paymentRecord(s, { text: 'Plata 120,50 MDL la LINELLA, card *4821', at, confirm: true, category: cat.id, account: other.id, note: 'Groceries', amount_set: 13000 }, { now: at + 60000, today: '2026-11-22' });
+  assert.equal(r.ok, true);
+  assert.equal(r.tx.category, cat.id);
+  assert.equal(r.tx.account, other.id);
+  assert.equal(r.tx.note, 'Groceries');
+  assert.equal(r.tx.amount, 13000);
+  assert.equal(r.tx.review, undefined, 'confirmed: nothing to check');
+});

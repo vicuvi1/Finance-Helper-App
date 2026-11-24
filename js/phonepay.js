@@ -122,13 +122,39 @@ export const captureId = (p, now) => `ph-${hash(`${p.kind}|${p.amount}|${p.curre
 export function paymentRecord(state, input, { now = Date.now(), today }) {
   const p = readPayment(input);
   if (p.kind === 'skip') return { ok: false, skip: true, why: p.why, p };
-  const id = captureId(p, now);
+  // Asked first on the phone: what you confirmed or changed (amount, note, category, card).
+  const confirmed = input.confirm === true;
+  if (confirmed && Number(input.amount_set) > 0) p.amount = Math.round(Number(input.amount_set));
+  const at = Number(input.at) > 0 ? Number(input.at) : now; // when the bank's notification came
+  const id = captureId(p, at);
   if ((state.tx || []).some((t) => t.id === id) || state.deleted?.[id]) return { ok: false, skip: true, why: 'Already recorded.', p };
   const recent = (state.tx || []).find((t) => t.type === p.kind && t.date === today && Math.abs((t.createdAt || 0) - now) < 10 * 60000 && (t.amount === p.amount || t.original?.amount === p.amount));
   if (recent) return { ok: false, skip: true, why: 'Already recorded a moment ago.', p, existing: recent.id };
-  const what = p.merchant ? canonicalFor(state, p.merchant) : p.kind === 'income' ? 'Money in' : 'Card payment';
+  const what = confirmed && String(input.note || '').trim() ? String(input.note).trim().slice(0, 80) : p.merchant ? canonicalFor(state, p.merchant) : p.kind === 'income' ? 'Money in' : 'Card payment';
   const text = `${p.kind === 'income' ? '+' : ''}${(p.amount / 100).toFixed(2)} ${p.currency || ''} ${what}`.replace(/\s+/g, ' ');
-  const r = parseQuick(state, text, { today, accountId: accountFor(state, p) });
+  const accountId = confirmed && activeAccounts(state).some((a) => a.id === input.account) ? input.account : accountFor(state, p);
+  const catOk = confirmed && (state.settings.categories || []).some((c) => c.id === input.category);
+  const r = parseQuick(state, text, { today, accountId, ...(catOk ? { catOverride: input.category } : {}) });
   if (!r.ok) return { ok: false, why: r.missing || 'Could not read it.', p };
-  return { ok: true, p, tx: { id, createdAt: now, updatedAt: now, ...r.tx, note: what, source: 'phone', review: true } };
+  // Confirmed on the phone: no "to check" needed.
+  return { ok: true, p, tx: { id, createdAt: now, updatedAt: now, ...r.tx, note: what, source: 'phone', ...(confirmed ? { confirmedAt: now } : { review: true }) } };
+}
+
+/**
+ * What a payment would be saved as, without saving it (the phone asks you first): the record,
+ * your 8 most used categories of that kind and your cards, for the "Change" window.
+ */
+export function paymentPreview(state, input, { now = Date.now(), today }) {
+  const r = paymentRecord(state, input, { now, today });
+  if (!r.ok) return r;
+  const t = r.tx;
+  const used = {};
+  for (const x of state.tx || []) if (x.type === t.type) used[x.category] = (used[x.category] || 0) + 1;
+  const cats = (state.settings.categories || []).filter((c) => !c.archived && (c.type || 'expense') === t.type)
+    .sort((a, b) => (b.id === t.category) - (a.id === t.category) || (used[b.id] || 0) - (used[a.id] || 0)).slice(0, 8)
+    .map((c) => ({ id: c.id, name: c.name, emoji: c.emoji || '' }));
+  const accs = activeAccounts(state).filter((a) => a.kind !== 'crypto').map((a) => ({ id: a.id, name: a.name, currency: a.currency || state.settings.currency }));
+  const cat = (state.settings.categories || []).find((c) => c.id === t.category);
+  const acc = accs.find((a) => a.id === t.account);
+  return { ok: true, tx: t, amount: r.p.amount, currency: r.p.currency || state.settings.currency, note: t.note, category: t.category, categoryName: cat?.name || 'Other', account: t.account, accountName: acc?.name || '', kind: t.type, categories: cats, accounts: accs };
 }

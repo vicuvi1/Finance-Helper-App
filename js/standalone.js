@@ -431,8 +431,10 @@ function paintAndroid(sheet) {
     <p style="margin:12px 0 6px"><b>Step 2:</b> your bank apps. ${apps.length ? 'Tick the ones whose payments to record:' : 'Pay once with your card (or wait for your bank\'s next notification): the bank app shows up here.'}</p>
     ${apps.map((a) => `<label class="ppay-app"><input type="checkbox" data-pp-app="${esc(a.pkg)}" ${a.on ? 'checked' : ''}><span><b>${esc(a.label)}</b><small>${esc(a.example)}</small></span></label>`).join('')}
     ${st.queued ? `<p style="margin:8px 0 0">${st.queued} payment${st.queued === 1 ? '' : 's'} waiting to be sent (no internet).</p>` : ''}
-    <label class="ppay-app" style="margin-top:10px"><input type="checkbox" data-pp-alerts ${st.alerts !== false ? 'checked' : ''}><span><b>Phone alerts</b><small>A bill due tomorrow, a budget at 80%, money running low: a notification on the phone (checked about once an hour).</small></span></label>
-    <p style="margin:10px 0 0">Add the <b>Safe to spend today</b> widget: press and hold the home screen → Widgets → Finance Helper.</p>
+    <label class="ppay-app" style="margin-top:10px"><input type="checkbox" data-pp-ask ${st.askFirst !== false ? 'checked' : ''}><span><b>Ask me before saving</b><small>Each payment comes as a question: "💳 120 MDL · Linella — Food · maib Visa, save it?" with Save, Change (category, card, amount, note) and Ignore. Off: saved by itself, to check later. On Android 16 (Samsung One UI 8) it also shows in the status bar and the Now Bar.</small></span></label>${st.waiting ? `<p style="margin:4px 0 0">${st.waiting} payment${st.waiting === 1 ? '' : 's'} waiting for your answer in the notifications.</p>` : ''}
+    <label class="ppay-app"><input type="checkbox" data-pp-alerts ${st.alerts !== false ? 'checked' : ''}><span><b>Phone alerts</b><small>A bill due tomorrow, a budget at 80%, money running low: a notification on the phone (checked about once an hour).</small></span></label>
+    <p style="margin:10px 0 0">App version <b>${esc(st.version || '?')}</b>${st.latest && st.version && st.latest !== st.version ? ` · <b>${esc(st.latest)}</b> is out: check the notification to update` : ''} · <button type="button" class="linkish" data-pp-android="update">Check for an update</button></p>
+    <p style="margin:6px 0 0">Add the <b>Safe to spend today</b> widget: press and hold the home screen → Widgets → Finance Helper.</p>
     <p style="margin:6px 0 0">Quick add from anywhere: swipe down twice from the top → ✏️ edit the tiles → drag <b>Add a record</b> in. Tap it, type "120 lunch", Save.</p>`;
 }
 
@@ -473,8 +475,11 @@ async function openPhonePay(reset = false) {
       paintAndroid(sheet);
       const again = () => { if (document.body.contains(sheet)) paintAndroid(sheet); };
       document.addEventListener('visibilitychange', again);
-      sheet.addEventListener('click', (e) => { if (e.target.closest('[data-pp-android="allow"]')) window.FHAndroid.openListenerSettings(); });
-      sheet.addEventListener('change', (e) => { if (e.target.matches?.('[data-pp-alerts]')) { try { window.FHAndroid.setAlerts(e.target.checked); } catch { /* older app */ } ctx.toast(e.target.checked ? 'Phone alerts on' : 'Phone alerts off'); return; } const pkg = e.target.dataset?.ppApp; if (pkg) { window.FHAndroid.setApp(pkg, e.target.checked); ctx.toast(e.target.checked ? 'Its payments will be recorded' : 'Not recorded any more'); } });
+      sheet.addEventListener('click', (e) => {
+        if (e.target.closest('[data-pp-android="allow"]')) window.FHAndroid.openListenerSettings();
+        if (e.target.closest('[data-pp-android="update"]')) { try { window.FHAndroid.checkUpdate(); ctx.toast('Checking… a notification says if there is a new version'); } catch { ctx.toast('Update this app once by hand to get this'); } }
+      });
+      sheet.addEventListener('change', (e) => { if (e.target.matches?.('[data-pp-ask]')) { try { window.FHAndroid.setAskFirst(e.target.checked); } catch { /* older app */ } ctx.toast(e.target.checked ? 'Each payment will ask you first' : 'Payments are saved by themselves (check them later)'); return; } if (e.target.matches?.('[data-pp-alerts]')) { try { window.FHAndroid.setAlerts(e.target.checked); } catch { /* older app */ } ctx.toast(e.target.checked ? 'Phone alerts on' : 'Phone alerts off'); return; } const pkg = e.target.dataset?.ppApp; if (pkg) { window.FHAndroid.setApp(pkg, e.target.checked); ctx.toast(e.target.checked ? 'Its payments will be recorded' : 'Not recorded any more'); } });
     }
     sheet.querySelectorAll('[data-pp-last4]').forEach((inp) => inp.addEventListener('change', () => {
       const a = st.settings.accounts.find((x) => x.id === inp.dataset.ppLast4);

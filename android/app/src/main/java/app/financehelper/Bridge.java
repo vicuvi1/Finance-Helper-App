@@ -39,6 +39,10 @@ final class Bridge {
       out.put("capture", !s.capture().isEmpty());
       out.put("queued", s.queue().length());
       out.put("alerts", s.alertsOn());
+      out.put("askFirst", s.askFirst());
+      out.put("version", BuildConfigHolder.VERSION);
+      out.put("latest", s.latestVersion());
+      out.put("waiting", s.pending().length());
       org.json.JSONArray list = new org.json.JSONArray();
       JSONObject apps = s.apps();
       for (Iterator<String> it = apps.keys(); it.hasNext();) {
@@ -69,6 +73,18 @@ final class Bridge {
       apps.put(pkg, x);
       s.saveApps(apps);
     } catch (Exception ignored) { /* nothing to change */ }
+  }
+
+  /** Ask before saving each payment (true) or save by itself (false). */
+  @JavascriptInterface public void setAskFirst(boolean on) {
+    if (!mine()) return;
+    s.setAskFirst(on);
+  }
+
+  /** Look for a newer version of the app now (the answer comes as a notification). */
+  @JavascriptInterface public void checkUpdate() {
+    if (!mine()) return;
+    new Thread(() -> UpdateCheck.run(a, true)).start();
   }
 
   /** Phone notifications for bills, budgets and money running low (on by default). */

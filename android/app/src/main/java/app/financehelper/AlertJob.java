@@ -40,6 +40,7 @@ public class AlertJob extends JobService {
     new Thread(() -> {
       try {
         Capture.send(this, null);
+        UpdateCheck.run(this, false);
         String line = Capture.safeLine(this);
         if (line != null) Widget.fromLine(this, line);
         Store s = new Store(this);

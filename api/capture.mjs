@@ -3,6 +3,8 @@
 //        of a bank notification/SMS → {ok, saved, text}   (text: one line to show on the phone)
 //   POST /api/capture?k=<secret>&q=alerts → {alerts: [{id, title, body}]} (Android phone notifications)
 //   POST /api/capture?k=<secret> {quick: '120 lunch', at} → records it like Quick add (the Android tile)
+//   POST /api/capture?k=<secret>&q=preview {text, at} → what it would save, your categories and cards (asks first)
+//   POST /api/capture?k=<secret> {text, at, confirm: true, category, account, note, amount_set} → saves what you confirmed
 //   POST /api/capture?k=<secret>&q=safe → {line: 'Safe to spend today: 412 MDL'} (the Android widget)
 //   POST /api/capture {op:'link'|'reset'}  (Bearer session) → {url}   reset: the old link stops working
 // The record goes into Money's copy on the server (the apps get it on their next sync) and, when
@@ -12,7 +14,7 @@ import { randomBytes, timingSafeEqual } from 'node:crypto'
 import { bearer, config, requireSession, run, send } from './_lib.mjs'
 import { pushCopy, readValue } from './_money.mjs'
 import { normalizeState, SCHEMA_VERSION } from '../js/model.js'
-import { paymentRecord } from '../js/phonepay.js'
+import { paymentRecord, paymentPreview } from '../js/phonepay.js'
 import { formatMoney } from '../js/money.js'
 import { safeLine } from '../js/safespend.js'
 import { loggedText } from '../js/telegram.js'
@@ -104,6 +106,18 @@ export default async function handler(req, res) {
       try { safe = safeLine(st, today, fmt).replace(/<[^>]+>/g, '') } catch { /* not critical */ }
       const acc = (st.settings.accounts || []).find((a) => a.id === t.account)?.name || ''
       return send(res, 200, { ok: true, saved: true, id, text: `✅ ${t.type === 'income' ? '+' : ''}${formatMoney(t.amount, t.currency, { reveal: true })} · ${t.note || ''}${acc ? ` · ${acc}` : ''}${safe ? `\n${safe}` : ''}` })
+    } catch (e) {
+      return send(res, 503, { error: e.message || 'Try again' })
+    }
+  }
+  // The Android app asks you first: what this payment would be saved as (nothing saved).
+  if (url.searchParams.get('q') === 'preview') {
+    try {
+      const cur = await readValue(cfg)
+      const st = normalizeState({ ...(cur.value?.data || {}), version: SCHEMA_VERSION })
+      const p = paymentPreview(st, input || {}, { now, today })
+      if (!p.ok) return send(res, 200, { ok: true, payment: false, text: p.why || 'Not a payment' })
+      return send(res, 200, { ok: true, payment: true, amount: p.amount, currency: p.currency, note: p.note, kind: p.kind, category: p.category, categoryName: p.categoryName, account: p.account, accountName: p.accountName, categories: p.categories, accounts: p.accounts })
     } catch (e) {
       return send(res, 503, { error: e.message || 'Try again' })
     }

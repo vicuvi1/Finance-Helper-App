@@ -34,6 +34,19 @@ final class Store {
   String widgetNote() { return p.getString("w_note", ""); }
   void setWidget(String amount, String note) { p.edit().putString("w_amount", amount).putString("w_note", note).apply(); }
 
+  /** Ask before saving a payment (a notification with Save / Change / Ignore); off = save by itself. */
+  boolean askFirst() { return p.getBoolean("ask_first", true); }
+  void setAskFirst(boolean on) { p.edit().putBoolean("ask_first", on).apply(); }
+  /** Payments waiting for your answer: {id: {text, at, preview}}. */
+  JSONObject pending() {
+    try { return new JSONObject(p.getString("pending", "{}")); } catch (Exception e) { return new JSONObject(); }
+  }
+  void savePending(JSONObject o) { p.edit().putString("pending", o.toString()).apply(); }
+  long lastUpdateCheck() { return p.getLong("update_check", 0); }
+  void setLastUpdateCheck(long t) { p.edit().putLong("update_check", t).apply(); }
+  String latestVersion() { return p.getString("latest_version", ""); }
+  void setLatestVersion(String v) { p.edit().putString("latest_version", v).apply(); }
+
   boolean alertsOn() { return p.getBoolean("alerts", true); }
   void setAlertsOn(boolean on) { p.edit().putBoolean("alerts", on).apply(); }
   /** Alert ids already shown (the last 200). */
