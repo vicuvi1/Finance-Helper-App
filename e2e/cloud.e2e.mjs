@@ -136,11 +136,14 @@ test('first visit: sign in with the PIN and Money comes from the server; a web r
   await page.click('.sheet [data-close]');
   // Payments recorded by themselves from the phone: the link takes a bank message once.
   // Inside the Android app (a stand-in for window.FHAndroid): two steps, the link is handed over.
-  await page.evaluate(() => { window.FHAndroid = { status: () => JSON.stringify({ listener: true, askFirst: true, version: '1.133.0', latest: '1.133.0', waiting: 1, apps: [{ pkg: 'md.madeup.bank', label: 'Made-up Bank', example: 'Plata 10 MDL', on: false, seen: 1 }] }), setCapture: (u) => { window.__cap = u; }, setApp: (p, on) => { window.__app = [p, on]; }, openListenerSettings: () => {}, setWidgetLine: () => {}, setAskFirst: (on) => { window.__ask = on; }, checkUpdate: () => {} }; });
+  await page.evaluate(() => { window.FHAndroid = { status: () => JSON.stringify({ listener: true, askFirst: true, version: '1.133.0', latest: '1.133.0', waiting: 1, apps: [{ pkg: 'md.madeup.bank', label: 'Made-up Bank', example: 'Plata 10 MDL', on: false, seen: 1 }] }), setCapture: (u) => { window.__cap = u; }, setApp: (p, on) => { window.__app = [p, on]; }, openListenerSettings: () => {}, setWidgetLine: () => {}, setAskFirst: (on) => { window.__ask = on; }, checkUpdate: () => {}, setupStatus: () => JSON.stringify({ listener: true, banks: 0, battery: false, notify: true, capture: true }), fix: (w) => { window.__fix = w; } }; });
   await page.click('[data-testid="phone-pay"]');
   await page.waitForSelector('[data-testid="pp-link"]', { timeout: 15000 });
   assert.match(await page.textContent('[data-testid="pp-android"]'), /Step 1 done[\s\S]*Made-up Bank/);
   await page.check('[data-pp-app="md.madeup.bank"]');
+  assert.match(await page.textContent('[data-testid="pp-setup"]'), /Setup check: \d of \d ready[\s\S]*Battery: Unrestricted/);
+  await page.click('[data-pp-fix="battery"]');
+  assert.equal(await page.evaluate(() => window.__fix), 'battery');
   await page.uncheck('[data-pp-ask]');
   assert.equal(await page.evaluate(() => window.__ask), false);
   assert.deepEqual(await page.evaluate(() => window.__app), ['md.madeup.bank', true]);

@@ -6700,3 +6700,12 @@ tr.week-row b.bad { color: var(--expense); } tr.week-row b.good { color: var(--i
 .ph-classic { text-align: center; margin: 4px 0 8px; font-size: 13px; }
 @media (prefers-reduced-motion: reduce) { .ph-track { scroll-behavior: auto; } }
 .ph-ring.warn .ph-ring-fg { stroke: var(--expense); }
+
+/* Phone setup check (js/phonesetup.js) */
+.ppay-setup { display: grid; gap: 6px; margin: 0 0 12px; padding: 10px 12px; border-radius: 12px; background: var(--surface); }
+.ppay-check { display: flex; gap: 10px; align-items: center; }
+.ppay-check > span:nth-child(2) { flex: 1; min-width: 0; display: grid; gap: 1px; }
+.ppay-check small { color: var(--muted); }
+.ppay-ic { flex: none; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 700; }
+.ppay-check.ok .ppay-ic { background: var(--income-soft); color: var(--income); }
+.ppay-check.bad .ppay-ic { background: var(--expense-soft); color: var(--expense); }

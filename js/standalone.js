@@ -21,6 +21,7 @@ import { notesSince, shouldShow, NOTES } from './whatsnew.js';
 import { trayLine } from './trayline.js';
 import { deriveKey, seal, newSalt } from './cipher.js';
 import { readPayment, accountFor } from './phonepay.js';
+import { setupItems, problems as setupProblems } from './phonesetup.js';
 import { activeAccounts, touch } from './model.js';
 import { formatMoney } from './money.js';
 import { passkeyPossible, hasReader, hasLocalPasskey, setLocalPasskey, localPasskeyId, makePasskey, usePasskey, deviceLabel } from './passkey.js';
@@ -425,7 +426,14 @@ function paintAndroid(sheet) {
   let st = {};
   try { st = JSON.parse(window.FHAndroid.status() || '{}'); } catch { /* older app */ }
   const apps = (st.apps || []).sort((a, b) => (b.seen || 0) - (a.seen || 0));
-  box.innerHTML = `${st.listener
+  let setup = {};
+  try { setup = JSON.parse(window.FHAndroid.setupStatus?.() || '{}'); } catch { /* older app */ }
+  const items = window.FHAndroid.setupStatus ? setupItems(setup, ctx.state) : [];
+  const okN = items.filter((x) => x.ok).length;
+  const checkHTML = items.length ? `<div class="ppay-setup" data-testid="pp-setup"><b>${okN === items.length ? '✓ Everything is set' : `Setup check: ${okN} of ${items.length} ready`}</b>
+    ${items.map((x) => `<div class="ppay-check ${x.ok ? 'ok' : 'bad'}"><span class="ppay-ic" aria-hidden="true">${x.ok ? '✓' : '!'}</span><span><b>${esc(x.title)}</b><small>${esc(x.text)}</small></span>${!x.ok && x.fix ? `<button type="button" class="btn sm${x.id === 'battery' || x.id === 'listener' ? ' primary' : ''}" data-pp-fix="${esc(x.fix)}">Fix</button>` : ''}</div>`).join('')}
+    ${setup.queued ? `<p style="margin:6px 0 0">${setup.queued} waiting to be sent (no internet when they came).</p>` : ''}</div>` : '';
+  box.innerHTML = `${checkHTML}${st.listener
     ? '<p style="margin:0 0 8px">✓ <b>Step 1 done:</b> the app can read notifications.</p>'
     : '<p style="margin:0 0 8px"><b>Step 1:</b> let the app read notifications (Android asks once). It sends only your bank apps\' payments to your server.</p><button type="button" class="btn primary sm" data-pp-android="allow">Allow reading notifications</button>'}
     <p style="margin:12px 0 6px"><b>Step 2:</b> your bank apps. ${apps.length ? 'Tick the ones whose payments to record:' : 'Pay once with your card (or wait for your bank\'s next notification): the bank app shows up here.'}</p>
@@ -477,6 +485,8 @@ async function openPhonePay(reset = false) {
       document.addEventListener('visibilitychange', again);
       sheet.addEventListener('click', (e) => {
         if (e.target.closest('[data-pp-android="allow"]')) window.FHAndroid.openListenerSettings();
+        const fx = e.target.closest('[data-pp-fix]');
+        if (fx) { try { window.FHAndroid.fix(fx.dataset.ppFix); } catch { window.FHAndroid.openListenerSettings(); } }
         if (e.target.closest('[data-pp-android="update"]')) { try { window.FHAndroid.checkUpdate(); ctx.toast('Checking… a notification says if there is a new version'); } catch { ctx.toast('Update this app once by hand to get this'); } }
       });
       sheet.addEventListener('change', (e) => { if (e.target.matches?.('[data-pp-ask]')) { try { window.FHAndroid.setAskFirst(e.target.checked); } catch { /* older app */ } ctx.toast(e.target.checked ? 'Each payment will ask you first' : 'Payments are saved by themselves (check them later)'); return; } if (e.target.matches?.('[data-pp-alerts]')) { try { window.FHAndroid.setAlerts(e.target.checked); } catch { /* older app */ } ctx.toast(e.target.checked ? 'Phone alerts on' : 'Phone alerts off'); return; } const pkg = e.target.dataset?.ppApp; if (pkg) { window.FHAndroid.setApp(pkg, e.target.checked); ctx.toast(e.target.checked ? 'Its payments will be recorded' : 'Not recorded any more'); } });
@@ -787,6 +797,19 @@ export function init() {
   });
   cloud.subscribe(() => refreshCard());
   if (window.desktop?.tray || window.FHAndroid) { setTimeout(updateTray, 3000); setInterval(updateTray, 60000); }
+  // The Android app: once a day, if something on the phone would make payments be missed, say so.
+  if (window.FHAndroid?.setupStatus && !ctx.DEMO) {
+    setTimeout(() => {
+      try {
+        const day = todayISO();
+        if (localStorage.getItem('finance-helper.setupNag') === day) return;
+        const bad = setupProblems(JSON.parse(window.FHAndroid.setupStatus() || '{}'), ctx.state);
+        if (!bad.length || !cloud?.config.signedIn) return;
+        localStorage.setItem('finance-helper.setupNag', day);
+        ctx.toast(`Phone setup: ${bad[0].title.toLowerCase()} needs a tap${bad.length > 1 ? ` (+${bad.length - 1} more)` : ''}`, 'Fix', () => openPhonePay());
+      } catch { /* not critical */ }
+    }, 4000);
+  }
   // The Android app's notification "Payment seen from maib" opens #phone-pay.
   const phonePayHash = () => { if (location.hash === '#phone-pay') { history.replaceState(null, '', '#settings'); ctx.ui.settingsTab = 'data'; ctx.render(); if (cloud.config.signedIn) openPhonePay(); else ctx.toast('Sign in to Cloud sync first (Settings → Data & backups).'); } };
   window.addEventListener('hashchange', phonePayHash);

@@ -75,6 +75,67 @@ final class Bridge {
     } catch (Exception ignored) { /* nothing to change */ }
   }
 
+  /**
+   * Everything the phone needs for payments to be caught reliably:
+   * {listener, notify, battery, promoted (null below Android 16), capture, banks, queued, widget}.
+   */
+  @JavascriptInterface public String setupStatus() {
+    if (!mine()) return "{}";
+    try {
+      JSONObject out = new JSONObject();
+      out.put("listener", listenerOn());
+      boolean notify = android.os.Build.VERSION.SDK_INT < 33 || a.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED;
+      android.app.NotificationManager nm = a.getSystemService(android.app.NotificationManager.class);
+      out.put("notify", notify && (nm == null || nm.areNotificationsEnabled()));
+      android.os.PowerManager pm = a.getSystemService(android.os.PowerManager.class);
+      out.put("battery", pm != null && pm.isIgnoringBatteryOptimizations(a.getPackageName()));
+      Object promoted = JSONObject.NULL;
+      if (android.os.Build.VERSION.SDK_INT >= 36 && nm != null) {
+        try { promoted = nm.getClass().getMethod("canPostPromotedNotifications").invoke(nm); } catch (Throwable ignored) { /* not on this phone */ }
+      }
+      out.put("promoted", promoted);
+      out.put("capture", !s.capture().isEmpty());
+      int banks = 0;
+      JSONObject apps = s.apps();
+      for (Iterator<String> it = apps.keys(); it.hasNext();) if (apps.optJSONObject(it.next()).optBoolean("on")) banks++;
+      out.put("banks", banks);
+      out.put("queued", s.queue().length());
+      android.appwidget.AppWidgetManager wm = android.appwidget.AppWidgetManager.getInstance(a);
+      out.put("widget", wm.getAppWidgetIds(new ComponentName(a, SafeWidget.class)).length);
+      out.put("version", BuildConfigHolder.VERSION);
+      return out.toString();
+    } catch (Exception e) {
+      return "{}";
+    }
+  }
+
+  /** One-tap fixes: "listener", "battery", "notify", "promoted", "app". */
+  @JavascriptInterface public void fix(String what) {
+    if (!mine()) return;
+    a.runOnUiThread(() -> {
+      try {
+        Intent i;
+        String pkg = a.getPackageName();
+        switch (String.valueOf(what)) {
+          case "listener": i = new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS); break;
+          case "battery":
+            // Samsung "Unrestricted": the app may keep its notification listener awake.
+            i = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:" + pkg));
+            break;
+          case "notify":
+          case "promoted":
+            i = new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, pkg);
+            break;
+          default: i = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + pkg));
+        }
+        a.startActivity(i);
+      } catch (Exception e) {
+        // Some phones lack a screen: open the app's own settings page instead.
+        try { a.startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + a.getPackageName()))); } catch (Exception ignored) { /* nothing more to try */ }
+      }
+    });
+  }
+
   /** Ask before saving each payment (true) or save by itself (false). */
   @JavascriptInterface public void setAskFirst(boolean on) {
     if (!mine()) return;
