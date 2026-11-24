@@ -14,6 +14,7 @@ import { findSubscriptions, recurringFrom } from '../subs.js';
 import * as SubTable from './subtable.js';
 import * as Planned from './plannedui.js';
 import * as Debts from './debtsui.js';
+import * as Life from './lifeplan.js';
 import * as BudgetAuto from '../budgetauto.js';
 import * as MoneyB2 from './moneyb2.js';
 import * as Repeating from './repeating.js';
@@ -677,6 +678,7 @@ export function view() {
   SubTable.init();
   Planned.init();
   Debts.init();
+  Life.init();
   const tab = ctx.ui.planTab || 'subtable';
   const expenseRules = rules.filter((r) => r.type === 'expense');
 
@@ -706,6 +708,9 @@ export function view() {
     case 'debts':
       tabContent = Debts.tab();
       break;
+    case 'life':
+      tabContent = Life.tab();
+      break;
     default:
       tabContent = subsFinderCard(state, today) + subscriptionsTab(state, today, rules, scheduled);
       break;
@@ -727,6 +732,7 @@ export function view() {
     <div class="chips plan-tabs">
       <button class="chip" data-act="plan-tab" data-tab="subtable" aria-pressed="${tab === 'subtable'}" data-testid="plan-tab-subtable">🧾 Subscriptions</button>
       <button class="chip" data-act="plan-tab" data-tab="planned" aria-pressed="${tab === 'planned'}" data-testid="plan-tab-planned">🗓️ Planned</button>
+      <button class="chip" data-act="plan-tab" data-tab="life" aria-pressed="${tab === 'life'}" data-testid="plan-tab-life">🧭 Life planner</button>
       ${Debts.hasDebts(state) || tab === 'debts' ? `<button class="chip" data-act="plan-tab" data-tab="debts" aria-pressed="${tab === 'debts'}" data-testid="plan-tab-debts">🏦 Debts</button>` : ''}
       <button class="chip" data-act="plan-tab" data-tab="subs" aria-pressed="${tab === 'subs'}">✨ All bills &amp; what-if <span class="tab-badge">${expenseRules.length}</span></button>
       <button class="chip" data-act="plan-tab" data-tab="repeating" aria-pressed="${tab === 'repeating'}" data-testid="plan-tab-repeating">🔁 Repeating ${due.length ? `<span class="tab-badge bad">${due.length}</span>` : ''}</button>

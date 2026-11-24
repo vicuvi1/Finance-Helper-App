@@ -6,6 +6,7 @@
 import { isNewerVersion } from './version.js';
 
 export const NOTES = [
+  { v: '1.131.0', items: ['Plan → 🧭 Life planner: put your big goals on a timeline (an apartment, a car, a wedding) and see if the money will be there. One answer ("2 of 3 fit"), a line of your money month by month with each goal marked, and for a goal that doesn\'t fit: how much more a month, or the month it would fit. Sliders for what comes in, what you spend, prices, a yearly raise, what savings earn and how much to keep aside; they start from your own months.'] },
   { v: '1.130.1', items: ['Fix: the People cards were squashed (names and amounts on top of each other) since 1.112. They look right again.'] },
   { v: '1.130.0', items: ['Under "All my money" in the sidebar: about how much that is in dollars and euros at today\'s rates, in small print (hidden with your amounts when you press Space).'] },
   { v: '1.129.0', items: ['Android app: a quick-add button in the phone\'s quick settings (swipe down twice, add "Add a record"): type "120 lunch" and Save, without opening the app; it waits and sends itself if you\'re offline.', 'Android app: phone alerts for a bill due tomorrow, a budget at 80% and money running low, each once (switch them off in the phone section of Record payments automatically). Install the new app to get these.'] },

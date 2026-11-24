@@ -328,6 +328,30 @@ test('Bank statement: phone payments matched and checked, what the bank lacks is
   await context.close();
 });
 
+test('Life planner: add a goal, see if it fits, a slider changes the answer', async () => {
+  const { page, errors, context } = await openPage(browser, server.url);
+  await page.goto(`${server.url}#plan`);
+  await page.waitForSelector('[data-testid="plan-tab-life"]');
+  await page.click('[data-testid="plan-tab-life"]');
+  await page.waitForSelector('[data-testid="life-planner"]');
+  await page.fill('[data-lp="name"]', 'Made-up car');
+  await page.fill('[data-lp="amount"]', '90000');
+  await page.fill('[data-lp="month"]', '2028-06');
+  await page.click('[data-testid="lp-add"]');
+  await page.waitForSelector('[data-testid="lp-row"]');
+  const st = await page.evaluate(() => JSON.parse(globalThis.__fhStore.getItem('finance-helper.state')).settings.lifeGoals);
+  assert.equal(st[0].amount, 9000000);
+  // Coming in 30 000 a month and spending 10 000: it fits.
+  for (const [k, v] of [['income', 3000000], ['spending', 1000000]]) {
+    await page.$eval(`[data-lp-slider="${k}"]`, (el, val) => { el.max = String(Math.max(Number(el.max), val)); el.value = String(val); el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); }, v);
+  }
+  await page.waitForFunction(() => /fits/i.test(document.querySelector('.lp-answer')?.textContent || ''));
+  const plan = await page.evaluate(() => JSON.parse(globalThis.__fhStore.getItem('finance-helper.state')).settings.lifePlan);
+  assert.equal(plan.income, 3000000);
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
 test('Plan → Planned: add a big expense, it is spread over the months', async () => {
   const { page, errors, context } = await openPage(browser, server.url);
   await page.goto(`${server.url}#plan`);

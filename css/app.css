@@ -6596,3 +6596,50 @@ tr.week-row b.bad { color: var(--expense); } tr.week-row b.good { color: var(--i
 
 /* Sidebar "All my money": about the same in USD and EUR */
 .sc-fx { margin: 2px 0 6px; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; letter-spacing: 0.01em; }
+
+/* Plan → Life planner (js/screens/lifeplan.js) */
+.lp { display: flex; flex-wrap: wrap; gap: 18px; align-items: flex-start; }
+.lp-main { flex: 999 1 560px; min-width: 0; display: grid; gap: 14px; }
+.lp-side { flex: 1 1 300px; margin: 0; display: grid; gap: 14px; position: sticky; top: 16px; }
+.lp-card { margin: 0; }
+.lp-answer { margin: 4px 0 0; font-family: var(--display); font-weight: 600; font-size: 40px; line-height: 1.1; letter-spacing: -0.01em; }
+.lp-answer.ok { color: var(--income); }
+.lp-sub { margin: 0; font-size: 16px; color: var(--muted); line-height: 1.5; max-width: 760px; }
+.lp-sub b { color: var(--text); }
+.lp-h3 { margin: 0 0 8px; font-size: 15px; font-weight: 600; }
+.lp-chart { display: block; height: auto; }
+.lp-chart text { fill: var(--muted); font-size: 12px; font-family: var(--font); }
+.lp-chart .lp-grid { stroke: var(--line); }
+.lp-chart .lp-zero { stroke: var(--expense); stroke-dasharray: 4 4; opacity: 0.6; }
+.lp-chart .lp-line { fill: none; stroke: var(--gold); stroke-width: 3; stroke-linejoin: round; }
+.lp-chart .lp-keep { fill: none; stroke: var(--faint); stroke-width: 1.5; stroke-dasharray: 6 6; }
+.lp-chart .lp-mark circle { stroke: var(--surface); stroke-width: 3; }
+.lp-chart .lp-mark.ok circle { fill: var(--income); }
+.lp-chart .lp-mark.bad circle { fill: var(--expense); }
+.lp-chart .lp-mark text { fill: var(--text); font-size: 13px; font-weight: 600; }
+.lp-chart .lp-drop { stroke: var(--line-strong); stroke-width: 2; stroke-dasharray: 3 3; }
+.lp-legend { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; margin: 8px 0 0; }
+.lp-key { display: inline-block; width: 18px; height: 3px; border-radius: 2px; background: var(--gold); vertical-align: middle; }
+.lp-key.keep { background: none; border-top: 2px dashed var(--faint); height: 0; }
+.lp-key.dot { width: 10px; height: 10px; border-radius: 50%; }
+.lp-key.dot.ok { background: var(--income); }
+.lp-key.dot.bad { background: var(--expense); }
+.lp-table td { vertical-align: middle; }
+.lp-status { font-size: 13px; line-height: 1.35; }
+.lp-status.ok { color: var(--income); }
+.lp-status.bad { color: var(--expense); }
+.lp-slider { display: grid; gap: 4px; }
+.lp-sl-top { display: flex; justify-content: space-between; gap: 10px; font-size: 14px; }
+.lp-slider input[type="range"] { width: 100%; accent-color: var(--gold); }
+.lp-slider .linkish { justify-self: start; }
+@media (max-width: 700px) { .lp-side { position: static; } .lp-answer { font-size: 30px; } }
+.lp .st-wrap { overflow-x: auto; }
+.lp .lp-table { min-width: 620px; }
+.lp .lp-table input.st-in { width: 100%; box-sizing: border-box; }
+.lp-main > * { min-width: 0; }
+.lp-chart { max-width: 100%; }
+.lp .lp-table { table-layout: fixed; }
+.lp .lp-status { overflow-wrap: anywhere; }
+.lp .lp-table th:nth-child(1) { width: 28%; } .lp .lp-table th:nth-child(2) { width: 15%; } .lp .lp-table th:nth-child(3) { width: 19%; }
+.lp .lp-table th:nth-child(4) { width: auto; } .lp .lp-table th:nth-child(5) { width: 48px; }
+.lp .lp-status { text-align: left; }
