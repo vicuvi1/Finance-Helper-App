@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const out = join(root, 'web-dist');
-const FILES = ['index.html', 'manifest.webmanifest', 'sw.js', 'css', 'js', 'icons', 'fonts'];
+const FILES = ['index.html', 'manifest.webmanifest', 'sw.js', 'css', 'js', 'icons', 'fonts', 'download'];
 rmSync(out, { recursive: true, force: true });
 mkdirSync(out, { recursive: true });
 for (const f of FILES) if (existsSync(join(root, f))) cpSync(join(root, f), join(out, f), { recursive: true });

@@ -416,8 +416,8 @@ async function openSheetFeed(reset = false) {
 
 // ---------- Payments recorded by themselves from the phone ----------
 
-/** The Android app, attached to every release by CI (.github/workflows/desktop.yml). */
-export const ANDROID_APK = 'https://github.com/vicuvi1/Finance-Helper-App/releases/latest/download/finance-helper.apk';
+/** The Android app, signed with your key, on your own site (download/; also attached to releases by CI). */
+export const ANDROID_APK = `${DEFAULT_URL}/download/finance-helper.apk`;
 
 /** In the Android app: allow reading notifications, then pick the bank apps (window.FHAndroid, android/). */
 function paintAndroid(sheet) {
