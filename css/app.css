@@ -6709,3 +6709,7 @@ tr.week-row b.bad { color: var(--expense); } tr.week-row b.good { color: var(--i
 .ppay-ic { flex: none; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 700; }
 .ppay-check.ok .ppay-ic { background: var(--income-soft); color: var(--income); }
 .ppay-check.bad .ppay-ic { background: var(--expense-soft); color: var(--expense); }
+/* Donut: the line under the total stays inside the ring (two short lines, never wider than the hole) */
+.dn-wide .dn-sub { white-space: normal; display: grid; gap: 1px; width: clamp(120px, 20cqi, 170px); line-height: 1.3; }
+.dn-wide .dn-sub span { display: block; }
+.dn-wide { max-width: 780px; }

@@ -60,12 +60,13 @@ const clip = (s, n) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 // callout per slice either side (kept apart by spreadLabels); the narrow one
 // has none, the rows under it are the legend. `mid` is the text in the hole.
 function donutSvg(items, { total, wide, selected, label, mid, sub }) {
-  const W = wide ? 600 : 240;
+  // Wide: room on both sides for the labels (names up to 18 letters + %), so none is cut off.
+  const W = wide ? 760 : 240;
   const H = wide ? 300 : 240;
   const cx = W / 2;
   const cy = H / 2;
-  const R = wide ? 100 : 84;
-  const SW = wide ? 30 : 32;
+  const R = wide ? 108 : 84;
+  const SW = wide ? 26 : 32;
   const gap = items.length > 1 ? 0.5 : 0;
   let at = 0;
   const segs = [];
@@ -153,7 +154,8 @@ export function spendingCard(opts = {}) {
   const counted = daysBetween(range.from, range.to > today ? today : range.to);
   const vs = word === 'same days last month' || word === 'the month before' ? 'last month' : word;
   const perDay = `${esc(plain(Math.round(total / Math.max(1, counted) / 100) * 100))} a day`;
-  const sub = ch == null ? perDay : `<b class="${ch > 0 ? 'up' : ch < 0 ? 'down' : ''}">${ch > 0 ? '↑ ' : ch < 0 ? '↓ ' : ''}${Math.abs(ch)}%</b> vs ${esc(vs)} · ${perDay}`;
+  // Two short lines, so they fit inside the ring.
+  const sub = ch == null ? perDay : `<span><b class="${ch > 0 ? 'up' : ch < 0 ? 'down' : ''}">${ch > 0 ? '↑ ' : ch < 0 ? '↓ ' : ''}${Math.abs(ch)}%</b> vs ${esc(vs)}</span><span>${perDay}</span>`;
 
   const aria = `Spending by category, ${range.label}: ${items.map((it) => `${it.name} ${it.pct}%`).join(', ')}. Total ${ctx.money(total)}.`;
   const midWord = mode === 'day' ? 'Everyday spending' : 'Spent';
