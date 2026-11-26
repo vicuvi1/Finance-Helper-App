@@ -12,7 +12,10 @@ import { activeAccounts } from './model.js';
 
 const CURS = { MDL: 'MDL', LEI: 'MDL', LEU: 'MDL', L: 'MDL', USD: 'USD', $: 'USD', EUR: 'EUR', '€': 'EUR', RON: 'RON', RUB: 'RUB', UAH: 'UAH', GBP: 'GBP', '£': 'GBP' };
 const CUR = '(MDL|LEI|LEU|USD|EUR|RON|RUB|UAH|GBP|\\$|€|£)';
-const NUM = '(\\d[\\d\\s\\u00a0\\u202f.,]*\\d|\\d)';
+// A number: "120", "120,50", or thousands in groups of exactly three ("1 234,56", "1,234.56", "1.200").
+// Never glued to what stands before it: card digits ("*4821 120,50" is 120,50, not 4 821 120,50) or a
+// time or date ("14:05 120,50" is 120,50, not 5 120,50).
+const NUM = "((?<![\\d*•#]|\\d[:.,/])(?:\\d{1,3}(?:[ \\u00a0\\u202f.,']\\d{3})+(?:[.,]\\d{1,2})?|\\d+(?:[.,]\\d{1,2})?)(?!\\d))";
 
 /** "1 234,56" / "1,234.56" / "120.5" / "120" → bani (or null). */
 export function parseAmount(text) {
@@ -38,7 +41,7 @@ export function parseAmount(text) {
 }
 
 const SKIP = /refuz|respins|declin|insuficien|fonduri insuf|отказ|отклон|недостаточно|\bcod\b|codul|\bcode\b|parol|password|\bOTP\b|3-?D ?Secure|verificare/i;
-const INCOME = /alimentar|primit|încasa|incasa|credit(ed|are)|received|top.?up|зачисл|поступ|пополн|rambursa|refund|возврат|anulare|reversal/i;
+const INCOME = /alimentar|suplini|depunere|\bdeposit(ed)?\b|внесен|primit|încasa|incasa|credit(ed|are)|received|top.?up|зачисл|поступ|пополн|rambursa|refund|возврат|anulare|reversal/i;
 const BALANCE = /(sold|balance|disponibil|остаток|баланс|доступно)\W{0,3}$/i;
 
 /** The amount and currency in a bank message, skipping the balance ("Sold: 3 400 MDL"). */
@@ -55,8 +58,12 @@ function findAmount(text) {
   return null;
 }
 
+const W = '(?<![\\p{L}\\p{N}_])';
+const E = '(?![\\p{L}\\p{N}_])';
+
 function findMerchant(text) {
-  const m = text.match(/(?:\bla\b|\bat\b|merchant|comerciant|beneficiar|magazin|\bв\b|продавец)\s*[:\-]?\s*([^\n,;|]+?)(?=\s*(?:[,;|\n]|\.\s|\s(?:sold|balance|disponibil|data|on|pe|card|остаток|карта)\b|$))/i);
+  // \b only knows Latin letters, so "в Linella" needs Unicode-aware word edges (W).
+  const m = text.match(new RegExp(`(?:${W}(?:la|at|в)${E}|merchant|comerciant|beneficiar|magazin|магазин|продавец)\\s*[:\\-]?\\s*([^\\n,;|]+?)(?=\\s*(?:[,;|\\n]|\\.\\s|\\s(?:sold|balance|disponibil|data|on|pe|card|остаток|баланс|доступно|карта|карты|карте|карту)${E}|$))`, 'iu'));
   return m ? m[1].replace(/[.*"'«»]+$/g, '').trim().slice(0, 60) : '';
 }
 
@@ -116,10 +123,13 @@ export const captureId = (p, now) => `ph-${hash(`${p.kind}|${p.amount}|${p.curre
 
 /**
  * A payment → {ok, tx} | {ok:false, skip?, why}. `now` and `today` (YYYY-MM-DD in Moldova).
+ * `dayOf(ms)` gives the calendar day of a time: with it the record gets the day the payment was made
+ * (`input.at`), not the day the server got it (a queued payment, or one sent just after midnight).
  * The same amount already recorded in the last 10 minutes (by the phone, the bot or you) is skipped:
- * the bank's SMS and its app notification often come for one payment.
+ * the bank's SMS and its app notification often come for one payment. Two phone payments at
+ * different shops are two payments.
  */
-export function paymentRecord(state, input, { now = Date.now(), today }) {
+export function paymentRecord(state, input, { now = Date.now(), today, dayOf }) {
   const p = readPayment(input);
   if (p.kind === 'skip') return { ok: false, skip: true, why: p.why, p };
   // Asked first on the phone: what you confirmed or changed (amount, note, category, card).
@@ -128,24 +138,28 @@ export function paymentRecord(state, input, { now = Date.now(), today }) {
   const at = Number(input.at) > 0 ? Number(input.at) : now; // when the bank's notification came
   const id = captureId(p, at);
   if ((state.tx || []).some((t) => t.id === id) || state.deleted?.[id]) return { ok: false, skip: true, why: 'Already recorded.', p };
-  const recent = (state.tx || []).find((t) => t.type === p.kind && t.date === today && Math.abs((t.createdAt || 0) - now) < 10 * 60000 && (t.amount === p.amount || t.original?.amount === p.amount));
+  // The payment's own day; a time that can't be right (ahead of now, or over 60 days old) is ignored.
+  const day = dayOf && at !== now && at <= now + 10 * 60000 && at > now - 60 * 86400000 ? dayOf(at) : today;
+  const shop = (p.merchant || '').toLowerCase();
+  const recent = (state.tx || []).find((t) => t.type === p.kind && (t.date === day || t.date === today) && Math.abs((t.createdAt || 0) - now) < 10 * 60000 && (t.amount === p.amount || t.original?.amount === p.amount)
+    && !(shop && t.source === 'phone' && t.shop && t.shop !== shop));
   if (recent) return { ok: false, skip: true, why: 'Already recorded a moment ago.', p, existing: recent.id };
   const what = confirmed && String(input.note || '').trim() ? String(input.note).trim().slice(0, 80) : p.merchant ? canonicalFor(state, p.merchant) : p.kind === 'income' ? 'Money in' : 'Card payment';
   const text = `${p.kind === 'income' ? '+' : ''}${(p.amount / 100).toFixed(2)} ${p.currency || ''} ${what}`.replace(/\s+/g, ' ');
   const accountId = confirmed && activeAccounts(state).some((a) => a.id === input.account) ? input.account : accountFor(state, p);
   const catOk = confirmed && (state.settings.categories || []).some((c) => c.id === input.category);
-  const r = parseQuick(state, text, { today, accountId, ...(catOk ? { catOverride: input.category } : {}) });
+  const r = parseQuick(state, text, { today: day, accountId, ...(catOk ? { catOverride: input.category } : {}) });
   if (!r.ok) return { ok: false, why: r.missing || 'Could not read it.', p };
   // Confirmed on the phone: no "to check" needed.
-  return { ok: true, p, tx: { id, createdAt: now, updatedAt: now, ...r.tx, note: what, source: 'phone', ...(confirmed ? { confirmedAt: now } : { review: true }) } };
+  return { ok: true, p, tx: { id, createdAt: now, updatedAt: now, ...r.tx, note: what, source: 'phone', ...(shop ? { shop } : {}), ...(confirmed ? { confirmedAt: now } : { review: true }) } };
 }
 
 /**
  * What a payment would be saved as, without saving it (the phone asks you first): the record,
  * your 8 most used categories of that kind and your cards, for the "Change" window.
  */
-export function paymentPreview(state, input, { now = Date.now(), today }) {
-  const r = paymentRecord(state, input, { now, today });
+export function paymentPreview(state, input, { now = Date.now(), today, dayOf }) {
+  const r = paymentRecord(state, input, { now, today, dayOf });
   if (!r.ok) return r;
   const t = r.tx;
   const used = {};

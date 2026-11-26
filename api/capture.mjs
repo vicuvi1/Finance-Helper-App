@@ -115,7 +115,7 @@ export default async function handler(req, res) {
     try {
       const cur = await readValue(cfg)
       const st = normalizeState({ ...(cur.value?.data || {}), version: SCHEMA_VERSION })
-      const p = paymentPreview(st, input || {}, { now, today })
+      const p = paymentPreview(st, input || {}, { now, today, dayOf: moneyDay })
       if (!p.ok) return send(res, 200, { ok: true, payment: false, text: p.why || 'Not a payment' })
       return send(res, 200, { ok: true, payment: true, amount: p.amount, currency: p.currency, note: p.note, kind: p.kind, category: p.category, categoryName: p.categoryName, account: p.account, accountName: p.accountName, categories: p.categories, accounts: p.accounts })
     } catch (e) {
@@ -135,7 +135,7 @@ export default async function handler(req, res) {
   try {
     const cur = await readValue(cfg)
     const state = normalizeState({ ...(cur.value?.data || {}), version: SCHEMA_VERSION })
-    const r = paymentRecord(state, input || {}, { now, today })
+    const r = paymentRecord(state, input || {}, { now, today, dayOf: moneyDay })
     if (!r.ok) return send(res, 200, { ok: true, saved: false, text: r.why })
     state.tx.push(r.tx)
     await pushCopy(cfg, state, { edited: true, editedAt: now }, now)

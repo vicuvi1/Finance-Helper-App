@@ -76,3 +76,49 @@ test('ask first: a preview saves nothing; confirming with changes saves exactly 
   assert.equal(r.tx.amount, 13000);
   assert.equal(r.tx.review, undefined, 'confirmed: nothing to check');
 });
+
+test('card digits and times are not part of the amount; thousands only in groups of three', () => {
+  const a = readPayment({ text: 'Plata card *4821 120,50 MDL LINELLA' });
+  assert.deepEqual([a.amount, a.last4], [12050, '4821']);
+  assert.equal(readPayment({ text: '14:05 120,50 MDL' }).amount, 12050);
+  assert.equal(readPayment({ text: '22.11.2026 14:05 Plata 75 MDL la Made-up Cafe' }).amount, 7500);
+  assert.equal(readPayment({ text: 'Plata 1 234,56 MDL la Made-up Shop' }).amount, 123456);
+  assert.equal(readPayment({ text: 'Plata 12 345 MDL' }).amount, 1234500);
+  assert.equal(readPayment({ text: 'Paid USD 1,234.56 at Made-up Store' }).amount, 123456);
+  assert.equal(readPayment({ text: 'Suma:120,50 MDL' }).amount, 12050);
+  assert.equal(readPayment({ text: 'Plata -45 MDL' }).amount, 4500);
+});
+
+test('Russian messages keep the shop; top-ups are income', () => {
+  const p = readPayment({ text: 'Покупка 350 MDL в Linella, карта *4821. Остаток: 2 100 MDL' });
+  assert.deepEqual([p.kind, p.amount, p.merchant, p.last4], ['expense', 35000, 'Linella', '4821']);
+  assert.equal(readPayment({ text: 'Покупка 90 MDL в Made-up Кафе карта *4821' }).merchant, 'Made-up Кафе');
+  for (const text of ['Suplinire cont 5000 MDL', 'Пополнение счета 5000 MDL', 'Top-up 5000 MDL', 'Depunere numerar 5000 MDL', 'Deposit 5000 MDL']) {
+    const q = readPayment({ text });
+    assert.deepEqual([q.kind, q.amount], ['income', 500000], text);
+  }
+});
+
+test('a payment gets its own day, not the day the server got it', () => {
+  const s = defaultState();
+  const dayOf = (ms) => new Date(ms + 2 * 3600000).toISOString().slice(0, 10); // made-up UTC+2
+  const at = Date.UTC(2026, 10, 22, 21, 30); // 23:30 on the 22nd
+  const now = Date.UTC(2026, 10, 22, 22, 10); // 00:10 on the 23rd
+  const r = paymentRecord(s, { text: 'Plata 80 MDL la Made-up Bar', at }, { now, today: '2026-11-23', dayOf });
+  assert.equal(r.tx.date, '2026-11-22');
+  // No time sent, or a time that can't be right: today.
+  assert.equal(paymentRecord(s, { text: 'Plata 81 MDL la Made-up Bar' }, { now, today: '2026-11-23', dayOf }).tx.date, '2026-11-23');
+  assert.equal(paymentRecord(s, { text: 'Plata 82 MDL la Made-up Bar', at: now + 5 * 86400000 }, { now, today: '2026-11-23', dayOf }).tx.date, '2026-11-23');
+});
+
+test('the same amount at another shop a few minutes later is a second payment', () => {
+  const s = defaultState();
+  const now = Date.UTC(2026, 10, 22, 10);
+  const a = paymentRecord(s, { text: 'Plata 50 MDL la Made-up Cafe', at: now }, { now, today: '2026-11-22' });
+  s.tx.push(a.tx);
+  const b = paymentRecord(s, { text: 'Plata 50 MDL la Made-up Taxi', at: now + 300000 }, { now: now + 300000, today: '2026-11-22' });
+  assert.equal(b.ok, true);
+  // The same shop again, or a message with no shop in it, is still one payment.
+  assert.equal(paymentRecord(s, { text: 'Achitare 50 MDL la MADE-UP CAFE' }, { now: now + 200000, today: '2026-11-22' }).ok, false);
+  assert.equal(paymentRecord(s, { text: 'Achitare 50.00 MDL *4821' }, { now: now + 200000, today: '2026-11-22' }).ok, false);
+});
