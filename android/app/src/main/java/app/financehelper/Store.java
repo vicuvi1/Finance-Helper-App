@@ -15,7 +15,10 @@ final class Store {
   String server() { return p.getString("server", DEFAULT_SERVER); }
   void setServer(String s) { p.edit().putString("server", s).apply(); }
   String capture() { return p.getString("capture", ""); }
-  void setCapture(String s) { p.edit().putString("capture", s).apply(); }
+  void setCapture(String s) { p.edit().putString("capture", s).remove("link_gone").apply(); }
+  /** When you were last told that the server refuses this phone's link (a new link clears it). */
+  long linkGoneAt() { return p.getLong("link_gone", 0); }
+  void setLinkGoneAt(long t) { p.edit().putLong("link_gone", t).apply(); }
 
   /** Apps that showed a notification that looks like a payment: {pkg: {label, example, on, seen}}. */
   JSONObject apps() {

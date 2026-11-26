@@ -5,6 +5,14 @@
   <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
   <uses-permission android:name="android.permission.POST_PROMOTED_NOTIFICATIONS" />
   <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+  <!-- Android 11+: lets the app read the names of apps with a launcher icon (your bank apps), so
+       "Record payments automatically" lists "maib", not "md.example.bank". Not QUERY_ALL_PACKAGES. -->
+  <queries>
+    <intent>
+      <action android:name="android.intent.action.MAIN" />
+      <category android:name="android.intent.category.LAUNCHER" />
+    </intent>
+  </queries>
   <application
     android:label="@string/app_name"
     android:icon="@mipmap/ic_launcher"

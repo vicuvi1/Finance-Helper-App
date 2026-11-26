@@ -32,7 +32,20 @@ final class UpdateCheck {
     String latest = latest();
     if (latest == null) return;
     s.setLatestVersion(latest);
-    if (newer(latest, BuildConfigHolder.VERSION)) notifyUpdate(ctx, latest);
+    // Asked from the installed package each time: the hourly job runs without the app's screen,
+    // so nothing else has filled the version in. Unknown version: say nothing.
+    String mine = installed(ctx);
+    if (!mine.isEmpty() && newer(latest, mine)) notifyUpdate(ctx, latest);
+  }
+
+  /** The version of the app that is installed ("1.136.0"), or "" when it can't be read. */
+  static String installed(Context ctx) {
+    try {
+      String v = ctx.getPackageManager().getPackageInfo(ctx.getPackageName(), 0).versionName;
+      return v == null ? "" : v;
+    } catch (Exception e) {
+      return "";
+    }
   }
 
   /** The newest release's version that carries the Android app ("1.133.0"), or null. */

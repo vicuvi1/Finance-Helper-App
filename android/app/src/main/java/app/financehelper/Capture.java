@@ -1,6 +1,12 @@
 package app.financehelper;
 
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.content.Context;
+import android.content.Intent;
+import android.net.Uri;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -14,7 +20,13 @@ import org.json.JSONObject;
 final class Capture {
   private Capture() {}
 
-  /** POSTs text; returns the server's JSON or null when it couldn't be reached. Run off the main thread. */
+  /** What you see when the server no longer knows this phone's link (after "New link" in the app). */
+  static final String LINK_CHANGED = "Not sent: the link changed. Open Finance Helper and set up the phone again. Kept on the phone until then.";
+
+  /**
+   * POSTs text; returns the server's JSON, null when it couldn't be reached, or {gone: true} when the
+   * server refuses this link (an old link after "New link"). Run off the main thread.
+   */
   static JSONObject post(String url, String body, String type) {
     HttpURLConnection c = null;
     try {
@@ -26,7 +38,7 @@ final class Capture {
       c.setRequestProperty("Content-Type", type);
       try (OutputStream o = c.getOutputStream()) { o.write(body.getBytes(StandardCharsets.UTF_8)); }
       int code = c.getResponseCode();
-      if (code != 200) return code == 404 ? new JSONObject().put("gone", true) : null;
+      if (code != 200) return code == 404 || code == 401 || code == 403 || code == 410 ? new JSONObject().put("gone", true) : null;
       try (InputStream in = c.getInputStream()) {
         ByteArrayOutputStream b = new ByteArrayOutputStream();
         byte[] buf = new byte[4096];
@@ -54,6 +66,11 @@ final class Capture {
       // Quick adds wait as JSON ({"quick": "120 lunch", "at": …}); bank messages as plain text.
       JSONObject r = post(url, t, t.startsWith("{") ? "application/json" : "text/plain; charset=utf-8");
       if (r == null) { left.put(t); continue; }
+      if (gone(ctx, r)) {
+        // The link changed: nothing was saved. Keep this one and the rest for the new link.
+        for (int k = i; k < q.length(); k++) left.put(q.optString(k));
+        break;
+      }
       if (r.optBoolean("saved")) Widget.fromLine(ctx, r.optString("text"));
     }
     trim(left);
@@ -67,12 +84,13 @@ final class Capture {
       Store s = new Store(ctx);
       String url = s.capture();
       JSONObject r = url.isEmpty() ? null : post(url, body, "application/json");
-      if (r == null || r.optBoolean("gone")) {
+      boolean gone = gone(ctx, r);
+      if (r == null || gone) {
         JSONArray q = s.queue();
         q.put(body);
         trim(q);
         s.saveQueue(q);
-        return null;
+        return gone ? LINK_CHANGED : null;
       }
       if (r.optBoolean("saved")) Widget.fromLine(ctx, r.optString("text"));
       return r.optString("text", "Saved");
@@ -87,7 +105,8 @@ final class Capture {
     if (url.isEmpty()) return null;
     try {
       String body = new JSONObject().put("text", text).put("at", at).toString();
-      return post(url + (url.contains("?") ? "&" : "?") + "q=preview", body, "application/json");
+      JSONObject r = post(url + (url.contains("?") ? "&" : "?") + "q=preview", body, "application/json");
+      return gone(ctx, r) ? null : r; // no preview: the payment is still asked about and kept
     } catch (Exception e) {
       return null;
     }
@@ -99,12 +118,13 @@ final class Capture {
     String url = s.capture();
     String json = body.toString();
     JSONObject r = url.isEmpty() ? null : post(url, json, "application/json");
-    if (r == null) {
+    boolean gone = gone(ctx, r);
+    if (r == null || gone) {
       JSONArray q = s.queue();
       q.put(json);
       trim(q);
       s.saveQueue(q);
-      return null;
+      return gone ? LINK_CHANGED : null;
     }
     if (r.optBoolean("saved")) Widget.fromLine(ctx, r.optString("text"));
     return r.optString("text", "Saved");
@@ -116,6 +136,33 @@ final class Capture {
     if (url.isEmpty()) return null;
     JSONObject r = post(url + (url.contains("?") ? "&" : "?") + "q=alerts", "{}", "application/json");
     return r == null ? null : r.optJSONArray("alerts");
+  }
+
+  /** Did the server refuse this link? Then tell you once a day to set up the phone again. */
+  private static boolean gone(Context ctx, JSONObject r) {
+    if (r == null || !r.optBoolean("gone")) return false;
+    try {
+      Store s = new Store(ctx);
+      long now = System.currentTimeMillis();
+      if (now - s.linkGoneAt() < 20 * 3600 * 1000L) return true;
+      s.setLinkGoneAt(now);
+      NotificationManager nm = ctx.getSystemService(NotificationManager.class);
+      if (nm == null) return true;
+      nm.createNotificationChannel(new NotificationChannel("fh", "Finance Helper", NotificationManager.IMPORTANCE_DEFAULT));
+      Intent open = new Intent(ctx, MainActivity.class).setAction(Intent.ACTION_VIEW).setData(Uri.parse("fh://open/phone-pay"));
+      PendingIntent pi = PendingIntent.getActivity(ctx, 2, open, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
+      nm.notify(4403, new Notification.Builder(ctx, "fh")
+        .setSmallIcon(android.R.drawable.ic_dialog_info)
+        .setContentTitle("Payments are not being recorded")
+        .setContentText("The link changed. Tap to set up this phone again; payments wait on the phone until then.")
+        .setStyle(new Notification.BigTextStyle().bigText("The link changed. Tap to set up this phone again; payments wait on the phone until then."))
+        .setContentIntent(pi)
+        .setAutoCancel(true)
+        .build());
+    } catch (Exception ignored) {
+      // The payment is kept either way.
+    }
+    return true;
   }
 
   private static void trim(JSONArray q) { while (q.length() > 50) q.remove(0); }
