@@ -37,7 +37,16 @@ export function debtStatus(state, d, today) {
   const left = afterPayments(d.balance, r, d.payment, paid);
   const months = monthsToPayOff(left, r, d.payment);
   const done = left <= 0;
-  const payoff = Number.isFinite(months) ? addMonths(monthKey(today), Math.max(0, months - 1)) : null;
+  // The month of the next payment: this month only while its payment day is still ahead
+  // (a first payment on 15 Dec seen on 22 Nov is December, so 2 payments end in January).
+  const rule = d.ruleId ? (state.recurring || []).find((x) => x.id === d.ruleId) : null;
+  const logged = d.ruleId ? (state.tx || []).filter((t) => t.recurring === d.ruleId && t.date <= today).map((t) => t.date) : [];
+  const lastDone = [rule?.lastDone || '', ...logged].reduce((m, x) => (x > m ? x : m), '') || addDays(today, -1);
+  const dd = String(Math.min(28, Math.max(1, Number(d.day) || 1))).padStart(2, '0');
+  let first = monthKey(lastDone);
+  if (`${first}-${dd}` <= lastDone) first = addMonths(first, 1);
+  if (first < monthKey(today)) first = monthKey(today); // overdue: you pay it now
+  const payoff = Number.isFinite(months) ? addMonths(first, Math.max(0, months - 1)) : null;
   const interestLeft = Number.isFinite(months) && !done ? Math.max(0, d.payment * months - left) : null;
   const interestMonth = Math.round(left * r);
   return { ...d, paid, left, months, payoff, interestLeft, interestMonth, done, never: !done && !Number.isFinite(months) };

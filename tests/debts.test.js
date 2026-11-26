@@ -38,3 +38,21 @@ test('a loan with its monthly bill; payments logged bring it down; removing paus
   assert.equal(s.settings.debts.length, 0);
   assert.equal(s.recurring.find((x) => x.id === 'r1').paused, true);
 });
+
+test('paid off: the month of the last payment, counted from the next payment day', () => {
+  // 10 000 owed, 5 000 a month, on the 15th. Added on 22 Nov: the first payment is 15 Dec, the last 15 Jan.
+  const s = defaultState();
+  const d = addDebt(s, { name: 'Made-up loan', balance: 1000000, rate: 0, payment: 500000, day: 15 }, { id: 'd1', ruleId: 'r1', now: 1, today: '2026-11-22' });
+  assert.equal(s.recurring[0].start, '2026-12-15');
+  assert.equal(debtStatus(s, d, '2026-11-22').payoff, '2027-01');
+  assert.equal(debtStatus(s, d, '2026-12-10').payoff, '2027-01');
+  // December's payment logged: one left, in January.
+  const rule = s.recurring[0];
+  s.tx.push({ id: 'p1', date: '2026-12-15', type: 'expense', amount: 500000, currency: 'MDL', account: rule.account, category: rule.category, recurring: 'r1', note: 'x', createdAt: 2, updatedAt: 2 });
+  const st = debtStatus(s, d, '2026-12-20');
+  assert.deepEqual([st.months, st.payoff], [1, '2027-01']);
+  // The payment day is still ahead this month: this month counts.
+  const s2 = defaultState();
+  const d2 = addDebt(s2, { name: 'Made-up card', balance: 1000000, rate: 0, payment: 500000, day: 25 }, { id: 'd2', ruleId: 'r2', now: 1, today: '2026-11-22' });
+  assert.equal(debtStatus(s2, d2, '2026-11-22').payoff, '2026-12');
+});
