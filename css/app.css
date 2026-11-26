@@ -1495,7 +1495,8 @@ table.grid tr.is-today:not(.day-row) td { background: color-mix(in srgb, var(--t
 .goal-card.done::before { content: "✓ Reached"; position: absolute; top: 14px; right: 16px; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--g2); }
 .gc-ring { position: relative; width: 132px; height: 132px; display: grid; place-items: center; }
 .gc-ring.sm { width: 96px; height: 96px; }
-.g-ring { position: absolute; inset: 0; filter: drop-shadow(0 0 10px color-mix(in srgb, var(--g2) 35%, transparent)); }
+/* The svg carries its full size (132) as attributes: it must follow the ring's box, which is smaller on a phone. */
+.g-ring { position: absolute; inset: 0; width: 100%; height: 100%; filter: drop-shadow(0 0 10px color-mix(in srgb, var(--g2) 35%, transparent)); }
 .g-track { fill: none; stroke: var(--surface-3); stroke-width: 10; }
 .gc-ring.sm .g-track, .gc-ring.sm .g-prog { stroke-width: 8; }
 .g-prog { fill: none; stroke-width: 10; stroke-linecap: round; stroke-dasharray: var(--c); stroke-dashoffset: var(--off); animation: g-draw 1.2s cubic-bezier(.2,.8,.2,1) both; }
@@ -5419,7 +5420,8 @@ body.locked .theme-atmosphere, body.printing .theme-atmosphere { display: none; 
 .top .sub { font-size: 14.5px; margin-top: 6px; }
 .top .eyebrow { text-transform: none; letter-spacing: 0; font-size: 14px; font-weight: 600; color: var(--gold); }
 .card h2 { font-size: 16px; text-transform: none; letter-spacing: -0.005em; color: var(--text); font-weight: 600; }
-.card h2 .right { color: var(--muted); }
+/* Not buttons: "+ Add repeating" keeps its own readable text colour in every theme. */
+.card h2 .right:not(.btn) { color: var(--muted); }
 .hero .label, .sc-label, .nav-h, .section-h, .log-kpi-label, .yr-hero .k, .yr-tile .k, .pay-card .k, .ss .k,
 details.card > summary, .home-picks .label, .mm-l, .gs-kpi-lbl, .sub-kpi-card .k, .wipe-sum-lbl, .inv-head,
 .dp-group > small, .tgb-g small, .set-nav-title, .tg-kpi-label, .sankey-col-hdr {
@@ -6650,7 +6652,7 @@ tr.week-row b.bad { color: var(--expense); } tr.week-row b.good { color: var(--i
 .ph-tabs::-webkit-scrollbar { display: none; }
 .ph-tab { flex: 1 0 auto; min-height: 36px; padding: 6px 12px; border: 0; border-radius: 999px; background: transparent; color: var(--muted); font: inherit; font-size: 13px; white-space: nowrap; cursor: pointer; }
 .ph-tab[aria-selected="true"] { background: var(--gold); color: var(--bg); font-weight: 600; }
-.ph-track { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; }
+.ph-track { display: flex; align-items: flex-start; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; }
 .ph-track::-webkit-scrollbar { display: none; }
 .ph-panel { flex: 0 0 100%; box-sizing: border-box; padding: 6px 16px 12px; scroll-snap-align: start; scroll-snap-stop: always; display: flex; flex-direction: column; gap: 12px; min-height: calc(100dvh - 190px); }
 .ph-q { margin: 6px 0 0; color: var(--muted); font-size: 14px; }
@@ -6679,9 +6681,10 @@ tr.week-row b.bad { color: var(--expense); } tr.week-row b.good { color: var(--i
 .ph-k { display: inline-block; width: 14px; height: 3px; border-radius: 2px; margin-right: 6px; vertical-align: middle; background: var(--gold); }
 .ph-k.usual { background: none; border-top: 2px dashed var(--faint); height: 0; }
 .ph-trio { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-.ph-trio > div { padding: 10px 12px; border-radius: 14px; background: var(--surface); display: grid; gap: 2px; }
+.ph-trio > div { padding: 10px; border-radius: 14px; background: var(--surface); display: grid; gap: 2px; min-width: 0; }
 .ph-trio small { color: var(--muted); font-size: 12px; }
-.ph-trio b { font-family: var(--display); font-size: 20px; font-weight: 600; }
+/* "25,4k MDL" has to fit a third of a phone's width: smaller on narrow screens, and it may wrap. */
+.ph-trio b { font-family: var(--display); font-size: clamp(14px, 4.3vw, 20px); font-weight: 600; white-space: normal; overflow-wrap: anywhere; }
 .ph-bar { display: flex; height: 12px; gap: 3px; border-radius: 6px; overflow: hidden; }
 .ph-bar i, .ph-k.c0, .ph-k.c1, .ph-k.c2, .ph-k.c3 { display: inline-block; }
 .ph-bar .c0, .ph-k.c0 { background: var(--c1); } .ph-bar .c1, .ph-k.c1 { background: var(--gold); }
@@ -6690,7 +6693,7 @@ tr.week-row b.bad { color: var(--expense); } tr.week-row b.good { color: var(--i
 .ph-ruler { position: relative; height: 14px; border-radius: 7px; background: var(--surface-3); overflow: hidden; }
 .ph-ruler i { position: absolute; inset: 0 auto 0 0; border-radius: 7px; background: var(--gold); }
 .ph-line6 { position: absolute; left: 50%; top: -2px; bottom: -2px; width: 2px; background: var(--income); }
-.ph-box .ph-legend { justify-content: space-between; }
+.ph-ruler + .ph-legend { justify-content: space-between; }
 .ph-goals { display: grid; gap: 10px; }
 .ph-goal { display: flex; gap: 12px; align-items: center; padding: 10px 12px; border-radius: 14px; background: var(--surface); }
 .ph-goal span { display: grid; gap: 2px; }
@@ -6729,3 +6732,11 @@ tr.week-row b.bad { color: var(--expense); } tr.week-row b.good { color: var(--i
 .cpu-count { display: inline-flex; align-items: center; gap: 6px; }
 .cpu-count b { min-width: 22px; text-align: center; font-variant-numeric: tabular-nums; }
 .cpu-count .icon-btn { width: 36px; height: 36px; font-size: 18px; }
+
+/* Rows without an icon (Home's To confirm, Plan → Repeating, Subscriptions per year): the name gets
+   the wide column, not the 36px icon column. Buttons that don't fit beside it go on their own line. */
+.tx:has(> .t:first-child) { grid-template-columns: minmax(0, 1fr) auto; }
+.tx.rec-row:has(> .t:first-child) { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.tx.rec-row:has(> .t:first-child) > .t { flex: 1 1 150px; }
+.tx.rec-row:has(> .t:first-child) > :is(.rec-btns, .sub-acts) { margin-left: auto; }
+.b2-sub .sub-year { display: inline-flex; align-items: baseline; gap: 6px; }

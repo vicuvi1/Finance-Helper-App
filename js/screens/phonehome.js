@@ -77,7 +77,7 @@ export function view(today, parts) {
       <p class="ph-q">How is ${esc(monthName)} going?</p>
       <h1 class="ph-a ${m.rate != null && m.rate < 0 ? 'warn' : 'good'}">${esc(monthAnswer)}</h1>
       ${m.vsUsual != null ? `<p class="ph-sub">${Math.abs(m.vsUsual) < 0.05 ? 'About like a usual month.' : `${Math.round(Math.abs(m.vsUsual) * 100)}% ${m.vsUsual > 0 ? 'more' : 'less'} than a usual month by today.`}</p>` : ''}
-      <div class="ph-box">${monthChart(m)}<p class="ph-legend"><i class="ph-k line"></i>${esc(monthName)} <i class="ph-k usual"></i>a usual month</p></div>
+      <div class="ph-box">${monthChart(m)}<p class="ph-legend"><span><i class="ph-k line"></i>${esc(monthName)}</span> <span><i class="ph-k usual"></i>a usual month</span></p></div>
       <div class="ph-trio"><div><small>In</small><b class="income">${esc(ctx.money(m.income, { compact: true }))}</b></div><div><small>Out</small><b class="expense">${esc(ctx.money(m.spent, { compact: true }))}</b></div><div><small>Kept</small><b>${esc(ctx.money(m.kept, { compact: true }))}</b></div></div>
       ${m.top.length ? `<div class="ph-bar" role="img" aria-label="Where it went">${m.top.map((c, i) => `<i class="c${i}" style="flex:${Math.max(1, Math.round(c.share * 100))}"></i>`).join('')}</div><p class="ph-legend">${m.top.map((c, i) => `<span><i class="ph-k c${i}"></i>${esc(c.name)} ${esc(ctx.money(c.amount, { compact: true }))}</span>`).join(' ')}</p>` : ''}` },
     { id: 'safety', label: 'Safety', html: `
