@@ -11,6 +11,7 @@ import { todayISO } from '../dates.js';
 import { recId } from '../recurring.js';
 import { cloudEngine } from '../standalone.js';
 import { addSub } from '../cattree.js';
+import { costPerUse, addUse } from '../subuse.js';
 import { EVERY, REMIND, DEFAULT_REMIND, subscriptionTable, addSubscription, editSubscription, subTypes, subsCategory } from '../subtable.js';
 
 const draft = { name: '', amount: '', currency: '', every: 'month', next: '', account: '', sub: '', remind: DEFAULT_REMIND };
@@ -77,7 +78,20 @@ export function tab() {
       <tbody>${rows || '<tr><td colspan="10" class="muted" style="padding:14px">No subscriptions yet. Add your first one below.</td></tr>'}${newRow}</tbody>
     </table></div>
     <p class="muted small" style="margin-bottom:0">Each change saves at once and can be undone (Ctrl+Z). Logging a payment makes a normal record in the Log.</p>
-  </section>`;
+  </section>${worthCard(base)}`;
+}
+
+/** "Is it worth it?": tap + each time you use a subscription and see what one use costs. */
+function worthCard(base) {
+  const list = costPerUse(ctx.state, todayISO(), { all: true });
+  if (!list.length) return '';
+  const row = (x) => `<div class="cpu-row" data-testid="cpu-row">
+    <span class="cpu-name"><b>${esc(x.name)}</b><small>${esc(formatMoney(x.monthly, base))} a month${x.avgUses != null ? ` · usually ${String(Math.round(x.avgUses * 10) / 10).replace('.', ',')} uses` : ''}</small></span>
+    <span class="cpu-count" role="group" aria-label="Uses this month of ${esc(x.name)}"><button type="button" class="icon-btn" data-st-act="use-minus" data-id="${esc(x.id)}" aria-label="One less" ${x.uses ? '' : 'disabled'}>−</button><b>${x.uses}</b><button type="button" class="icon-btn" data-st-act="use-plus" data-id="${esc(x.id)}" aria-label="Used it once more" data-testid="cpu-plus">+</button></span>
+    <span class="cpu-per ${esc(x.tone)}">${x.perUse != null ? `<b>${esc(formatMoney(Math.round(x.perUse / 100) * 100, base))}</b> a use` : ''}${x.verdict ? `<small>${esc(x.verdict)}</small>` : ''}</span></div>`;
+  return `<section class="card cpu-card" data-testid="cost-per-use"><h2 style="margin:0">Is it worth it?</h2>
+    <p class="muted small" style="margin:4px 0 10px">Tap + each time you use a subscription this month (or tell the bot <b>used gym</b>): you see what one use really costs.</p>
+    ${list.map(row).join('')}</section>`;
 }
 
 async function openCalendar(reset = false) {
@@ -198,6 +212,7 @@ export function init() {
     else if (act === 'cal-copy') { const i = document.getElementById('cal-url'); i?.select(); navigator.clipboard?.writeText(i?.value || '').then(() => ctx.toast('Link copied'), () => ctx.toast('Select the link and press Ctrl+C')); }
     else if (act === 'cal-reset') openCalendar(true);
     else if (act === 'log') log(b.dataset.id);
+    else if (act === 'use-plus' || act === 'use-minus') { addUse(ctx.state, b.dataset.id, todayISO(), act === 'use-plus' ? 1 : -1); ctx.commit(); }
     else if (act === 'delete') confirmDelete(b.dataset.id);
     else if (act === 'pause') {
       const r = ctx.state.recurring.find((x) => x.id === b.dataset.id);

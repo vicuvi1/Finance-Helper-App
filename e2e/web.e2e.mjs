@@ -328,7 +328,7 @@ test('Bank statement: phone payments matched and checked, what the bank lacks is
   await context.close();
 });
 
-test('Life planner: add a goal, see if it fits, a slider changes the answer', async () => {
+test('Future planner: add a goal, see if it fits, a slider changes the answer', async () => {
   const { page, errors, context } = await openPage(browser, server.url);
   await page.goto(`${server.url}#plan`);
   await page.waitForSelector('[data-testid="plan-tab-life"]');
@@ -386,6 +386,37 @@ test('Phone Home: four swipe screens on a phone, the long Home on the desktop, C
   await desk.page.waitForSelector('#app header.top');
   assert.equal(await desk.page.$('[data-testid="phone-home"]'), null, 'the desktop keeps its Home');
   await desk.context.close();
+});
+
+test('Offline: a small pill says so, and goes when the internet is back', async () => {
+  const { page, errors, context } = await openPage(browser, server.url, { width: 390, height: 844 });
+  await page.goto(server.url);
+  await page.waitForSelector('#app');
+  await context.setOffline(true);
+  await page.evaluate(() => window.dispatchEvent(new Event('offline')));
+  await page.waitForSelector('[data-testid="offline-pill"]');
+  await context.setOffline(false);
+  await page.evaluate(() => window.dispatchEvent(new Event('online')));
+  await page.waitForFunction(() => !document.querySelector('[data-testid="offline-pill"]'));
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
+test('Is it worth it?: + counts a use and shows the cost per use', async () => {
+  const { page, errors, context } = await openPage(browser, server.url);
+  await page.goto(`${server.url}#plan`);
+  await page.waitForSelector('[data-testid="sub-table"]');
+  await page.fill('[data-st-new="name"]', 'Made-up Gym');
+  await page.fill('[data-st-new="amount"]', '600');
+  await page.click('[data-testid="sub-add"]');
+  await page.waitForSelector('[data-testid="cost-per-use"]');
+  await page.click('[data-testid="cpu-plus"]');
+  await page.click('[data-testid="cpu-plus"]');
+  await page.waitForFunction(() => /300.*a use/.test(document.querySelector('[data-testid="cpu-row"]')?.textContent.replace(/\s/g, ' ') || ''));
+  const uses = await page.evaluate(() => JSON.parse(globalThis.__fhStore.getItem('finance-helper.state')).recurring.find((r) => r.note === 'Made-up Gym').uses);
+  assert.equal(Object.values(uses)[0], 2);
+  assert.deepEqual(errors, []);
+  await context.close();
 });
 
 test('Plan → Planned: add a big expense, it is spread over the months', async () => {

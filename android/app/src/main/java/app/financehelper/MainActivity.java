@@ -43,6 +43,12 @@ public class MainActivity extends Activity {
         return true;
       }
       @Override public void onPageStarted(WebView v, String url, Bitmap icon) { bridge.pageUrl = url; }
+      // No internet on the very first start (later starts open from the saved copy): a plain page with Try again.
+      @Override public void onReceivedError(WebView v, android.webkit.WebResourceRequest r, android.webkit.WebResourceError e) {
+        if (!r.isForMainFrame()) return;
+        String retry = new Store(MainActivity.this).server() + "/";
+        v.loadDataWithBaseURL(null, "<html><body style='margin:0;background:#0b0d12;color:#eceef2;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;text-align:center'><div style='padding:24px'><h2 style='font-weight:600'>No internet</h2><p style='color:#8b93a3;line-height:1.5'>Finance Helper opens as soon as you're online. Payments from your bank are still caught and sent later.</p><p><a href='" + retry + "' style='display:inline-block;margin-top:12px;padding:12px 22px;border-radius:12px;background:#e3b95f;color:#0b0d12;text-decoration:none;font-weight:600'>Try again</a></p></div></body></html>", "text/html", "utf-8", null);
+      }
       @Override public void doUpdateVisitedHistory(WebView v, String url, boolean reload) { bridge.pageUrl = url; }
     });
     web.setWebChromeClient(new WebChromeClient() {

@@ -732,7 +732,7 @@ export function view() {
     <div class="chips plan-tabs">
       <button class="chip" data-act="plan-tab" data-tab="subtable" aria-pressed="${tab === 'subtable'}" data-testid="plan-tab-subtable">🧾 Subscriptions</button>
       <button class="chip" data-act="plan-tab" data-tab="planned" aria-pressed="${tab === 'planned'}" data-testid="plan-tab-planned">🗓️ Planned</button>
-      <button class="chip" data-act="plan-tab" data-tab="life" aria-pressed="${tab === 'life'}" data-testid="plan-tab-life">🧭 Life planner</button>
+      <button class="chip" data-act="plan-tab" data-tab="life" aria-pressed="${tab === 'life'}" data-testid="plan-tab-life">🧭 Future planner</button>
       ${Debts.hasDebts(state) || tab === 'debts' ? `<button class="chip" data-act="plan-tab" data-tab="debts" aria-pressed="${tab === 'debts'}" data-testid="plan-tab-debts">🏦 Debts</button>` : ''}
       <button class="chip" data-act="plan-tab" data-tab="subs" aria-pressed="${tab === 'subs'}">✨ All bills &amp; what-if <span class="tab-badge">${expenseRules.length}</span></button>
       <button class="chip" data-act="plan-tab" data-tab="repeating" aria-pressed="${tab === 'repeating'}" data-testid="plan-tab-repeating">🔁 Repeating ${due.length ? `<span class="tab-badge bad">${due.length}</span>` : ''}</button>

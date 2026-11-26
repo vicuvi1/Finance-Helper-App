@@ -335,6 +335,24 @@ function paintVersion() {
   meta.appendChild(v);
 }
 
+/**
+ * No internet: a small pill at the top on every screen (the sync line under the name is hidden on
+ * phones). Everything keeps working; what you add is kept here and sent when you're back online.
+ */
+function paintOffline() {
+  if (typeof document === 'undefined') return;
+  const off = navigator.onLine === false;
+  let el = document.getElementById('fh-offline');
+  if (!off) { el?.remove(); return; }
+  if (el) return;
+  el = document.createElement('div');
+  el.id = 'fh-offline';
+  el.setAttribute('role', 'status');
+  el.dataset.testid = 'offline-pill';
+  el.innerHTML = '<i></i>Offline · what you add is kept and sent when you\'re back';
+  document.body.appendChild(el);
+}
+
 function paintStatus() {
   if (typeof document === 'undefined') return;
   const el = document.querySelector('.tabbar .brand-sub');
@@ -796,6 +814,7 @@ export function init() {
     },
   });
   cloud.subscribe(() => refreshCard());
+  paintOffline();
   if (window.desktop?.tray || window.FHAndroid) { setTimeout(updateTray, 3000); setInterval(updateTray, 60000); }
   // The Android app: once a day, if something on the phone would make payments be missed, say so.
   if (window.FHAndroid?.setupStatus && !ctx.DEMO) {
@@ -873,8 +892,8 @@ export function init() {
     }
   } catch { /* no storage: nothing to change */ }
   if (!ctx.DEMO) {
-    window.addEventListener('online', () => { paintStatus(); soon(500); });
-    window.addEventListener('offline', paintStatus);
+    window.addEventListener('online', () => { paintStatus(); paintOffline(); soon(500); });
+    window.addEventListener('offline', () => { paintStatus(); paintOffline(); });
     window.addEventListener('focus', () => soon(1000));
     document.addEventListener('visibilitychange', () => { if (!document.hidden) soon(800); });
     // Always in step: while the app is on screen it checks the server every minute

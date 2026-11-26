@@ -1,4 +1,4 @@
-// The life planner (Plan → Life planner): your big goals on a timeline (an apartment, a car,
+// The future planner (Plan → Future planner): your big goals on a timeline (an apartment, a car,
 // a wedding) and whether the money will be there, month by month, with sliders for what comes
 // in, what you spend, prices, a yearly raise, the return on savings and how much to keep aside.
 // Goal costs are in today's money; prices rising makes them (and your spending) cost more later.

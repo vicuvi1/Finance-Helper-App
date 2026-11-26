@@ -31,6 +31,7 @@ import { addMonths, monthKey } from '../js/dates.js'
 import { pushCopy, readValue } from './_money.mjs'
 import { run } from './_lib.mjs'
 import { answer, isQuestion, splitRecords, readReminder } from '../js/botask.js'
+import { addUse, findSub, costPerUse } from '../js/subuse.js'
 
 export const MONEY_TZ = 'Europe/Chisinau'
 
@@ -72,6 +73,7 @@ export const HELP = [
   '',
   '<b>Ask in plain words</b>: <code>food this month</code>, <code>taxi in October</code>, <code>and last month?</code>, <code>can I afford 3000</code>, <code>what\'s left today</code>, <code>when is rent</code>, <code>where did my money go</code>',
   'Reminders: <code>remind me to pay internet on the 27th</code> · /reminders',
+  'Subscriptions: <code>used gym</code> counts a use (cost per use in Plan)',
   '',
   '/today · /month · /balance · /last · /undo',
 ].join('\n')
@@ -262,6 +264,18 @@ export async function handleUpdate(cfg, bot, update, { now = Date.now(), fetchIm
   const cur = await readValue(cfg, fetchImpl)
   const s = state(cur.value)
   if (s.tx.some((t) => t.id === id || String(t.id).startsWith(`${id}-`)) || s.deleted?.[id]) return calls
+
+  // "used gym": one more use of a subscription (Plan → Subscriptions → Is it worth it?).
+  const used = /^\/?(?:used|folosit|am folosit|использовал[аи]?)\s+(.+)$/i.exec(text)
+  if (used) {
+    const r = findSub(s, used[1], today)
+    if (!r) { await reply(`🤔 No subscription called "${esc(used[1])}". Plan → Subscriptions lists them.`); return calls }
+    const n = addUse(s, r.id, today, 1, now)
+    await pushCopy(cfg, s, { edited: true, editedAt: now }, now, fetchImpl)
+    const c = costPerUse(s, today).find((x) => x.id === r.id)
+    await reply(`✅ ${esc(r.note || 'It')}: used ${n} time${n === 1 ? '' : 's'} this month${c?.perUse ? ` · <b>${money(s, c.perUse)}</b> a use` : ''}.`)
+    return calls
+  }
 
   // A question in plain words: "food this month", "and last month?", "can I afford 3000".
   if (isQuestion(text) || /^(when|next|cand|когда)\b/i.test(text)) {

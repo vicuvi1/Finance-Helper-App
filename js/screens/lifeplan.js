@@ -1,4 +1,4 @@
-// Plan → 🧭 Life planner (numbers: js/lifeplan.js). The sliders update the answer, the chart and
+// Plan → 🧭 Future planner (numbers: js/lifeplan.js). The sliders update the answer, the chart and
 // each goal live while you drag; letting go saves them (synced).
 
 import { ctx, esc } from '../ctx.js';
