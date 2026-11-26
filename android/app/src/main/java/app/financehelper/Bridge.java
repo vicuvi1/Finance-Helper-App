@@ -52,7 +52,7 @@ final class Bridge {
       }
       out.put("apps", list);
       return out.toString();
-    } catch (Exception e) {
+    } catch (Throwable e) {
       return "{}";
     }
   }
@@ -60,7 +60,7 @@ final class Bridge {
   @JavascriptInterface public void setCapture(String url) {
     if (!mine() || url == null || !url.startsWith("https://")) return;
     s.setCapture(url);
-    new Thread(() -> Capture.send(a, null)).start();
+    bg(() -> Capture.send(a, null));
   }
 
   @JavascriptInterface public void setApp(String pkg, boolean on) {
@@ -104,7 +104,7 @@ final class Bridge {
       out.put("widget", wm.getAppWidgetIds(new ComponentName(a, SafeWidget.class)).length);
       out.put("version", BuildConfigHolder.VERSION);
       return out.toString();
-    } catch (Exception e) {
+    } catch (Throwable e) {
       return "{}";
     }
   }
@@ -129,7 +129,7 @@ final class Bridge {
           default: i = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + pkg));
         }
         a.startActivity(i);
-      } catch (Exception e) {
+      } catch (Throwable e) {
         // Some phones lack a screen: open the app's own settings page instead.
         try { a.startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + a.getPackageName()))); } catch (Exception ignored) { /* nothing more to try */ }
       }
@@ -139,32 +139,40 @@ final class Bridge {
   /** Ask before saving each payment (true) or save by itself (false). */
   @JavascriptInterface public void setAskFirst(boolean on) {
     if (!mine()) return;
-    s.setAskFirst(on);
+    try { s.setAskFirst(on); } catch (Throwable e) { App.keep(a, e, "setAskFirst (ignored)"); forget(); }
   }
 
   /** Look for a newer version of the app now (the answer comes as a notification). */
   @JavascriptInterface public void checkUpdate() {
     if (!mine()) return;
-    new Thread(() -> UpdateCheck.run(a, true)).start();
+    bg(() -> UpdateCheck.run(a, true));
   }
 
   /** Phone notifications for bills, budgets and money running low (on by default). */
   @JavascriptInterface public void setAlerts(boolean on) {
     if (!mine()) return;
-    s.setAlertsOn(on);
-    AlertJob.schedule(a);
+    try { s.setAlertsOn(on); AlertJob.schedule(a); } catch (Throwable e) { App.keep(a, e, "setAlerts (ignored)"); forget(); }
   }
 
   @JavascriptInterface public void openListenerSettings() {
     if (!mine()) return;
-    a.runOnUiThread(() -> a.startActivity(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)));
+    a.runOnUiThread(() -> { try { a.startActivity(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)); } catch (Throwable ignored) { /* no such screen */ } });
   }
 
   /** The page's own "Safe to spend today" line, for the widget (sent while the app is open). */
   @JavascriptInterface public void setWidgetLine(String line) {
     if (!mine()) return;
-    Widget.fromLine(a, line);
+    // Called by the page on every screen: a problem with the widget must never close the app.
+    try { Widget.fromLine(a, line); } catch (Throwable e) { App.keep(a, e, "setWidgetLine (ignored)"); forget(); }
   }
+
+  /** Off-screen work that can never take the app down. */
+  private static void bg(Runnable r) {
+    new Thread(() -> { try { r.run(); } catch (Throwable ignored) { /* tried again later */ } }).start();
+  }
+
+  /** Recorded for the developer's log only, not shown as "stopped last time" (the app didn't stop). */
+  private void forget() { a.getSharedPreferences("fh", android.content.Context.MODE_PRIVATE).edit().remove("crash").apply(); }
 
   private boolean listenerOn() {
     String flat = Settings.Secure.getString(a.getContentResolver(), "enabled_notification_listeners");

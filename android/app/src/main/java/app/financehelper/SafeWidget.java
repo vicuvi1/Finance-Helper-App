@@ -13,13 +13,15 @@ import android.widget.RemoteViews;
 public class SafeWidget extends AppWidgetProvider {
   @Override
   public void onUpdate(Context ctx, AppWidgetManager m, int[] ids) {
-    draw(ctx, m, ids);
+    try { draw(ctx, m, ids); } catch (Throwable ignored) { /* drawn next time */ }
     PendingResult done = goAsync();
     new Thread(() -> {
       try {
         String line = Capture.safeLine(ctx);
         if (line != null) Widget.fromLine(ctx, line);
         Capture.send(ctx, null); // anything waiting from when the phone was offline
+      } catch (Throwable ignored) {
+        // Next update.
       } finally {
         done.finish();
       }
@@ -28,6 +30,7 @@ public class SafeWidget extends AppWidgetProvider {
 
   static void refresh(Context ctx) {
     AppWidgetManager m = AppWidgetManager.getInstance(ctx);
+    if (m == null) return; // a phone without home-screen widgets
     draw(ctx, m, m.getAppWidgetIds(new ComponentName(ctx, SafeWidget.class)));
   }
 
