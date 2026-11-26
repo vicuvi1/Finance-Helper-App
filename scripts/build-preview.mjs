@@ -21,10 +21,16 @@ for (const dir of ['css', 'js', 'icons', 'fonts']) cpSync(join(root, dir), join(
 cpSync(join(root, 'tests/fixtures/sample-month.csv'), join(out, 'sample.csv'));
 
 // The host wraps the page in its own <html>/<head>/<body>, so publish only
-// the title, the stylesheet and what is inside <body>.
+// the title, the viewport, the stylesheets and what is inside <body>.
 const html = readFileSync(join(root, 'index.html'), 'utf8');
 const title = html.match(/<title>.*?<\/title>/s)[0];
 const body = html.match(/<body>([\s\S]*)<\/body>/)[1]
   .replace('<script type="module"', '<script>window.FH_DEMO = true;</script>\n  <script type="module"');
-writeFileSync(join(out, 'index.html'), `${title}\n<link rel="stylesheet" href="css/app.css">\n${body.trim()}\n`);
+// Every stylesheet index.html links (not only app.css), in the same order, and the viewport
+// meta so the phone layout works.
+const head = [
+  ...(html.match(/<meta name="viewport"[^>]*>/) || ['<meta name="viewport" content="width=device-width, initial-scale=1">']),
+  ...html.match(/<link rel="stylesheet"[^>]*>/g),
+].join('\n');
+writeFileSync(join(out, 'index.html'), `${title}\n${head}\n${body.trim()}\n`);
 console.log(`preview written to ${out}`);
