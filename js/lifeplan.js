@@ -53,11 +53,16 @@ export function planInputs(state, today) {
 /**
  * Month by month from this month to a year after the last goal (at most 30 years).
  * → { months: [{key, money, paid: [goal ids]}], goals: [{...goal, cost, fits, short, before, after, fitsAlone, earliest, extra}],
- *     fit, total, lowest }
+ *     skipped: [{...goal, state: 'passed'|'far'}] (not on the timeline), fit, total, lowest }
  */
 export function project(state, today, inputs = planInputs(state, today), goals = lifeGoals(state)) {
   const now = monthKey(today);
-  const sorted = [...goals].filter((g) => g && g.amount > 0 && /^\d{4}-\d{2}$/.test(g.month || '')).sort((a, b) => a.month.localeCompare(b.month));
+  const valid = [...goals].filter((g) => g && g.amount > 0 && /^\d{4}-\d{2}$/.test(g.month || '')).sort((a, b) => a.month.localeCompare(b.month));
+  // A goal whose month has passed, or more than 30 years ahead, can't be on the timeline: it's
+  // listed apart (`skipped`, with why) so the screen still draws and you can pick a new month.
+  const horizon = addMonths(now, 360);
+  const sorted = valid.filter((g) => g.month >= now && g.month <= horizon);
+  const skipped = valid.filter((g) => g.month < now || g.month > horizon).map((g) => ({ ...g, state: g.month < now ? 'passed' : 'far' }));
   const spanOf = (list) => {
     const last = list.reduce((m, g) => (g.month > m ? g.month : m), addMonths(now, 24));
     return Math.min(360, Math.max(24, monthsBetween(now, last) + 13));
@@ -111,7 +116,7 @@ export function project(state, today, inputs = planInputs(state, today), goals =
     return { ...g, ...r, fitsAlone: alone.fits, earliest, extra };
   });
   const lowest = all.months.reduce((m, x) => (x.money < m.money ? x : m), all.months[0]);
-  return { months: all.months, goals: goalsOut, fit: goalsOut.filter((g) => g.fits).length, total: goalsOut.length, lowest, inputs };
+  return { months: all.months, goals: goalsOut, skipped, fit: goalsOut.filter((g) => g.fits).length, total: goalsOut.length, lowest, inputs };
 }
 
 export function addGoal(state, f, { id, now = Date.now() }) {

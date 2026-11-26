@@ -41,3 +41,19 @@ test('sliders are saved; goals can be removed', () => {
   addGoal(s, { name: 'x', amount: 100, month: '2027-01' }, { id: 'g', now: 1 });
   assert.equal(removeGoal(s, 'g', 2), true);
 });
+
+test('a goal whose month has passed or is over 30 years ahead does not break the plan', () => {
+  const s = defaultState();
+  addGoal(s, { name: 'Made-up car', amount: 3000000, month: '2027-05' }, { id: 'car', now: 1 });
+  addGoal(s, { name: 'Made-up old trip', amount: 500000, month: '2026-03' }, { id: 'old', now: 1 });
+  addGoal(s, { name: 'Made-up far house', amount: 900000000, month: '2070-01' }, { id: 'far', now: 1 });
+  const p = project(s, '2026-11-15', plain);
+  assert.deepEqual(p.goals.map((g) => g.id), ['car']);
+  assert.equal(p.goals[0].fits, true);
+  assert.equal(p.total, 1);
+  assert.deepEqual(p.skipped.map((g) => [g.id, g.state]), [['old', 'passed'], ['far', 'far']]);
+  // Only skipped goals: still a timeline, nothing thrown.
+  const only = project(s, '2026-11-15', plain, s.settings.lifeGoals.filter((g) => g.id !== 'car'));
+  assert.equal(only.goals.length, 0);
+  assert.ok(only.months.length > 0);
+});

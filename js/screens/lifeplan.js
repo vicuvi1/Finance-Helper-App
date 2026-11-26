@@ -75,11 +75,20 @@ function resultHTML() {
   const goals = p.goals;
   const bad = goals.filter((g) => !g.fits);
   const answer = !goals.length
-    ? '<h2 class="lp-answer">Add a big goal below to see if the money will be there.</h2>'
+    ? `<h2 class="lp-answer">${p.skipped?.length ? 'Pick a new month for your goal below to see if the money will be there.' : 'Add a big goal below to see if the money will be there.'}</h2>`
     : !bad.length
       ? `<h2 class="lp-answer ok">${goals.length === 1 ? 'It fits.' : goals.length === 2 ? 'Both fit.' : `All ${goals.length} fit.`}</h2><p class="lp-sub">The money is there for each, and you still keep ${esc(String(p.inputs.keep))} month${p.inputs.keep === 1 ? '' : 's'} of spending aside. Lowest point: ${esc(fm(p.lowest.money))} in ${esc(mon(p.lowest.key))}.</p>`
       : `<h2 class="lp-answer">${goals.length - bad.length} of ${goals.length} fit${goals.length - bad.length === 1 ? 's' : ''}.</h2><p class="lp-sub"><b>${esc(bad[0].name)}</b> is short by ${esc(fm(bad[0].short))} in ${esc(mon(bad[0].month))}: put aside about <b>${esc(fm(bad[0].extra))} more a month</b>${bad[0].earliest ? `, or move it to <b>${esc(mon(bad[0].earliest))}</b>` : ''}.${bad.length > 1 ? ` ${bad.length - 1} more below.` : ''}${!bad[0].fitsAlone ? '' : ' On its own it would fit: it clashes with the goals before it.'}</p>`;
-  const rows = goals.map((g) => `<tr data-id="${esc(g.id)}" data-testid="lp-row">
+  const cells = (g) => `
+      <td><input class="st-in" data-lp-edit="name" value="${esc(g.name)}" aria-label="Goal"></td>
+      <td><input class="st-in st-num" data-lp-edit="amount" value="${esc(String(Math.round(g.amount / 100)))}" inputmode="decimal" aria-label="Cost in today's money"></td>
+      <td><input class="st-in" type="month" data-lp-edit="month" value="${esc(g.month)}" aria-label="When"></td>`;
+  const del = (g) => `<td class="num"><button type="button" class="icon-btn" data-lp-act="delete" aria-label="Remove ${esc(g.name)}" title="Remove">🗑️</button></td></tr>`;
+  // Goals that can't be on the timeline: still listed, so you can pick a new month or remove them.
+  const skippedRows = (p.skipped || []).map((g) => `<tr data-id="${esc(g.id)}" data-testid="lp-row">${cells(g)}
+      <td class="lp-status bad">${g.state === 'passed' ? 'This date has passed' : 'More than 30 years ahead'}<br><small class="muted">Pick ${g.state === 'passed' ? 'a new' : 'a nearer'} month to see if it fits.</small></td>
+      ${del(g)}`).join('');
+  const rows = skippedRows + goals.map((g) => `<tr data-id="${esc(g.id)}" data-testid="lp-row">
       <td><input class="st-in" data-lp-edit="name" value="${esc(g.name)}" aria-label="Goal"></td>
       <td><input class="st-in st-num" data-lp-edit="amount" value="${esc(String(Math.round(g.amount / 100)))}" inputmode="decimal" aria-label="Cost in today's money"></td>
       <td><input class="st-in" type="month" data-lp-edit="month" value="${esc(g.month)}" aria-label="When"></td>
