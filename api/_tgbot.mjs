@@ -278,7 +278,7 @@ export async function handleUpdate(cfg, bot, update, { now = Date.now(), fetchIm
   }
 
   // A question in plain words: "food this month", "and last month?", "can I afford 3000".
-  if (isQuestion(text) || /^(when|next|cand|когда)\b/i.test(text)) {
+  if (isQuestion(text) || (/^(when|next|cand)\b/i.test(text) && !/\d/.test(text))) {
     const prev = await readCtx(cfg, chatId, now, fetchImpl)
     const a = answer(s, text, today, prev)
     if (a) {

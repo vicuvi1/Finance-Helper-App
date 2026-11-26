@@ -39,6 +39,10 @@ test('questions vs records', () => {
   assert.equal(isQuestion('taxi 45'), false);
   assert.equal(isQuestion('yesterday 120 lunch'), false);
   assert.equal(isQuestion('120 lunch today'), false);
+  // An amount and no "?": a record, even when it starts like a question or a follow-up.
+  for (const rec of ['cat food 120', 'and 50 taxi', 'si 30 cafea', 'is 300 gas', 'can of paint 80', 'и 40 кофе', 'do 25 laundry']) assert.equal(isQuestion(rec), false, rec);
+  for (const q of ['cat food 120?', 'can I afford 3000', 'how much is 20 usd', 'taxi in October', 'taxi in october 2025', 'такси в октябре', 'cat am cheltuit pe taxi', 'and taxi', 'сколько на такси']) assert.equal(isQuestion(q), true, q);
+  assert.equal(isQuestion('taxi in the rain'), false);
 });
 
 test('answers: category, shop, follow-ups, top, income', () => {
@@ -54,6 +58,8 @@ test('answers: category, shop, follow-ups, top, income', () => {
   assert.match(plain(answer(s, 'where did my money go this month', TODAY)), /Where it went[\s\S]*Food/);
   assert.match(plain(answer(s, 'how much did I earn this month', TODAY)), /Earned.*20 000 MDL/);
   assert.equal(answer(s, 'taxi 45', TODAY), null);
+  assert.equal(answer(s, 'cat food 120', TODAY), null);
+  assert.match(plain(answer(s, 'taxi in October', TODAY)), /taxi.*October/i);
 });
 
 test('afford, left today, when is', () => {
@@ -74,4 +80,7 @@ test('several records in one message; reminders', () => {
   assert.equal(readReminder('remind me pay rent on the 3rd', TODAY).date, '2026-12-03');
   assert.equal(readReminder('напомни заплатить интернет завтра', TODAY).date, '2026-11-23');
   assert.equal(readReminder('lunch 120', TODAY), null);
+  // A day the month doesn't have becomes its last day.
+  assert.equal(readReminder('remind me to pay tax on 30 feb', TODAY).date, '2027-02-28');
+  assert.equal(readReminder('remind me to pay tax on 31 november', TODAY).date, '2026-11-30');
 });

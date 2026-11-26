@@ -98,15 +98,29 @@ export function totalFor(state, subj, per, { income = false } = {}) {
 const QWORDS = /^(how|what|whats|when|where|can|could|is|are|do|did|cat|cati|cand|unde|pot|сколько|когда|куда|можно|могу|что|где)(?:(?<![\p{L}\p{N}])(?=[\p{L}\p{N}])|(?<=[\p{L}\p{N}])(?![\p{L}\p{N}]))/u;
 const FOLLOW = /^(and|but|si|iar|а|и)(?:(?<![\p{L}\p{N}])(?=[\p{L}\p{N}])|(?<=[\p{L}\p{N}])(?![\p{L}\p{N}]))/u;
 
-/** Does the message ask something (rather than log a record)? */
+const WB = String.raw`(?:(?<![\p{L}\p{N}])(?=[\p{L}\p{N}])|(?<=[\p{L}\p{N}])(?![\p{L}\p{N}]))`;
+// Words that only ever start a question. The other question words also start records
+// ("cat food 120", "is 300 gas", "can of paint 80"), as do "and 50 taxi" / "si 30 cafea".
+const STRONG = new RegExp(`^(how|what|whats|when|where|cati|cand|unde|сколько|когда|куда|что|где)${WB}`, 'u');
+const ASKS = new RegExp(`${WB}(afford|imi permit|pot sa cumpar|ramas|left|safe|remind|aminteste|напомни)${WB}|могу (ли )?(себе )?позволить|могу купить`, 'u');
+const YEAR = new RegExp(`${WB}20\\d\\d${WB}`, 'gu');
+const IN_MONTH = new RegExp(`${WB}(?:in|din|since|de la|в|с)\\s+(\\p{L}+)`, 'gu');
+
+/**
+ * Does the message ask something (rather than log a record)?
+ * With an amount and no "?" it is a record, unless it starts with a word that only asks ("how much is 20…").
+ * Without an amount: a question word, a follow-up ("and taxi"), or a time ("food this month", "taxi in October").
+ */
 export function isQuestion(text) {
   const t = fold(text).trim();
   if (!t || t.startsWith('/')) return false;
-  if (/\?\s*$/.test(t) || QWORDS.test(t) || FOLLOW.test(t)) return true;
-  if (/(?:(?<![\p{L}\p{N}])(?=[\p{L}\p{N}])|(?<=[\p{L}\p{N}])(?![\p{L}\p{N}]))(afford|ramas|left|safe|remind|aminteste|напомни)(?:(?<![\p{L}\p{N}])(?=[\p{L}\p{N}])|(?<=[\p{L}\p{N}])(?![\p{L}\p{N}]))/u.test(t)) return true;
-  // "food this month": no amount (years like 2025 don't count) but a time phrase.
-  const amount = t.replace(/(?:(?<![\p{L}\p{N}])(?=[\p{L}\p{N}])|(?<=[\p{L}\p{N}])(?![\p{L}\p{N}]))20\d\d(?:(?<![\p{L}\p{N}])(?=[\p{L}\p{N}])|(?<=[\p{L}\p{N}])(?![\p{L}\p{N}]))/gu, '').match(/\d/);
-  return !amount && PERIODS.some((p) => p.re.test(t));
+  if (/\?\s*$/.test(t) || ASKS.test(t)) return true;
+  // Years like 2025 are not an amount.
+  const amount = /\d/.test(t.replace(YEAR, ''));
+  if (amount) return STRONG.test(t);
+  if (QWORDS.test(t) || FOLLOW.test(t)) return true;
+  if (PERIODS.some((p) => p.re.test(t))) return true;
+  return [...t.matchAll(IN_MONTH)].some((m) => monthIndex(m[1]) >= 0);
 }
 
 /**
@@ -207,10 +221,10 @@ export function readReminder(text, today) {
   take(/(?:(?<![\p{L}\p{N}])(?=[\p{L}\p{N}])|(?<=[\p{L}\p{N}])(?![\p{L}\p{N}]))(?:on the |on |pe |la )?(\d{1,2})(?:st|nd|rd|th|-?го)?\s+(\p{L}+)(?:(?<![\p{L}\p{N}])(?=[\p{L}\p{N}])|(?<=[\p{L}\p{N}])(?![\p{L}\p{N}]))/u, (x) => {
     const i = monthIndex(x[2]);
     if (i < 0) return null;
-    let y = Number(today.slice(0, 4));
-    let d = `${y}-${String(i + 1).padStart(2, '0')}-${String(Math.min(Number(x[1]), 31)).padStart(2, '0')}`;
-    if (d < today) { y++; d = `${y}${d.slice(4)}`; }
-    return d;
+    // A day the month doesn't have ("30 feb") is its last day, never a date that doesn't exist.
+    const on = (y) => { const k = `${y}-${String(i + 1).padStart(2, '0')}`; return `${k}-${String(Math.min(Math.max(1, Number(x[1])), daysInMonth(k))).padStart(2, '0')}`; };
+    const y = Number(today.slice(0, 4));
+    return on(y) < today ? on(y + 1) : on(y);
   });
   take(/(?:(?<![\p{L}\p{N}])(?=[\p{L}\p{N}])|(?<=[\p{L}\p{N}])(?![\p{L}\p{N}]))(?:on the |on |pe |la )(\d{1,2})(?:st|nd|rd|th)?(?:(?<![\p{L}\p{N}])(?=[\p{L}\p{N}])|(?<=[\p{L}\p{N}])(?![\p{L}\p{N}]))|(\d{1,2})-?го(?:(?<![\p{L}\p{N}])(?=[\p{L}\p{N}])|(?<=[\p{L}\p{N}])(?![\p{L}\p{N}]))/u, (x) => {
     const n = Math.min(Number(x[1] || x[2]), 31);
