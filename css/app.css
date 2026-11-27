@@ -6740,3 +6740,9 @@ tr.week-row b.bad { color: var(--expense); } tr.week-row b.good { color: var(--i
 .tx.rec-row:has(> .t:first-child) > .t { flex: 1 1 150px; }
 .tx.rec-row:has(> .t:first-child) > :is(.rec-btns, .sub-acts) { margin-left: auto; }
 .b2-sub .sub-year { display: inline-flex; align-items: baseline; gap: 6px; }
+
+/* "≈ 1 230 EUR": the euro value next to a lei figure, very small and quiet. */
+.fx-hint { display: inline-block; margin-left: 6px; font-family: var(--font); font-size: 11px; font-weight: 400; color: var(--muted); letter-spacing: 0.01em; font-variant-numeric: tabular-nums; vertical-align: baseline; white-space: nowrap; opacity: 0.85; }
+.ms-cell b .fx-hint { font-size: 11px; }
+.gc-amt .fx-of { margin-left: 4px; font-size: 10.5px; }
+.fx-hint.fx-line { display: block; margin: 2px 0 0; }

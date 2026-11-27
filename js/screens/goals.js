@@ -102,13 +102,13 @@ export function homeCard({ featured = false } = {}) {
   const line = st.ratio >= 1 ? 'Goal reached. Time to set a bigger one.' : st.eta ? `At your pace you get there in <b>${monthLabel(st.eta)}</b>.` : esc(M.goalMessage(st));
   if (featured) return `<section class="card goal-feature theme-${esc(g.theme || 'gold')}" aria-label="Main goal">
     <div class="gc-ring">${ring(st, g)}</div><div class="goal-feature-body"><span class="label">Your main goal</span>
-    <h2>${esc(g.name)}</h2><div class="gc-amt"><b>${ctx.money(g.account === 'allocated' ? st.current : lei(st.current))}</b><span> of ${ctx.money(st.target)}</span></div>
+    <h2>${esc(g.name)}</h2><div class="gc-amt"><b>${ctx.money(g.account === 'allocated' ? st.current : lei(st.current))}${ctx.fxHint?.(g.account === 'allocated' ? st.current : lei(st.current)) || ''}</b><span> of ${ctx.money(st.target)}${st.target && ctx.fxHint ? ctx.fxHint(st.target).replace('fx-hint', 'fx-hint fx-of') : ''}</span></div>
     <p>${st.target ? `${ctx.money(g.account === 'allocated' ? st.remaining : lei(st.remaining))} remaining · ${Math.round(st.ratio * 100)}% complete` : 'Set a target to start tracking your progress.'}</p>
     <span class="muted small">Tracks ${esc(sourceLabel(g))}</span></div>
     <div class="goal-feature-action"><button class="btn" data-go="goals">View goals →</button><p class="muted small">${st.eta && st.ratio < 1 ? `Estimated finish: ${monthLabel(st.eta)}` : esc(M.goalMessage(st))}</p></div></section>`;
   return `<section class="card goal-mini theme-${esc(g.theme || 'gold')}" data-go="goals"><h2>${esc(g.name)} <button class="card-link right" data-go="goals">All goals</button></h2>
     <div class="gm-row"><div class="gc-ring sm">${ring(st, g, 96)}</div>
-    <div><div class="gc-amt"><b>${ctx.money(g.account === 'allocated' ? st.current : lei(st.current))}</b><span> of ${ctx.money(st.target)}</span></div><p class="gc-msg" style="margin:6px 0 0">${line}</p></div></div></section>`;
+    <div><div class="gc-amt"><b>${ctx.money(g.account === 'allocated' ? st.current : lei(st.current))}${ctx.fxHint?.(g.account === 'allocated' ? st.current : lei(st.current)) || ''}</b><span> of ${ctx.money(st.target)}</span></div><p class="gc-msg" style="margin:6px 0 0">${line}</p></div></div></section>`;
 }
 
 export function otherGoalsCard() {

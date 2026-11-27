@@ -199,6 +199,20 @@ function bigMoney(c) {
 // Money that counts up to its value when a screen opens. Totals are whole lei:
 // the bani belong on single records, not on sums.
 const countUp = (c, key, opts) => (c = Math.round(c / 100) * 100, `<span data-count="${c}" data-ck="${key}" data-cur="1"${opts?.sign ? ' data-sign="1"' : ''}>${money(c, opts)}</span>`);
+// The same amount in euros, in very small print next to a lei figure ("≈ 1 230 EUR"); dollars when
+// your money is already in euros. Hidden amounts stay hidden; no rate yet: nothing.
+const fxHint = (c) => {
+  const base = state.settings.currency;
+  const to = base === 'EUR' ? 'USD' : 'EUR';
+  if (!c || base === to) return '';
+  if (Privacy.isHidden()) return `<small class="fx-hint">≈ •••• ${to}</small>`;
+  const v = convert(Math.abs(c), base, to, M.knownRates(state));
+  if (v == null || !Number.isFinite(v)) return '';
+  const r = Math.abs(v) >= 100000 ? Math.round(v / 1000) * 1000 : Math.round(v / 100) * 100;
+  return `<small class="fx-hint" title="About the same in ${to === 'EUR' ? 'euros' : 'dollars'} at today's rate">≈ ${c < 0 ? '−' : ''}${formatMoney(r, to)}</small>`;
+};
+// The same, on its own small line under a big figure (big figures would otherwise be cut off).
+const fxLine = (c) => fxHint(c).replace('class="fx-hint"', 'class="fx-hint fx-line"');
 
 // Save. Each save is an undo step, except quiet ones: changes that didn't
 // come from you (sync, the daily net-worth snapshot, Binance balances).
@@ -773,9 +787,9 @@ function homeStrip(s, key) {
   const inSub = p.pay ? (p.salary ? 'your salary' : 'salary not paid yet') + (p.otherIncome ? ` + ${money(p.otherIncome, { compact: true })} other` : '')
     : p.workIncome ? 'work profit + other income' : '';
   return `<section class="m-strip" aria-label="${esc(monthLabel(key))}: your money">
-    <div class="ms-cell"><span class="k">Came in for you</span><b class="${p.personalIncome > 0 ? 'income' : ''}">${countUp(p.personalIncome, 'm-in')}</b>${inSub ? `<span class="work-time">${esc(inSub)}</span>` : ''}</div>
-    <div class="ms-cell"><span class="k">You lived on</span><b class="${p.personalSpent ? 'expense' : ''}">${countUp(p.personalSpent, 'm-out')}</b>${w ? `<span class="work-time" title="What it cost in your work time (Settings → Your hour)">≈ ${w} of your work</span>` : p.workCosts ? '<span class="work-time">work costs not included</span>' : ''}</div>
-    <div class="ms-cell"><span class="k">Kept</span><b>${countUp(p.kept, 'm-net')}</b></div>
+    <div class="ms-cell"><span class="k">Came in for you</span><b class="${p.personalIncome > 0 ? 'income' : ''}">${countUp(p.personalIncome, 'm-in')}</b>${fxLine(p.personalIncome)}${inSub ? `<span class="work-time">${esc(inSub)}</span>` : ''}</div>
+    <div class="ms-cell"><span class="k">You lived on</span><b class="${p.personalSpent ? 'expense' : ''}">${countUp(p.personalSpent, 'm-out')}</b>${fxLine(p.personalSpent)}${w ? `<span class="work-time" title="What it cost in your work time (Settings → Your hour)">≈ ${w} of your work</span>` : p.workCosts ? '<span class="work-time">work costs not included</span>' : ''}</div>
+    <div class="ms-cell"><span class="k">Kept</span><b>${countUp(p.kept, 'm-net')}</b>${fxLine(p.kept)}</div>
     ${rate}
   </section>
   ${workLine(p)}`;
@@ -4034,6 +4048,8 @@ async function updateRates({ force = false, announce = false } = {}) {
 Object.defineProperty(ctx, 'state', { get: () => state });
 Object.assign(ctx, {
   ui,
+  fxHint,
+  fxLine,
   tipCard,
   dot,
   catColor,
